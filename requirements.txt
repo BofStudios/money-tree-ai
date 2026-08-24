@@ -1,0 +1,29 @@
+# Desktop shell
+PySide6>=6.6
+
+# Market data
+yfinance>=0.2.40          # free US stock candles, no account needed (signal mode)
+alpaca-py>=0.20           # Alpaca data + order execution (paper/live modes)
+pandas-market-calendars>=4.4   # real NYSE hours, holidays included
+
+# Web dashboard
+fastapi>=0.110
+uvicorn[standard]>=0.27
+
+# Telegram
+python-telegram-bot[job-queue]>=21.0
+
+# Optional mentor upgrade
+anthropic>=0.40
+
+# Core
+sqlalchemy>=2.0
+pydantic>=2.6
+pydantic-settings>=2.2
+python-dotenv>=1.0
+PyYAML>=6.0
+pandas>=2.2
+numpy>=1.26
+
+# Tests
+pytest>=8.0

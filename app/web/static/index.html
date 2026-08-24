@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>Money Tree AI</title>
+  <link rel="icon" href="/logo.png">
+  <link rel="apple-touch-icon" href="/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/dashboard.css">
+</head>
+<body>
+
+<!-- Held over the app until the first status arrives, so the dashboard is never
+     seen half-drawn or full of dashes. -->
+<div class="boot" id="boot">
+  <span class="boot-mark" aria-hidden="true">
+    <svg viewBox="0 0 100 100" fill="none">
+      <path class="b-trunk" d="M43.6 85.5 C44.2 73 46.6 63 47.2 53 L52.8 53 C53.4 63 55.8 73 56.4 85.5 Z" fill="currentColor"/>
+      <path class="b-root" d="M38.5 85.5 H61.5" stroke="currentColor" stroke-width="4.6" stroke-linecap="round"/>
+      <g fill="#1f9d63">
+        <circle class="b-leaf" cx="32.5" cy="43.5" r="15.5"/>
+        <circle class="b-leaf" cx="67.5" cy="43.5" r="15.5"/>
+        <circle class="b-leaf" cx="50" cy="48.5" r="16.5"/>
+      </g>
+      <g fill="#32d583">
+        <circle class="b-leaf" cx="34.5" cy="36" r="13.5"/>
+        <circle class="b-leaf" cx="65.5" cy="36" r="13.5"/>
+        <circle class="b-leaf" cx="50" cy="27.5" r="15.8"/>
+      </g>
+      <path class="b-cash" d="M56 21.5 C56 18 53.3 16 50 16 C46.7 16 44 17.8 44 21 C44 24.2 46.7 25.6 50 27
+               C53.3 28.4 56 29.8 56 33 C56 36.2 53.3 38 50 38 C46.7 38 44 36 44 32.5"
+            stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path class="b-cash" d="M50 13.2 V40.8" stroke="#ffffff" stroke-width="2.8" stroke-linecap="round"/>
+    </svg>
+  </span>
+  <b class="boot-name">Money Tree AI</b>
+  <span class="boot-step" id="bootStep">connecting…</span>
+</div>
+
+<div class="shell">
+
+  <!-- ============================================================== ai rail -->
+  <aside class="ai" id="aiRail">
+    <header class="ai-head">
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 100 100" fill="none">
+          <path d="M43.6 85.5 C44.2 73 46.6 63 47.2 53 L52.8 53 C53.4 63 55.8 73 56.4 85.5 Z" fill="currentColor"/>
+          <path d="M38.5 85.5 H61.5" stroke="currentColor" stroke-width="4.6" stroke-linecap="round"/>
+          <g fill="#1f9d63">
+            <circle cx="32.5" cy="43.5" r="15.5"/><circle cx="67.5" cy="43.5" r="15.5"/>
+            <circle cx="50" cy="48.5" r="16.5"/>
+          </g>
+          <g fill="#32d583">
+            <circle cx="34.5" cy="36" r="13.5"/><circle cx="65.5" cy="36" r="13.5"/>
+            <circle cx="50" cy="27.5" r="15.8"/>
+          </g>
+          <path d="M56 21.5 C56 18 53.3 16 50 16 C46.7 16 44 17.8 44 21 C44 24.2 46.7 25.6 50 27
+                   C53.3 28.4 56 29.8 56 33 C56 36.2 53.3 38 50 38 C46.7 38 44 36 44 32.5"
+                stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M50 13.2 V40.8" stroke="#ffffff" stroke-width="2.8" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <div class="ai-title">
+        <b>Money Tree AI</b>
+        <span id="aiState">thinking out loud</span>
+      </div>
+      <button class="icon" id="aiClose" aria-label="Close">
+        <svg viewBox="0 0 20 20"><path d="M5 5l10 10M15 5L5 15"/></svg>
+      </button>
+    </header>
+
+    <!-- What it has been told to remember, kept between restarts. -->
+    <div class="memory" id="memoryBox" hidden>
+      <div class="memory-head">
+        <span>Remembers</span><b id="memoryCount">0</b>
+      </div>
+      <ul class="memory-list" id="memoryList"></ul>
+    </div>
+
+    <div class="chat" id="chat"></div>
+
+    <div class="suggestions" id="suggestions"></div>
+
+    <form class="composer" id="askForm">
+      <input id="askInput" placeholder="Ask anything" autocomplete="off">
+      <button type="submit" id="askButton" aria-label="Send">
+        <svg viewBox="0 0 20 20"><path d="M10 16V4M10 4 5 9M10 4l5 5"/></svg>
+      </button>
+    </form>
+  </aside>
+
+  <!-- ================================================================= main -->
+  <div class="main">
+
+    <header class="top">
+      <button class="icon only-phone" id="aiOpen" aria-label="Open AI">
+        <svg viewBox="0 0 20 20"><path d="M4 4.5h12v9H8.5L4 16.5v-12Z"/></svg>
+        <i class="ping" id="aiPing" hidden></i>
+      </button>
+      <div class="top-state">
+        <i class="dot" id="marketLed"></i>
+        <span id="marketHeadline">…</span>
+        <span class="top-detail" id="marketDetail"></span>
+      </div>
+      <div class="top-right">
+        <span class="top-clock" id="clockNY">--:--</span>
+        <span class="top-mode" id="modeChip">—</span>
+      </div>
+    </header>
+
+    <div class="signal-tray" id="signalTray"></div>
+
+    <main class="page">
+
+      <!-- ============================================================= home -->
+      <section class="view active" data-view="home">
+
+        <section class="hero">
+          <div class="hero-label">Portfolio<span class="hero-state" id="heroMode"></span></div>
+          <div class="figure skeleton" id="heroEquity">$0.00</div>
+          <div class="hero-change" id="heroChange"></div>
+          <div class="spark" id="equitySpark"></div>
+        </section>
+
+        <!-- Where this money actually came from. Never let a made-up balance
+             sit on screen looking like the real thing. -->
+        <div class="realcheck" id="realCheck" hidden></div>
+
+        <section class="block">
+          <div class="block-head">
+            <h2>Holdings</h2>
+            <span class="muted" id="positionCount">0</span>
+          </div>
+          <div id="positionList"></div>
+        </section>
+
+        <div class="run" id="runBody"></div>
+
+        <section class="block">
+          <div class="block-head"><h2>Today</h2></div>
+          <div class="rows">
+            <div class="row"><span>Cash free to trade</span><b id="stripCash">—</b></div>
+            <div class="row"><span>Result so far</span><b id="stripDaily">—</b></div>
+            <div class="row"><span>Loss budget</span><b id="stripBudget">—</b></div>
+            <div class="row"><span>Open slots</span><b id="stripPositions">—</b></div>
+            <div class="row" id="lockRow" hidden><span>Paused</span><b class="plain">—</b></div>
+          </div>
+        </section>
+
+        <section class="block">
+          <div class="block-head"><h2>Track record</h2></div>
+          <div class="rows">
+            <div class="row"><span>Trades</span><b id="statTrades">0</b></div>
+            <div class="row"><span>Win rate</span><b id="statWinRate">—</b></div>
+            <div class="row"><span>Total P&amp;L</span><b id="statPnl">—</b></div>
+            <div class="row"><span>Profit factor</span><b id="statFactor">—</b></div>
+          </div>
+        </section>
+
+        <section class="block">
+          <div class="actions">
+            <button id="btnStart">Start</button>
+            <button id="btnStop">Stop</button>
+            <button id="btnScan">Scan now</button>
+            <button id="btnArm" class="danger">Arm live</button>
+          </div>
+          <p class="note" id="armHint"></p>
+        </section>
+      </section>
+
+      <!-- ============================================================ chart -->
+      <section class="view" data-view="chart">
+        <div class="chart-head">
+          <div class="symbol-rail" id="symbolTabs"></div>
+          <span class="quote" id="chartQuote">—</span>
+        </div>
+        <div id="chart"></div>
+        <p class="note" id="chartRead">Pick a symbol.</p>
+        <p class="note faint" id="chartNote"></p>
+      </section>
+
+      <!-- =========================================================== market -->
+      <section class="view" data-view="market">
+        <div class="block-head standalone">
+          <h2>Watchlist</h2>
+          <form class="add" id="addForm">
+            <input id="addSymbol" placeholder="Ticker" maxlength="8" autocomplete="off" spellcheck="false">
+            <button type="submit" class="ghost">Add</button>
+          </form>
+        </div>
+        <div id="watchRows"></div>
+        <p class="note faint" id="watchEmpty">Waiting for the first scan…</p>
+      </section>
+
+      <!-- ======================================================== catalysts -->
+      <section class="view" data-view="catalysts">
+        <div class="block-head standalone">
+          <h2>Catalysts</h2>
+          <button class="ghost" id="btnAddCatalyst">Add</button>
+        </div>
+
+        <p class="note faint">A catalyst is an event you expect to move a stock — a game
+          launch, a film, a ruling. Put the date in and the bot counts down to it, tells
+          you when your entry window opens, and keeps the real headlines next to your
+          thesis so you can see if the story still holds.</p>
+
+        <form class="catalyst-form" id="catalystForm" hidden>
+          <div class="field-row">
+            <label>What is happening
+              <input id="cTitle" placeholder="GTA 6 launch" maxlength="120" required>
+            </label>
+            <label>Ticker
+              <input id="cSymbol" placeholder="TTWO" maxlength="8" required spellcheck="false">
+            </label>
+          </div>
+          <div class="field-row">
+            <label>Expected date
+              <input id="cDate" placeholder="2026-11-19 or 2026-11" maxlength="10" required>
+            </label>
+            <label>Start looking
+              <select id="cWindow">
+                <option value="14">2 weeks before</option>
+                <option value="30">1 month before</option>
+                <option value="45" selected>6 weeks before</option>
+                <option value="90">3 months before</option>
+                <option value="180">6 months before</option>
+              </select>
+            </label>
+          </div>
+          <div class="field-row">
+            <label>How sure is the date
+              <select id="cConfidence">
+                <option value="confirmed">Confirmed</option>
+                <option value="estimated" selected>Estimated</option>
+                <option value="rumoured">Rumoured</option>
+              </select>
+            </label>
+            <label>Conviction
+              <select id="cConviction">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+              </select>
+            </label>
+          </div>
+          <div class="field-row">
+            <label>The plan
+              <select id="cExit">
+                <option value="before">Sell into the event</option>
+                <option value="after">Hold through the event</option>
+              </select>
+            </label>
+          </div>
+          <label>Why this moves the stock
+            <textarea id="cThesis" rows="2" maxlength="500"
+              placeholder="Take-Two makes GTA. A launch this size moves the whole year's revenue."></textarea>
+          </label>
+          <div class="actions">
+            <button type="submit" class="solid">Add catalyst</button>
+            <button type="button" class="ghost" id="btnCancelCatalyst">Cancel</button>
+          </div>
+        </form>
+
+        <div id="catalystList"></div>
+        <p class="note faint" id="catalystEmpty">Nothing on the calendar yet.</p>
+
+        <div class="block-head standalone"><h2>Headlines</h2></div>
+        <div id="newsList"></div>
+        <p class="note faint" id="newsEmpty">Add a catalyst and the news for it shows up here.</p>
+
+        <p class="note warn" id="catalystWarning"></p>
+      </section>
+
+      <!-- ========================================================= activity -->
+      <section class="view" data-view="activity">
+        <div class="block-head standalone">
+          <h2>Closed trades</h2>
+          <span class="muted" id="historyCount">0</span>
+        </div>
+        <div id="tradeRows"></div>
+        <p class="note faint" id="tradesEmpty">Nothing closed yet.</p>
+      </section>
+
+      <!-- ============================================================= live -->
+      <section class="view" data-view="live">
+        <div class="block-head standalone">
+          <h2>Trading real money</h2>
+          <span class="muted" id="setupProgress">—</span>
+        </div>
+
+        <p class="prose"><b>Midas has no API.</b> Their own broker listing says so, so
+          nothing can place an order there. In signal mode the bot tells you what to buy
+          and you place it yourself.</p>
+        <p class="prose">For the bot to trade on its own you need a broker with an API.
+          <b>Alpaca</b> accepts Turkish residents and is commission-free on US stocks.</p>
+        <p class="prose warn">Real money means real losses. Do step three properly.</p>
+
+        <ol class="steps" id="setupSteps"></ol>
+
+        <div class="block-head standalone"><h2>Safety rails</h2></div>
+        <div class="rows" id="railGrid"></div>
+
+        <div class="block-head standalone"><h2>Connections</h2></div>
+        <div class="rows" id="connGrid"></div>
+      </section>
+
+    </main>
+
+    <nav class="tabbar" id="nav">
+      <button class="tab active" data-tab="home">
+        <svg viewBox="0 0 20 20"><path d="M3 9.5 10 4l7 5.5M5.5 8.5V16h9V8.5"/></svg>
+        <span>Home</span>
+      </button>
+      <button class="tab" data-tab="chart">
+        <svg viewBox="0 0 20 20"><path d="M3 16V4M3 16h14M7 13V8.5M10.5 13V6M14 13v-3"/></svg>
+        <span>Chart</span>
+      </button>
+      <button class="tab" data-tab="market">
+        <svg viewBox="0 0 20 20"><path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h8"/></svg>
+        <span>Market</span>
+      </button>
+      <button class="tab" data-tab="catalysts">
+        <svg viewBox="0 0 20 20"><path d="M4 6.5h12v9H4v-9ZM4 9.5h12M7.5 4.5v3M12.5 4.5v3"/></svg>
+        <span>Catalysts</span>
+        <i class="tab-dot" id="catalystDot" hidden></i>
+      </button>
+      <button class="tab" data-tab="activity">
+        <svg viewBox="0 0 20 20"><path d="M10 5.5V10l3 1.8M17 10a7 7 0 1 1-2.05-4.95"/></svg>
+        <span>Activity</span>
+      </button>
+      <button class="tab" data-tab="live">
+        <svg viewBox="0 0 20 20"><path d="M10 3.5v8m0 0 3.2-3.2M10 11.5 6.8 8.3M4.5 15h11"/></svg>
+        <span>Live</span>
+      </button>
+    </nav>
+  </div>
+</div>
+
+<script src="/vendor/lightweight-charts.js"></script>
+<script src="/chart.js"></script>
+</body>
+</html>

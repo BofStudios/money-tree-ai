@@ -1,0 +1,109 @@
+# Copy to config/config.yaml and adjust. Non-secret settings only.
+
+# How the bot acts on its own decisions:
+#   signal — analyses only and tells you what to do (use this with Midas).
+#            No brokerage API needed. You place the trade yourself.
+#   paper  — Alpaca paper account. Simulated money, real prices.
+#   live   — Alpaca live account. Real money. Still requires arming in the UI.
+mode: signal
+
+market: us_stocks
+
+watchlist:
+  - AAPL
+  - MSFT
+  - NVDA
+  - AMZN
+  - GOOGL
+  - META
+  - TSLA
+  - SPY
+
+timeframe: 15m           # 1m 5m 15m 30m 1h 1d
+scan_interval_seconds: 60
+
+strategy:
+  name: ema_rsi
+  fast_ema: 12
+  slow_ema: 26
+  rsi_period: 14
+  rsi_overbought: 70
+  rsi_oversold: 30
+  atr_period: 14
+
+risk:
+  starting_paper_balance: 10000.0   # paper and signal modes
+  max_position_pct: 20.0            # hard cap on one position, as % of equity
+  max_daily_loss_pct: 5.0           # kill switch: disarms live trading when hit
+  max_open_positions: 3
+  fractional_shares: true           # a $5 stake cannot buy a whole $300 share
+  min_order_value: 1.0              # skip orders smaller than this
+
+  # How far the stop sits from entry.
+  #   atr     — scaled to how much the symbol actually moves (recommended)
+  #   percent — the flat stop_loss_pct below
+  stop_mode: atr
+  atr_period: 14
+  atr_multiple: 1.5
+  min_stop_pct: 0.8                 # floor, for very quiet symbols
+  max_stop_pct: 6.0                 # ceiling, for very wild ones
+  stop_loss_pct: 2.0                # only used when stop_mode is percent
+  reward_risk: 2.0                  # target sits this many stop-distances away
+
+  # How the share count is chosen.
+  #   risk  — fix the cash lost if the stop hits; size falls out of the stop
+  #   fixed — always spend max_position_pct of equity
+  sizing: risk
+  risk_per_trade_pct: 0.5           # raise this and max_position_pct starts to bind
+
+  trailing:
+    enabled: true
+    activate_at_pct: 2.0            # start trailing once the trade is up this much
+    trail_pct: 1.0                  # then follow this far behind the peak
+
+# Pauses on new entries after the patterns that drain an account.
+protections:
+  enabled: true
+  cooldown_minutes: 30              # no re-entry on a symbol straight after closing it
+  stoploss_guard_lookback_minutes: 240
+  stoploss_guard_trades: 3          # this many stop-outs in the window...
+  stoploss_guard_stop_minutes: 120  # ...halts every symbol for this long
+  max_drawdown_lookback_trades: 20
+  max_drawdown_pct: 15.0
+  max_drawdown_stop_minutes: 240
+
+# A "run": hand the bot a small stake and a target, and it trades only that
+# money until it gets there or falls through the floor. Paper money.
+challenge:
+  enabled: true
+  presets: [1.0, 5.0, 10.0, 25.0, 50.0, 100.0]
+  multipliers: [1.5, 2.0, 3.0, 5.0]
+  default_stake: 5.0
+  default_multiplier: 2.0
+  position_pct: 100.0        # a tiny bankroll cannot be diversified
+  max_open_positions: 1
+  bust_drawdown_pct: 50.0    # ends the run once half the stake is gone
+
+mentor:
+  enabled: true
+  verbosity: normal      # quiet | normal | chatty
+  max_lines: 400
+  # Who answers in the AI panel. "auto" picks the first that works, free first:
+  #   ollama    free, local, no account   (install ollama, then: ollama pull llama3.2)
+  #   gemini    free tier, needs GEMINI_API_KEY   (aistudio.google.com)
+  #   groq      free tier, needs GROQ_API_KEY     (console.groq.com)
+  #   anthropic paid, needs ANTHROPIC_API_KEY
+  provider: auto
+  model: ""              # empty means that provider's own default model
+  memory_turns: 12       # how much of the conversation it carries between answers
+
+telegram:
+  enabled: true
+  push_signals: true     # "BUY AAPL @ 182.40" alerts
+  push_fills: true       # position opened / closed
+  push_mentor: false     # full mentor chatter (noisy on a phone)
+  daily_summary: true
+
+web:
+  host: 0.0.0.0          # 0.0.0.0 lets your phone reach it over the same Wi-Fi
+  port: 8765
