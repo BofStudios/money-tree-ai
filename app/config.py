@@ -214,6 +214,10 @@ class Settings(BaseModel):
     def mentor_memory_path(self) -> Path:
         return DATA_DIR / "mentor_memory.json"
 
+    @property
+    def user_profile_path(self) -> Path:
+        return DATA_DIR / "user_profile.json"
+
 
 def load_settings(config_path: Path | None = None) -> Settings:
     path = config_path or (CONFIG_DIR / "config.yaml")

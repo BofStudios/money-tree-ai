@@ -14,6 +14,11 @@ from app.engine.portfolio_engine import PortfolioEngine
 from app.execution.signal_executor import SignalExecutor, _build_trade
 from app.mentor.ai import AIMentor
 from app.mentor.narrator import Narrator
+from app.research.analyst import Analyst, build_plan
+from app.research.service import DEPTHS as RESEARCH_DEPTHS
+from app.research.service import ResearchService
+from app.research.user_profile import CHOICES as PROFILE_CHOICES
+from app.research.user_profile import ProfileStore
 from app.storage.repository import Repository
 from app.web.ws import WebSocketHub
 
@@ -30,6 +35,9 @@ def build_router(
     settings: Settings | None = None,
     catalysts: CatalystManager | None = None,
     news: NewsFeed | None = None,
+    research: ResearchService | None = None,
+    analyst: Analyst | None = None,
+    profiles: ProfileStore | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api")
 
@@ -408,6 +416,119 @@ def build_router(
     def scan_now() -> dict:
         engine.scan_now()
         return {"ok": True}
+
+    # ---------------------------------------------------------------- research
+
+    def _need_research() -> None:
+        if research is None:
+            raise HTTPException(status_code=503, detail="Company research is not configured.")
+
+    @router.get("/research/search", dependencies=guarded)
+    def research_search(q: str = Query(default=""), limit: int = Query(default=8, ge=1, le=25)) -> dict:
+        _need_research()
+        return {"query": q, "results": research.search(q, limit)}
+
+    @router.get("/research/{symbol}", dependencies=guarded)
+    def research_company(symbol: str, depth: str = Query(default="standard")) -> dict:
+        _need_research()
+        if depth not in RESEARCH_DEPTHS:
+            raise HTTPException(status_code=400, detail=f"depth must be one of {RESEARCH_DEPTHS}")
+
+        view = research.company(symbol, depth)
+        if view.get("profile") is None and view.get("price") is None:
+            raise HTTPException(status_code=404, detail=f"No data for {symbol.upper()}.")
+
+        headlines = _headlines_for(symbol)
+        plan = build_plan(view, profiles.get().attention if profiles else [])
+        return {
+            **view,
+            "news": headlines,
+            "plan": plan.to_dict(),
+            "ai_available": bool(analyst and analyst.available),
+        }
+
+    @router.post("/research/{symbol}/analyse", dependencies=guarded)
+    def research_analyse(
+        symbol: str,
+        depth: str = Body(default="standard", embed=True),
+        attention: list[str] = Body(default=[], embed=True),
+        question: str | None = Body(default=None, embed=True),
+    ) -> dict:
+        _need_research()
+        if analyst is None or not analyst.available:
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "No AI is connected. Install Ollama (free, no account) or put a "
+                    "free GEMINI_API_KEY or GROQ_API_KEY in .env."
+                ),
+            )
+        if depth not in RESEARCH_DEPTHS:
+            raise HTTPException(status_code=400, detail=f"depth must be one of {RESEARCH_DEPTHS}")
+
+        view = research.company(symbol, depth)
+        if view.get("profile") is None and view.get("price") is None:
+            raise HTTPException(status_code=404, detail=f"No data for {symbol.upper()}.")
+
+        plan = build_plan(view, attention)
+        note = analyst.analyse(
+            view,
+            plan,
+            profile_prompt=profiles.get().as_prompt() if profiles else "",
+            headlines=_headlines_for(symbol),
+            question=question,
+        )
+        if note is None:
+            raise HTTPException(status_code=502, detail="The model did not return an analysis.")
+        return {"symbol": symbol.upper(), "depth": depth, "plan": plan.to_dict(), "note": note}
+
+    @router.post("/research/{symbol}/ask", dependencies=guarded)
+    def research_ask(symbol: str, question: str = Body(..., embed=True)) -> dict:
+        _need_research()
+        if analyst is None or not analyst.available:
+            raise HTTPException(status_code=503, detail="No AI is connected.")
+
+        view = research.company(symbol, "standard")
+        answer = analyst.ask(
+            view,
+            question,
+            profile_prompt=profiles.get().as_prompt() if profiles else "",
+            headlines=_headlines_for(symbol),
+        )
+        if answer is None:
+            raise HTTPException(status_code=502, detail="The model did not return an answer.")
+        return {"symbol": symbol.upper(), "answer": answer}
+
+    def _headlines_for(symbol: str) -> list[dict]:
+        """News for one symbol, or an empty list when no feed is configured."""
+        if news is None:
+            return []
+        try:
+            return [h.to_dict() if hasattr(h, "to_dict") else h
+                    for h in news.for_symbols([symbol.upper()], limit=10)]
+        except Exception:
+            log.debug("no headlines for %s", symbol, exc_info=True)
+            return []
+
+    # ----------------------------------------------------------------- profile
+
+    @router.get("/profile", dependencies=guarded)
+    def get_profile() -> dict:
+        if profiles is None:
+            raise HTTPException(status_code=503, detail="Profiles are not configured.")
+        return {"profile": profiles.get().to_dict(), "choices": PROFILE_CHOICES}
+
+    @router.patch("/profile", dependencies=guarded)
+    def patch_profile(changes: dict = Body(...)) -> dict:
+        if profiles is None:
+            raise HTTPException(status_code=503, detail="Profiles are not configured.")
+        return {"profile": profiles.update(changes).to_dict()}
+
+    @router.post("/profile/reset", dependencies=guarded)
+    def reset_profile() -> dict:
+        if profiles is None:
+            raise HTTPException(status_code=503, detail="Profiles are not configured.")
+        return {"profile": profiles.reset().to_dict()}
 
     # --------------------------------------------------------------- websocket
 

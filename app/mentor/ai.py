@@ -175,6 +175,19 @@ class AIMentor:
             600,
         )
 
+    def research(self, system: str, prompt: str, max_tokens: int) -> str | None:
+        """One-shot call with a caller-supplied system prompt.
+
+        Company research runs under its own instructions and must not inherit
+        the trading mentor's, so this deliberately bypasses SYSTEM_PROMPT. It
+        also stays out of conversation memory: a research note is a document,
+        not a chat turn, and replaying it would crowd out the actual dialogue.
+        """
+        if not self.available:
+            return None
+        reply = self.provider.chat(system, [{"role": "user", "content": prompt}], max_tokens)
+        return reply.text if reply else None
+
     def reset(self) -> None:
         self.memory.clear_history()
 

@@ -11,6 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/dashboard.css">
+  <link rel="stylesheet" href="/research.css">
 </head>
 <body>
 
@@ -308,33 +309,152 @@
         <div class="rows" id="connGrid"></div>
       </section>
 
+      <!-- ========================================================= research -->
+      <section class="view" data-view="research">
+
+        <div class="finder">
+          <div class="finder-field">
+            <svg class="finder-icon" viewBox="0 0 20 20" aria-hidden="true">
+              <circle cx="9" cy="9" r="5.5"/><path d="m13.5 13.5 3 3"/>
+            </svg>
+            <input id="rSearch" autocomplete="off" spellcheck="false"
+                   data-i18n-placeholder="research.search">
+            <button class="ghost sm" id="rClear" hidden data-i18n-label="action.close">✕</button>
+          </div>
+          <p class="note faint" id="rSearchHint" data-i18n="research.searchHint"></p>
+          <div class="finder-results" id="rResults" hidden></div>
+        </div>
+
+        <div id="rEmpty" class="empty-state">
+          <h3 data-i18n="empty.research"></h3>
+          <p data-i18n="empty.researchBody"></p>
+        </div>
+
+        <div id="rCompany" hidden>
+          <!-- identity + price -->
+          <header class="co-head">
+            <div class="co-id">
+              <span class="ticker lg" id="rTicker"></span>
+              <div>
+                <h2 class="co-name" id="rName"></h2>
+                <p class="co-meta" id="rMeta"></p>
+              </div>
+            </div>
+            <div class="co-price">
+              <div class="figure" id="rPrice"></div>
+              <div class="hero-change" id="rChange"></div>
+              <span class="freshness" id="rFresh"></span>
+            </div>
+          </header>
+
+          <div class="mode-switch" role="group">
+            <button class="seg active" data-mode="simple" data-i18n="mode.simple"></button>
+            <button class="seg" data-mode="advanced" data-i18n="mode.advanced"></button>
+            <span class="note faint" id="rModeHint"></span>
+          </div>
+
+          <!-- ai analysis -->
+          <section class="block">
+            <div class="block-head">
+              <h2 data-i18n="research.depth"></h2>
+            </div>
+            <div class="depth-grid" id="rDepth"></div>
+
+            <div class="block-head" style="margin-top:22px;">
+              <h2 data-i18n="research.attention"></h2>
+              <span class="muted" data-i18n="research.attentionHint"></span>
+            </div>
+            <div class="chips tagset" id="rAttention"></div>
+
+            <div class="plan" id="rPlan" hidden></div>
+
+            <div class="actions" style="margin-top:18px;">
+              <button id="rRun" class="primary" data-i18n="research.start"></button>
+            </div>
+            <p class="note warn" id="rAnalysisError" hidden></p>
+            <article class="note-body" id="rNote" hidden></article>
+          </section>
+
+          <!-- data sections, rendered from the payload -->
+          <div id="rSections"></div>
+
+          <p class="note faint disclaimer" data-i18n="disclaimer"></p>
+        </div>
+      </section>
+
+      <!-- ========================================================= settings -->
+      <section class="view" data-view="settings">
+        <div class="block-head standalone"><h2 data-i18n="settings.title"></h2></div>
+
+        <section class="block">
+          <div class="block-head"><h2 data-i18n="settings.language"></h2></div>
+          <div class="chips tagset" id="sLanguage"></div>
+        </section>
+
+        <section class="block">
+          <div class="block-head"><h2 data-i18n="settings.ai"></h2></div>
+          <div class="rows">
+            <div class="row"><span data-i18n="settings.aiProvider"></span><b id="sProvider">—</b></div>
+          </div>
+          <div class="field-block">
+            <label data-i18n="settings.level"></label>
+            <div class="chips tagset" data-profile="technical_level"></div>
+          </div>
+          <div class="field-block">
+            <label data-i18n="settings.tone"></label>
+            <div class="chips tagset" data-profile="detail"></div>
+          </div>
+          <div class="field-block">
+            <label data-i18n="settings.depth"></label>
+            <div class="chips tagset" data-profile="research_depth"></div>
+          </div>
+        </section>
+
+        <section class="block">
+          <div class="block-head"><h2 data-i18n="settings.profile"></h2></div>
+          <p class="note faint" data-i18n="settings.profileHint"></p>
+          <pre class="profile-dump" id="sProfile"></pre>
+          <div class="actions">
+            <button class="ghost" id="sReset" data-i18n="settings.resetProfile"></button>
+          </div>
+        </section>
+      </section>
+
     </main>
 
     <nav class="tabbar" id="nav">
       <button class="tab active" data-tab="home">
         <svg viewBox="0 0 20 20"><path d="M3 9.5 10 4l7 5.5M5.5 8.5V16h9V8.5"/></svg>
-        <span>Home</span>
+        <span data-i18n="nav.home">Home</span>
+      </button>
+      <button class="tab" data-tab="research">
+        <svg viewBox="0 0 20 20"><circle cx="9" cy="9" r="5.5"/><path d="m13.5 13.5 3 3"/></svg>
+        <span data-i18n="nav.research">Research</span>
       </button>
       <button class="tab" data-tab="chart">
         <svg viewBox="0 0 20 20"><path d="M3 16V4M3 16h14M7 13V8.5M10.5 13V6M14 13v-3"/></svg>
-        <span>Chart</span>
+        <span data-i18n="nav.chart">Chart</span>
       </button>
       <button class="tab" data-tab="market">
         <svg viewBox="0 0 20 20"><path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h8"/></svg>
-        <span>Market</span>
+        <span data-i18n="nav.market">Market</span>
       </button>
       <button class="tab" data-tab="catalysts">
         <svg viewBox="0 0 20 20"><path d="M4 6.5h12v9H4v-9ZM4 9.5h12M7.5 4.5v3M12.5 4.5v3"/></svg>
-        <span>Catalysts</span>
+        <span data-i18n="nav.catalysts">Catalysts</span>
         <i class="tab-dot" id="catalystDot" hidden></i>
       </button>
       <button class="tab" data-tab="activity">
         <svg viewBox="0 0 20 20"><path d="M10 5.5V10l3 1.8M17 10a7 7 0 1 1-2.05-4.95"/></svg>
-        <span>Activity</span>
+        <span data-i18n="nav.activity">Activity</span>
       </button>
       <button class="tab" data-tab="live">
         <svg viewBox="0 0 20 20"><path d="M10 3.5v8m0 0 3.2-3.2M10 11.5 6.8 8.3M4.5 15h11"/></svg>
-        <span>Live</span>
+        <span data-i18n="nav.live">Live</span>
+      </button>
+      <button class="tab" data-tab="settings">
+        <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="2.6"/><path d="M10 3.2v2M10 15v1.8M16.8 10h-1.8M5 10H3.2M14.8 5.2l-1.3 1.3M6.5 13.5l-1.3 1.3M14.8 14.8l-1.3-1.3M6.5 6.5 5.2 5.2"/></svg>
+        <span data-i18n="nav.settings">Settings</span>
       </button>
     </nav>
   </div>
@@ -342,5 +462,6 @@
 
 <script src="/vendor/lightweight-charts.js"></script>
 <script src="/chart.js"></script>
+<script type="module" src="/research.js"></script>
 </body>
 </html>

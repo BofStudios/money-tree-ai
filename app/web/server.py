@@ -32,6 +32,9 @@ def create_app(
     settings=None,
     catalysts=None,
     news=None,
+    research=None,
+    analyst=None,
+    profiles=None,
 ) -> FastAPI:
     api = FastAPI(title="Money Tree AI", docs_url=None, redoc_url=None)
     hub = WebSocketHub(events)
@@ -41,7 +44,10 @@ def create_app(
         hub.bind(asyncio.get_running_loop())
 
     api.include_router(
-        build_router(engine, repo, mentor, claude, hub, token, settings, catalysts, news)
+        build_router(
+            engine, repo, mentor, claude, hub, token, settings, catalysts, news,
+            research, analyst, profiles,
+        )
     )
     @api.middleware("http")
     async def _revalidate_static(request, call_next):

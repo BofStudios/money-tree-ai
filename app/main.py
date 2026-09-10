@@ -28,6 +28,10 @@ from app.risk.risk_manager import RiskManager
 from app.storage.db import create_session_factory
 from app.storage.repository import Repository
 from app.strategy.ema_rsi import EmaRsiStrategy
+from app.research.analyst import Analyst
+from app.research.service import ResearchService
+from app.research.user_profile import ProfileStore
+from app.research.yahoo_research import YahooResearch
 from app.web.server import WebServer, create_app
 
 log = logging.getLogger(__name__)
@@ -134,6 +138,12 @@ def main() -> None:
     catalysts = CatalystManager(session_factory, events)
     news = NewsFeed(settings.secrets.alpaca_api_key, settings.secrets.alpaca_api_secret)
 
+    # Company research runs off its own free provider and its own daily candles,
+    # so it keeps working in signal mode where no brokerage is connected at all.
+    research = ResearchService(YahooResearch(), YahooData(), timeframe="1d")
+    analyst = Analyst(claude)
+    profiles = ProfileStore(settings.user_profile_path)
+
     telegram = TelegramNotifier(
         token="" if args.no_telegram else settings.secrets.telegram_bot_token,
         allowed_chat_ids=settings.secrets.allowed_chat_ids,
@@ -148,7 +158,8 @@ def main() -> None:
 
     token = settings.secrets.dashboard_token
     api = create_app(
-        engine, repo, mentor, claude, events, token, settings, catalysts, news
+        engine, repo, mentor, claude, events, token, settings, catalysts, news,
+        research, analyst, profiles,
     )
     web = WebServer(api, settings.app.web.host, settings.app.web.port)
     web.start()

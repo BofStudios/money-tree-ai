@@ -1,0 +1,302 @@
+/* The research surface.
+ *
+ * Denser than the trading views on purpose: this screen is read and compared,
+ * not glanced at. It inherits every token from dashboard.css so the two
+ * surfaces cannot drift apart.
+ */
+
+/* ------------------------------------------------------------------ finder */
+
+.finder { margin-bottom: 26px; position: relative; }
+
+.finder-field {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 12px; padding: 0 14px; height: 46px;
+  transition: border-color 0.18s var(--ease), background 0.18s var(--ease);
+}
+.finder-field:focus-within { border-color: var(--text-3); background: var(--surface-2); }
+.finder-icon {
+  width: 17px; height: 17px; flex: none; color: var(--text-3);
+  fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round;
+}
+.finder-field input {
+  flex: 1; min-width: 0; height: 100%; border: none; background: none;
+  color: var(--text); font-family: var(--sans); font-size: 15px; outline: none;
+}
+.finder-field input::placeholder { color: var(--text-3); }
+
+.finder-results {
+  position: absolute; left: 0; right: 0; top: 52px; z-index: 40;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 12px; overflow: hidden;
+  box-shadow: 0 22px 50px -16px rgba(0, 0, 0, 0.9);
+  animation: flow 0.28s var(--spring);
+}
+.finder-row {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 11px 13px; border: none; background: none; cursor: pointer;
+  text-align: left; color: var(--text); font-family: inherit;
+  border-bottom: 1px solid var(--line-soft);
+}
+.finder-row:last-child { border-bottom: none; }
+.finder-row:hover, .finder-row:focus-visible { background: var(--surface-2); }
+.finder-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.finder-main b { font-size: 14px; font-weight: 600; }
+.finder-main small {
+  font-size: 12px; color: var(--text-3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.finder-ex { font-family: var(--mono); font-size: 10.5px; color: var(--text-3); flex: none; }
+.finder-empty { padding: 16px 14px; color: var(--text-3); font-size: 13.5px; }
+
+/* ------------------------------------------------------------ company head */
+
+.co-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 20px; flex-wrap: wrap; padding-bottom: 22px;
+}
+.co-id { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.ticker.lg { width: 48px; height: 48px; border-radius: 14px; font-size: 15px; }
+.co-name {
+  font-size: 21px; font-weight: 650; letter-spacing: -0.02em;
+  margin: 0; text-wrap: balance;
+}
+.co-meta { font-size: 12.5px; color: var(--text-3); margin: 3px 0 0; }
+.co-price { text-align: right; flex: none; }
+.co-price .figure { font-size: 30px; }
+.freshness {
+  display: block; margin-top: 5px;
+  font-family: var(--mono); font-size: 10.5px; color: var(--text-3);
+}
+
+/* ------------------------------------------------------------ mode switch */
+
+.mode-switch {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 4px; margin-bottom: 8px;
+}
+.seg {
+  font-size: 12.5px; font-weight: 500; font-family: inherit;
+  padding: 7px 15px; border-radius: 9px; cursor: pointer;
+  background: none; border: 1px solid transparent; color: var(--text-3);
+  transition: color 0.16s var(--ease), background 0.16s var(--ease),
+              border-color 0.16s var(--ease);
+}
+.seg:hover { color: var(--text-2); }
+.seg.active { background: var(--surface-2); border-color: var(--line); color: var(--text); }
+.mode-switch .note { margin: 0 0 0 6px; font-size: 12px; }
+
+/* ------------------------------------------------------------------ depth */
+
+.depth-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;
+}
+.depth {
+  display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
+  padding: 14px 15px; border-radius: 12px; cursor: pointer; text-align: left;
+  background: var(--surface); border: 1px solid var(--line); color: var(--text-2);
+  font-family: inherit;
+  transition: border-color 0.18s var(--ease), transform 0.2s var(--spring),
+              background 0.18s var(--ease);
+}
+.depth:hover { transform: translateY(-2px); border-color: var(--text-3); }
+.depth.active { border-color: var(--text); background: var(--surface-2); color: var(--text); }
+.depth b { font-size: 14px; font-weight: 600; }
+.depth small { font-size: 11.5px; color: var(--text-3); line-height: 1.45; }
+
+/* -------------------------------------------------------------- pick chips */
+
+.chips.tagset { gap: 7px; }
+.chip.pickable {
+  cursor: pointer; font-family: inherit; white-space: nowrap;
+  /* The stake picker's .chip stretches to fill its row; these are tags and
+     must hug their text instead, so the flex sizing is reset explicitly. */
+  flex: 0 0 auto; min-width: 0; text-align: left;
+  padding: 8px 13px; font-size: 12.5px;
+  transition: border-color 0.16s var(--ease), color 0.16s var(--ease),
+              background 0.16s var(--ease);
+}
+.chip.pickable::before { content: none; }
+.chip.pickable:hover { color: var(--text); }
+.chip.pickable.on {
+  background: var(--text); color: #000; border-color: var(--text); font-weight: 600;
+}
+
+/* -------------------------------------------------------------------- plan */
+
+.plan {
+  margin-top: 22px; padding: 18px 20px;
+  border: 1px solid var(--line); border-radius: var(--r); background: var(--surface);
+  animation: flow 0.5s var(--spring);
+}
+.plan h3 { margin: 0 0 12px; font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
+.plan-steps {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.plan-steps li {
+  display: flex; align-items: baseline; gap: 11px;
+  font-size: 13.5px; color: var(--text-2);
+  animation: flow 0.4s var(--spring) backwards;
+}
+.plan-steps li:nth-child(n + 2) { animation-delay: 0.04s; }
+.plan-steps li:nth-child(n + 4) { animation-delay: 0.08s; }
+.plan-steps li i {
+  font-family: var(--mono); font-size: 10.5px; font-style: normal;
+  color: var(--text-3); flex: none; font-variant-numeric: tabular-nums;
+}
+.plan-steps li.focused { color: var(--text); font-weight: 500; }
+.plan-steps li.focused i { color: var(--up); }
+
+/* ----------------------------------------------------------------- metrics */
+
+.row.metric > span { display: flex; align-items: baseline; gap: 8px; }
+.why {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.03em;
+  padding: 2px 7px; border-radius: 20px; cursor: pointer;
+  background: none; border: 1px solid var(--line); color: var(--text-3);
+  transition: color 0.16s var(--ease), border-color 0.16s var(--ease);
+}
+.why:hover { color: var(--text); border-color: var(--text-3); }
+
+/* A figure the provider does not supply. Never rendered as a zero. */
+.na { color: var(--text-3); cursor: help; border-bottom: 1px dotted var(--text-3); }
+
+/* ------------------------------------------------------------------ badges */
+
+.badges { display: flex; flex-wrap: wrap; gap: 7px; margin: 14px 0; }
+.badge {
+  font-size: 11.5px; font-weight: 500;
+  padding: 5px 11px; border-radius: 20px;
+  background: var(--surface-2); border: 1px solid var(--line); color: var(--text-2);
+}
+.pill.sm { font-size: 9.5px; padding: 3px 8px; }
+
+.levels { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 14px 0; }
+.levels > div {
+  padding: 11px 13px; border-radius: 10px;
+  background: var(--surface); border: 1px solid var(--line-soft);
+}
+.levels span { display: block; font-size: 11px; color: var(--text-3); margin-bottom: 4px; }
+.levels b { font-family: var(--mono); font-size: 13px; font-weight: 500; }
+
+/* ---------------------------------------------------------------- readings */
+
+.readings { display: flex; flex-direction: column; gap: 2px; }
+.reading {
+  padding: 13px 0; border-bottom: 1px solid var(--line-soft);
+  animation: flow 0.45s var(--spring) backwards;
+}
+.reading:last-child { border-bottom: none; }
+.reading-top { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.reading-label { font-size: 13.5px; font-weight: 500; }
+.reading-value {
+  font-family: var(--mono); font-size: 13px; font-weight: 500;
+  color: var(--text-2); font-variant-numeric: tabular-nums;
+}
+.reading p { margin: 5px 0 0; font-size: 13px; line-height: 1.55; color: var(--text-2); }
+.reading .why { margin-top: 7px; }
+
+/* ------------------------------------------------------------------ tables */
+
+.table-wrap { overflow-x: auto; margin: 0 -2px; }
+table.fin { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+table.fin th, table.fin td {
+  padding: 9px 12px; text-align: right; white-space: nowrap;
+  border-bottom: 1px solid var(--line-soft);
+}
+table.fin thead th {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 500; color: var(--text-3);
+}
+table.fin tbody th {
+  text-align: left; font-weight: 500; color: var(--text-2);
+  position: sticky; left: 0; background: var(--bg);
+}
+table.fin td {
+  font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--text);
+}
+
+/* ----------------------------------------------------------- analysis note */
+
+.note-body {
+  margin-top: 20px; padding: 22px 24px;
+  border: 1px solid var(--line); border-radius: var(--r);
+  background: var(--surface);
+  animation: flow 0.55s var(--spring);
+}
+.note-body h4 {
+  margin: 20px 0 8px; font-size: 12px; font-weight: 600;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--up);
+}
+.note-body h4:first-child { margin-top: 0; }
+.note-body p { margin: 0 0 11px; font-size: 14px; line-height: 1.68; color: var(--text-2); }
+.note-body ul { margin: 0 0 13px; padding-left: 18px; }
+.note-body li { font-size: 14px; line-height: 1.6; color: var(--text-2); margin-bottom: 5px; }
+.note-body strong { color: var(--text); font-weight: 600; }
+.note-body code {
+  font-family: var(--mono); font-size: 12.5px;
+  background: var(--surface-2); padding: 1px 5px; border-radius: 4px;
+}
+
+.disclaimer { text-align: center; padding: 26px 0 8px; font-size: 11.5px; }
+
+/* ------------------------------------------------------------------- sheet */
+
+.sheet {
+  position: fixed; inset: 0; z-index: 80;
+  background: rgba(0, 0, 0, 0.62);
+  display: grid; place-items: center; padding: 22px;
+  animation: fade 0.22s ease;
+}
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+.sheet-card {
+  width: min(460px, 100%); max-height: 80vh; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r); padding: 22px 24px;
+  animation: flow 0.4s var(--spring);
+}
+.sheet-card header {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+}
+.sheet-card h3 { margin: 0; font-size: 16px; font-weight: 650; letter-spacing: -0.02em; }
+.sheet-card h4 {
+  margin: 18px 0 6px; font-size: 11px; font-weight: 600;
+  letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-3);
+}
+.sheet-card p { margin: 0; font-size: 14px; line-height: 1.65; color: var(--text-2); }
+
+/* ------------------------------------------------------------ empty states */
+
+.empty-state { padding: 54px 0; text-align: center; }
+.empty-state h3 { margin: 0 0 7px; font-size: 15.5px; font-weight: 600; }
+.empty-state p { margin: 0; font-size: 13.5px; color: var(--text-3); }
+
+/* ---------------------------------------------------------------- settings */
+
+.field-block { margin-top: 20px; }
+.field-block > label {
+  display: block; margin-bottom: 9px; font-size: 12.5px; color: var(--text-2);
+}
+.profile-dump {
+  margin: 12px 0 0; padding: 14px 16px; overflow-x: auto;
+  background: var(--surface); border: 1px solid var(--line-soft); border-radius: 10px;
+  font-family: var(--mono); font-size: 11.5px; line-height: 1.7; color: var(--text-2);
+}
+
+button.primary {
+  background: var(--text); color: #000; font-weight: 600; border-color: var(--text);
+}
+button.primary:hover:not(:disabled) { opacity: 0.88; }
+button.sm { padding: 4px 8px; font-size: 12px; }
+
+/* -------------------------------------------------------------- responsive */
+
+@media (max-width: 620px) {
+  .co-head { flex-direction: column; gap: 14px; }
+  .co-price { text-align: left; }
+  .levels { grid-template-columns: 1fr; }
+  .depth-grid { grid-template-columns: 1fr; }
+  .note-body { padding: 18px 16px; }
+}
