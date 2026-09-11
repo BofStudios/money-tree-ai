@@ -1,8 +1,17 @@
 # Money Tree AI
 
-An automated US stock trading bot with a desktop app, a phone dashboard, a
-Telegram bot you can talk to, and an AI that explains every decision it makes —
-live, in a panel down the left-hand side.
+A Windows desktop app for researching US stocks and testing a mechanical trading
+strategy. It has a desktop window, a phone dashboard on the same Wi-Fi, a Telegram
+bot you can talk to, and an AI panel that narrates every decision — and only ever
+reasons about data it can actually see. Open source, MIT. It runs on your machine
+and sends your data nowhere.
+
+**It does not promise returns.** In a year of hourly backtests the built-in
+EMA/RSI strategy landed within a rounding error of break-even; the risk rules
+(adapted from Freqtrade) cut the worst drawdown by more than half but did not make
+it profitable — the full table is under
+[Did any of it help?](#did-any-of-it-help). This is a research and education tool,
+not investment advice.
 
 It runs in one of three modes:
 
@@ -10,7 +19,7 @@ It runs in one of three modes:
 |---|---|---|
 | **`signal`** | **Midas mode.** Analyses the market and tells you exactly what to buy or sell; you place it in Midas yourself. | Nothing. No brokerage API. |
 | `paper` | Trades by itself with simulated money on real prices. | Nothing. |
-| `live` | Trades by itself with real money through Alpaca. | An Alpaca account. |
+| `live` | Trades by itself with real money through Alpaca, behind an explicit **Arm** step that starts disarmed every run. | An Alpaca account. |
 
 ## Why signal mode exists
 
@@ -125,6 +134,17 @@ header, and a market bar that reads *"Market closed until Monday 16:30 İstanbul
 | **Mentor** | The live chat (below) |
 | **History** | Every closed trade with entry, exit, P&L and the reason it closed |
 | **Go Live** | The step-by-step guide to trading real money, with live status per step |
+
+**Company research** — a full screen per symbol, built from a free data provider
+(roughly 15 minutes delayed). Company profile, price snapshot, valuation ratios,
+quality metrics, the three financial statements, earnings history with the
+surprise on each report, analyst ratings and price targets, institutional
+holders, insider transactions, and dividend history. Every block shows which
+source supplied the number and how fresh it is. A **Simple / Advanced** toggle
+sets how much explanation sits next to each figure — the underlying data is the
+same at both levels. A number the provider does not have is shown as *"not
+available"*, never a zero or an estimate, and the AI is told in its prompt that
+it may not reason about a field it cannot see.
 
 **Signal cards** — when the bot finds a trade, a card appears at the top of the
 dashboard and a message lands in Telegram: shares, entry, stop, target, cash at
