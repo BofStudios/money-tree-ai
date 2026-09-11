@@ -417,6 +417,36 @@ def build_router(
         engine.scan_now()
         return {"ok": True}
 
+    # -------------------------------------------------------------------- news
+
+    @router.get("/news", dependencies=guarded)
+    def market_news(limit: int = Query(default=30, ge=1, le=60)) -> dict:
+        """Headlines across everything being watched — the watchlist, whatever
+        is held, and any catalyst symbols. One feed rather than three."""
+        symbols: list[str] = []
+        for symbol in engine.config.watchlist:
+            if symbol not in symbols:
+                symbols.append(symbol)
+        if catalysts is not None:
+            for symbol in catalysts.symbols():
+                if symbol not in symbols:
+                    symbols.append(symbol)
+
+        if news is None or not symbols:
+            return {"available": False, "symbols": symbols, "news": []}
+
+        try:
+            headlines = news.for_symbols(symbols, limit=limit)
+        except Exception:
+            log.debug("news feed unavailable", exc_info=True)
+            return {"available": False, "symbols": symbols, "news": []}
+
+        return {
+            "available": bool(news.available),
+            "symbols": symbols,
+            "news": [h.to_dict() if hasattr(h, "to_dict") else h for h in headlines],
+        }
+
     # ---------------------------------------------------------------- research
 
     def _need_research() -> None:

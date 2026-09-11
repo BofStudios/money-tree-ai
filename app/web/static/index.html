@@ -113,6 +113,11 @@
       </div>
     </header>
 
+    <!-- One important thing at a time, sliding down from the top. Not a log —
+         the chat panel and Activity tab already are that. This is only for
+         things worth interrupting the screen for. -->
+    <div class="alert-stack" id="alertStack"></div>
+
     <div class="signal-tray" id="signalTray"></div>
 
     <main class="page">
@@ -382,6 +387,16 @@
         </div>
       </section>
 
+      <!-- ============================================================= news -->
+      <section class="view" data-view="news">
+        <div class="block-head standalone">
+          <h2 data-i18n="section.news">News</h2>
+          <button class="ghost sm" id="newsRefresh">↻</button>
+        </div>
+        <p class="note faint" id="newsScope"></p>
+        <div id="newsFeed"></div>
+      </section>
+
       <!-- ========================================================= settings -->
       <section class="view" data-view="settings">
         <div class="block-head standalone"><h2 data-i18n="settings.title"></h2></div>
@@ -438,6 +453,11 @@
       <button class="tab" data-tab="market">
         <svg viewBox="0 0 20 20"><path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h8"/></svg>
         <span data-i18n="nav.market">Market</span>
+      </button>
+      <button class="tab" data-tab="news">
+        <svg viewBox="0 0 20 20"><path d="M3.5 4.5h10v11h-10v-11ZM13.5 8h3v6a1.5 1.5 0 0 1-3 0V8ZM5.5 7h6M5.5 10h6M5.5 13h4"/></svg>
+        <span data-i18n="section.news">News</span>
+        <i class="tab-dot" id="newsDot" hidden></i>
       </button>
       <button class="tab" data-tab="catalysts">
         <svg viewBox="0 0 20 20"><path d="M4 6.5h12v9H4v-9ZM4 9.5h12M7.5 4.5v3M12.5 4.5v3"/></svg>

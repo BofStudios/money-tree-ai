@@ -197,6 +197,7 @@ function showView(name) {
   if (name === "chart" && selected) loadChart(selected).catch(() => {});
   if (name === "live") loadSetup().catch(() => {});
   if (name === "catalysts") loadCatalysts().catch(() => {});
+  if (name === "news") loadNews().catch(() => {});
 }
 
 $("nav").onclick = (e) => {
@@ -457,7 +458,7 @@ function renderCatalysts(data) {
   $("newsEmpty").style.display = news.length ? "none" : "block";
   if (!data.news_available) {
     $("newsEmpty").textContent =
-      "Headlines need Alpaca keys in .env — the same ones the bot already uses for prices.";
+      "Headlines need broker keys in .env — the same ones the bot already uses for prices.";
   }
   $("newsList").innerHTML = news.map((n) => `
     <a class="news-item" href="${n.url}" target="_blank" rel="noopener">
@@ -545,9 +546,9 @@ function renderRealCheck(s) {
       cls: "livemoney",
       tag: armed ? "Real money · armed" : "Real money · not armed",
       body: armed
-        ? `This is your <b>real Alpaca balance</b> and the bot is allowed to place
+        ? `This is your <b>real money</b> and the bot is allowed to place
            orders with it. Losses here are real.`
-        : `This is your <b>real Alpaca balance</b>. The bot is watching but not
+        : `This is your <b>real money</b>. The bot is watching but not
            allowed to place orders until you arm it.`,
       line: ["Your real money at risk", "$" + money(s.equity)],
     },
@@ -810,7 +811,7 @@ function renderSetup(data) {
 
   const c = data.integrations;
   $("connGrid").innerHTML = [
-    ["Alpaca", c.alpaca], ["Telegram", c.telegram],
+    ["Broker", c.alpaca], ["Telegram", c.telegram],
     ["Claude", c.claude], ["Dashboard token", c.dashboard_token],
   ].map(([k, on]) => `<div class="row"><span>${k}</span><b class="plain">${on ? "connected" : "not set"}</b></div>`).join("");
 }
@@ -905,11 +906,124 @@ function connect() {
     else if (msg.type === "trade_closed") {
       get("/api/trades").then(renderTrades).catch(() => {});
       loadEquity().catch(() => {});
+      alertTradeClosed(msg);
     } else if (msg.type === "trade_opened" || msg.type === "signal_raised") {
       if (selected) loadChart(selected).catch(() => {});
+      if (msg.type === "trade_opened") alertTradeOpened(msg);
+    } else if (msg.type === "catalyst" && msg.event === "window_open") {
+      alertCatalyst(msg.catalyst);
     }
   };
   socket.onclose = () => setTimeout(connect, 3000);
+}
+
+/* =================================================================== news */
+
+async function loadNews() {
+  const host = $("newsFeed");
+  if (!host) return;
+  host.innerHTML = '<div class="empty">Loading…</div>';
+
+  try {
+    const data = await get("/api/news");
+    $("newsScope").textContent = data.symbols.length
+      ? `Watching ${data.symbols.length} symbols: ${data.symbols.join(", ")}`
+      : "";
+
+    if (!data.available) {
+      host.innerHTML =
+        '<div class="empty">The news feed needs broker keys in .env. '
+        + "Everything else still works.</div>";
+      return;
+    }
+    if (!data.news.length) {
+      host.innerHTML = '<div class="empty">No recent headlines for what you are watching.</div>';
+      return;
+    }
+
+    host.innerHTML = data.news.map((n) => `
+      <article class="news-item">
+        <div class="news-head">${escapeHtml(n.headline || "")}</div>
+        <div class="news-meta">${escapeHtml(stamp(n.created_at))} · ${escapeHtml(n.source || "")}</div>
+        ${(n.symbols || []).length
+          ? `<div class="news-syms">${n.symbols.map((s) =>
+              `<span>${escapeHtml(s)}</span>`).join("")}</div>`
+          : ""}
+      </article>`).join("");
+    $("newsDot").hidden = true;
+  } catch (err) {
+    host.innerHTML = `<div class="empty">${escapeHtml(err.message)}</div>`;
+  }
+}
+
+/* ================================================================= alerts */
+
+/* A banner is an interruption, so it is spent only on things that changed the
+   money or the plan. Everything quieter belongs in the chat rail. */
+
+const ALERT_LIFE = 9000;
+
+function showAlert({ tone = "info", title, body, symbol }) {
+  const host = $("alertStack");
+  if (!host) return;
+
+  const card = document.createElement("div");
+  card.className = `alert ${tone}`;
+  card.innerHTML = `
+    ${symbol ? `<span class="ticker">${escapeHtml(symbol.slice(0, 2))}</span>` : ""}
+    <div class="alert-main">
+      <b>${escapeHtml(title)}</b>
+      ${body ? `<span>${escapeHtml(body)}</span>` : ""}
+    </div>
+    <button class="icon" aria-label="Dismiss">
+      <svg viewBox="0 0 20 20"><path d="M5 5l10 10M15 5L5 15"/></svg>
+    </button>`;
+
+  const close = () => {
+    card.classList.add("leaving");
+    // Let the exit animation finish before the node goes, or it vanishes.
+    setTimeout(() => card.remove(), 320);
+  };
+  card.querySelector("button").onclick = close;
+  setTimeout(close, ALERT_LIFE);
+
+  host.prepend(card);
+  // Three is enough to notice; more is a log, and we already have one.
+  while (host.children.length > 3) host.lastElementChild.remove();
+}
+
+function alertTradeOpened(msg) {
+  const p = msg.position || {};
+  showAlert({
+    tone: "info",
+    symbol: p.symbol,
+    title: `Bought ${p.qty} ${p.symbol}`,
+    body: [
+      p.entry_price ? `at ${money(p.entry_price)}` : null,
+      p.stop_loss ? `stop ${money(p.stop_loss)}` : null,
+      p.take_profit ? `target ${money(p.take_profit)}` : null,
+    ].filter(Boolean).join(" · "),
+  });
+}
+
+function alertTradeClosed(msg) {
+  const won = (msg.pnl ?? 0) >= 0;
+  showAlert({
+    tone: won ? "good" : "bad",
+    symbol: msg.symbol,
+    title: `Closed ${msg.symbol} ${signed(msg.pnl)} (${signed(msg.pnl_pct)}%)`,
+    body: msg.exit_reason ? `Exit: ${msg.exit_reason}` : null,
+  });
+}
+
+function alertCatalyst(catalyst) {
+  if (!catalyst) return;
+  showAlert({
+    tone: "info",
+    symbol: catalyst.symbol,
+    title: `Entry window open — ${catalyst.symbol}`,
+    body: `${catalyst.title} · ${catalyst.days_away} days away`,
+  });
 }
 
 /* ================================================================ actions */
@@ -922,6 +1036,9 @@ async function act(fn) {
     addMessage({ text: err.message, level: "warn" });
   }
 }
+
+const newsRefresh = $("newsRefresh");
+if (newsRefresh) newsRefresh.onclick = () => loadNews().catch(() => {});
 
 $("btnStart").onclick = () => act(() => post("/api/engine/start"));
 $("btnStop").onclick = () => act(() => post("/api/engine/stop"));

@@ -300,3 +300,55 @@ button.sm { padding: 4px 8px; font-size: 12px; }
   .depth-grid { grid-template-columns: 1fr; }
   .note-body { padding: 18px 16px; }
 }
+
+/* ==========================================================================
+   ALERTS
+   A banner is an interruption. It is spent only on things that changed the
+   money or the plan; everything quieter goes to the chat rail.
+   ========================================================================== */
+
+.alert-stack {
+  position: sticky; top: 54px; z-index: 35;
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 0 22px; pointer-events: none;
+}
+.alert-stack:not(:empty) { padding-top: 12px; }
+
+.alert {
+  pointer-events: auto;
+  display: flex; align-items: center; gap: 12px;
+  max-width: var(--col); width: 100%; margin: 0 auto;
+  padding: 12px 14px; border-radius: 12px;
+  background: var(--surface-2); border: 1px solid var(--line);
+  box-shadow: 0 16px 36px -14px rgba(0, 0, 0, 0.9);
+  animation: drop 0.42s cubic-bezier(0.34, 1.4, 0.5, 1);
+}
+.alert.leaving { animation: lift 0.3s cubic-bezier(0.32, 0.72, 0, 1) forwards; }
+
+@keyframes drop {
+  from { opacity: 0; transform: translateY(-14px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes lift {
+  to { opacity: 0; transform: translateY(-10px) scale(0.98); }
+}
+
+.alert.good { border-left: 3px solid var(--up); }
+.alert.bad  { border-left: 3px solid var(--down); }
+.alert.info { border-left: 3px solid var(--text-2); }
+
+.alert .ticker { width: 32px; height: 32px; border-radius: 10px; font-size: 11px; }
+.alert-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.alert-main b { font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; }
+.alert-main span {
+  font-family: var(--mono); font-size: 11.5px; color: var(--text-3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.alert .icon { width: 26px; height: 26px; }
+.alert .icon svg { width: 14px; height: 14px; }
+
+@media (max-width: 620px) {
+  .alert-stack { padding: 0 14px; }
+  .alert-stack:not(:empty) { padding-top: 10px; }
+  .alert-main span { white-space: normal; }
+}
