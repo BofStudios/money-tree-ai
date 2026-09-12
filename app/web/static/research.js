@@ -714,18 +714,11 @@ function wireClicks() {
   $("rRun").onclick = runAnalysis;
 }
 
-/* --------------------------------------------------------------------- go */
+/* -------------------------------------------------------------- ai setup */
 
-(async () => {
-  wireSearch();
-  wireClicks();
-  await loadProfile();
-  depth = (profile && profile.research_depth) || "standard";
-  attention = (profile && profile.attention) || [];
-  applyTranslations();
-
-  // The mentor endpoint already knows which model is answering; reuse it so
-  // Settings doesn't need a second source of truth.
+// The mentor endpoint already knows which model is answering; reused here so
+// Settings doesn't carry a second source of truth.
+async function refreshProviderStatus() {
   try {
     const mentor = await get("/api/mentor");
     const ai = mentor.ai || {};
@@ -733,4 +726,72 @@ function wireClicks() {
       ? `${ai.model || ai.provider}${ai.free ? " · free" : ""}`
       : t("research.noAI");
   } catch { /* the dashboard still works without it */ }
+}
+
+let manualProvider = "groq";
+
+function wireAiSetup() {
+  const status = $("aiSetupStatus");
+  const form = $("aiManualForm");
+  if (!status || !form) return; // this build predates the setup card
+
+  const setStatus = (text, ok) => {
+    status.textContent = text;
+    status.classList.toggle("warn", ok === false);
+    status.classList.toggle("good", ok === true);
+  };
+
+  $("aiUseGroq").onclick = async () => {
+    setStatus("…");
+    try {
+      const { ai } = await post("/api/mentor/setup", { mode: "groq_free" });
+      setStatus(t("settings.aiSetupSaved", { model: ai.model || ai.provider }), true);
+      await refreshProviderStatus();
+    } catch (err) {
+      setStatus(err.message === "No free Groq key on file yet. Get one free at "
+        + "console.groq.com/keys, then use Enter manually."
+        ? t("settings.aiSetupNoGroqKey") : err.message, false);
+    }
+  };
+
+  $("aiUseManual").onclick = () => { form.hidden = !form.hidden; };
+
+  $("aiProviderPick").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-provider]");
+    if (!btn) return;
+    manualProvider = btn.dataset.provider;
+    [...$("aiProviderPick").children].forEach((c) =>
+      c.classList.toggle("on", c === btn));
+  });
+
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const key = $("aiKeyInput").value.trim();
+    if (!key) return;
+    setStatus("…");
+    try {
+      const { ai } = await post("/api/mentor/setup", {
+        mode: "manual", provider: manualProvider, api_key: key,
+      });
+      setStatus(t("settings.aiSetupSaved", { model: ai.model || ai.provider }), true);
+      $("aiKeyInput").value = "";
+      form.hidden = true;
+      await refreshProviderStatus();
+    } catch (err) {
+      setStatus(t("settings.aiSetupFailed") + " (" + err.message + ")", false);
+    }
+  };
+}
+
+/* --------------------------------------------------------------------- go */
+
+(async () => {
+  wireSearch();
+  wireClicks();
+  wireAiSetup();
+  await loadProfile();
+  depth = (profile && profile.research_depth) || "standard";
+  attention = (profile && profile.attention) || [];
+  applyTranslations();
+  await refreshProviderStatus();
 })();

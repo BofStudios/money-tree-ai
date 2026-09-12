@@ -97,6 +97,21 @@ class AIMentor:
         else:
             log.info("mentor has no working provider; rule-based narration only")
 
+    def reload(self, provider: str, keys: dict[str, str], model: str = "") -> bool:
+        """Switch providers without restarting — e.g. right after the owner
+        pastes a key in Settings. Returns whether the new provider actually
+        answers; on failure the mentor falls back to rule-based narration
+        rather than keeping a half-configured provider around.
+        """
+        self.config.provider = provider
+        self.config.model = model
+        try:
+            self.provider = build(provider, keys, model)
+        except Exception:
+            log.exception("could not switch the mentor to %s", provider)
+            self.provider = None
+        return self.available
+
     # ------------------------------------------------------------- introspect
 
     @property

@@ -407,10 +407,34 @@
         </section>
 
         <section class="block">
-          <div class="block-head"><h2 data-i18n="settings.ai"></h2></div>
+          <div class="block-head"><h2 data-i18n="settings.aiSetup"></h2></div>
           <div class="rows">
             <div class="row"><span data-i18n="settings.aiProvider"></span><b id="sProvider">—</b></div>
           </div>
+
+          <div class="ai-setup-choice">
+            <button class="ai-choice" id="aiUseGroq">
+              <b data-i18n="settings.useFreeGroq"></b>
+              <span data-i18n="settings.useFreeGroqHint"></span>
+            </button>
+            <button class="ai-choice" id="aiUseManual">
+              <b data-i18n="settings.enterManually"></b>
+              <span data-i18n="settings.enterManuallyHint"></span>
+            </button>
+          </div>
+
+          <form class="ai-manual-form" id="aiManualForm" hidden>
+            <div class="chips tagset" id="aiProviderPick">
+              <button type="button" class="chip pickable" data-provider="groq">Groq</button>
+              <button type="button" class="chip pickable" data-provider="gemini">Gemini</button>
+              <button type="button" class="chip pickable" data-provider="anthropic">Anthropic</button>
+            </div>
+            <input id="aiKeyInput" type="password" autocomplete="off" spellcheck="false"
+                   data-i18n-placeholder="settings.pasteKey">
+            <button type="submit" class="primary sm" data-i18n="action.save"></button>
+          </form>
+          <p class="note" id="aiSetupStatus"></p>
+
           <div class="field-block">
             <label data-i18n="settings.level"></label>
             <div class="chips tagset" data-profile="technical_level"></div>

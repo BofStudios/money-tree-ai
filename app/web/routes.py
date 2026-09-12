@@ -9,10 +9,11 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, WebSocket, W
 from app.catalysts.manager import CatalystManager, parse_date
 from app.catalysts.news import NewsFeed
 from app.common.models import Position
-from app.config import Settings
+from app.config import Settings, write_secret
 from app.engine.portfolio_engine import PortfolioEngine
 from app.execution.signal_executor import SignalExecutor, _build_trade
 from app.mentor.ai import AIMentor
+from app.mentor.providers import BUILDERS
 from app.mentor.narrator import Narrator
 from app.research.analyst import Analyst, build_plan
 from app.research.service import DEPTHS as RESEARCH_DEPTHS
@@ -101,6 +102,70 @@ def build_router(
         if not claude.memory.forget(index):
             raise HTTPException(status_code=404, detail="no such memory")
         return {"memory": claude.memory.facts()}
+
+    @router.post("/mentor/setup", dependencies=guarded)
+    def mentor_setup(
+        mode: str = Body(..., embed=True),
+        provider: str = Body(default="groq", embed=True),
+        api_key: str = Body(default="", embed=True),
+    ) -> dict:
+        """Connect an AI provider from Settings, live — no restart.
+
+        Two paths, mirroring the two buttons in the UI: reuse a Groq key
+        already on file, or take a freshly pasted key for any of the three
+        hosted providers and write it into .env before switching to it.
+        """
+        if settings is None:
+            raise HTTPException(status_code=503, detail="Settings are not available.")
+
+        if mode == "groq_free":
+            provider = "groq"
+            key = settings.secrets.groq_api_key
+            if not key:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "No free Groq key on file yet. Get one free at "
+                        "console.groq.com/keys, then use Enter manually."
+                    ),
+                )
+        elif mode == "manual":
+            provider = (provider or "").strip().lower()
+            if provider not in ("groq", "gemini", "anthropic"):
+                raise HTTPException(status_code=400, detail="Unknown provider.")
+            key = (api_key or "").strip()
+            if not key:
+                raise HTTPException(status_code=400, detail="Paste an API key first.")
+
+            # Prove the key actually works with one real call before writing
+            # anything to disk — .available() only checks the key is non-empty,
+            # so a typo'd key would otherwise be saved and reported as success.
+            candidate = BUILDERS[provider]({provider: key}, "")
+            # Some free-tier models (Groq's gpt-oss line) spend part of the
+            # budget on hidden reasoning before the visible reply, so this
+            # needs real headroom — a tight budget here reads as a bad key.
+            probe = candidate.chat(
+                "Reply with one word.", [{"role": "user", "content": "Say OK."}], 80
+            )
+            if probe is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="That key was rejected by the provider. Double-check it and try again.",
+                )
+
+            write_secret(f"{provider.upper()}_API_KEY", key)
+            setattr(settings.secrets, f"{provider}_api_key", key)
+        else:
+            raise HTTPException(status_code=400, detail="mode must be groq_free or manual")
+
+        settings.app.mentor.provider = provider
+        ok = claude.reload(provider, settings.secrets.mentor_keys, settings.app.mentor.model)
+        if not ok:
+            raise HTTPException(
+                status_code=502,
+                detail="Saved the key, but could not reach the model. Double-check it is correct.",
+            )
+        return {"ai": claude.backend}
 
     @router.get("/challenge", dependencies=guarded)
     def challenge() -> dict:

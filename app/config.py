@@ -26,6 +26,27 @@ ASSETS = BUNDLE_ROOT / "assets"
 ExecutionMode = Literal["signal", "paper", "live"]
 
 
+def write_secret(key: str, value: str) -> None:
+    """Set one line in .env, in place, without disturbing the rest of the file.
+
+    Used when the owner pastes an API key from Settings instead of editing .env
+    by hand. Only ever touches the single matching line (or appends one) — never
+    rewrites the whole file, so comments and unrelated entries survive.
+    """
+    path = PROJECT_ROOT / ".env"
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+
+    prefix = f"{key}="
+    for i, line in enumerate(lines):
+        if line.startswith(prefix):
+            lines[i] = f"{key}={value}"
+            break
+    else:
+        lines.append(f"{key}={value}")
+
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 class Secrets(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=PROJECT_ROOT / ".env", env_file_encoding="utf-8", extra="ignore"

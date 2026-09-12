@@ -33,7 +33,9 @@ LOCAL_TIMEOUT = 300.0
 DEFAULT_MODELS = {
     "ollama": "llama3.2",
     "gemini": "gemini-2.0-flash",
-    "groq": "llama-3.3-70b-versatile",
+    # Groq retired llama-3.3-70b-versatile; gpt-oss-120b is its current
+    # free-tier flagship (verified live against /v1/models on 2026-09-12).
+    "groq": "openai/gpt-oss-120b",
     "anthropic": "claude-opus-5",
 }
 
