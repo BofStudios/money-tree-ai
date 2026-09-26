@@ -22,6 +22,8 @@ interface Broker {
 
     /** Market buy with a broker-held stop-loss and take-profit (GTC). */
     suspend fun buyBracket(entry: Entry, clientId: String): BrokerOrder
+    /** Plain market buy of a fractional quantity (DAY). No broker-held stop. */
+    suspend fun buyFractional(entry: Entry, clientId: String): BrokerOrder
     suspend fun cancelOrder(orderId: String)
     /** Market sell of the whole position. Cancel its open orders first. */
     suspend fun closePosition(symbol: String)

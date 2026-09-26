@@ -38,7 +38,13 @@ class FakeBroker : Broker {
     override suspend fun buyBracket(entry: Entry, clientId: String): BrokerOrder {
         placed += entry
         return BrokerOrder("o${placed.size}", clientId, entry.symbol, "buy", "market", "accepted",
-            entry.qty.toDouble(), null, null)
+            entry.qty, null, null)
+    }
+    val fractionalBuys = ArrayList<Entry>()
+    override suspend fun buyFractional(entry: Entry, clientId: String): BrokerOrder {
+        fractionalBuys += entry
+        return BrokerOrder("f${fractionalBuys.size}", clientId, entry.symbol, "buy", "market", "accepted",
+            entry.qty, null, null)
     }
     override suspend fun cancelOrder(orderId: String) {
         cancelled += orderId
@@ -287,6 +293,61 @@ class EngineTest {
         val (id, stop) = broker.moved.single()
         assertEquals("s1", id)
         assertEquals(101.97, stop, 1e-9)
+    }
+
+    // -------------------------------------------------------- small account
+
+    private val tenDollars = Account(10.0, 10.0, 10.0, 10.0, "USD", false)
+
+    @Test fun tenDollarsBuysNothingWithWholeShares() = runTest {
+        broker.account = tenDollars
+        broker.bars["AAA"] = Candles.crossUpOnLastBar()
+        engine().cycle()
+        assertTrue(broker.placed.isEmpty())
+        assertTrue(broker.fractionalBuys.isEmpty())
+    }
+
+    @Test fun tenDollarsBuysAFractionWhenSmallAccountModeIsOn() = runTest {
+        settings = settings.copy(fractional = true)
+        broker.account = tenDollars
+        broker.bars["AAA"] = Candles.crossUpOnLastBar()
+        engine().cycle()
+
+        assertTrue(broker.placed.isEmpty())
+        val e = broker.fractionalBuys.single()
+        assertTrue("under one share", e.qty < 1.0)
+        assertTrue("at least Alpaca's \$1 minimum", e.notional >= 1.0)
+        assertTrue("capped at 20% of \$10", e.notional <= 2.0 + 1e-9)
+        // No bracket at Alpaca, so this phone now holds the stop and target.
+        assertEquals(e.stop to e.target, store.guard("AAA"))
+    }
+
+    @Test fun aPhoneHeldStopSellsWhenThePriceFallsThroughIt() = runTest {
+        settings = settings.copy(watchlist = listOf("EEE"))
+        store.addOwned("EEE")
+        store.setGuard("EEE", 99.0, 110.0)
+        broker.positions += position("EEE", 100.0, 98.0, qty = 0.02)
+        broker.bars["EEE"] = Candles.of(List(120) { 98.0 })
+        engine().cycle()
+
+        assertEquals(listOf("EEE"), broker.sold)
+    }
+
+    @Test fun aPhoneHeldTargetSellsWhenReached() = runTest {
+        settings = settings.copy(watchlist = listOf("EEE"))
+        store.addOwned("EEE")
+        store.setGuard("EEE", 90.0, 104.0)
+        broker.positions += position("EEE", 100.0, 105.0, qty = 0.02)
+        broker.bars["EEE"] = Candles.of(List(120) { 105.0 })
+        engine().cycle()
+
+        assertEquals(listOf("EEE"), broker.sold)
+    }
+
+    @Test fun quantitiesPrintWithoutATrailingDecimal() {
+        assertEquals("7", formatQty(7.0))
+        assertEquals("0.0412", formatQty(0.0412))
+        assertEquals("0.5", formatQty(0.5))
     }
 
     // --------------------------------------------------------- the monitor

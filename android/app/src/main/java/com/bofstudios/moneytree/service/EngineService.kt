@@ -275,7 +275,7 @@ class AndroidNotifier(private val context: Context, private val turkish: () -> B
 
     override fun orderPlaced(e: Entry) {
         val w = Words(turkish())
-        post(if (w.tr) "${e.qty} ${e.symbol} alındı" else "Bought ${e.qty} ${e.symbol}",
+        post(if (w.tr) "${e.qtyText} ${e.symbol} alındı" else "Bought ${e.qtyText} ${e.symbol}",
             "~${w.usd(e.price)} · stop ${w.usd(e.stop)} · " + (if (w.tr) "hedef " else "target ") + w.usd(e.target))
     }
 

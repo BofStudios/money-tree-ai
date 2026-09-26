@@ -18,6 +18,12 @@ data class TradingSettings(
     val armed: Boolean = false,
     val watchlist: List<String> = DEFAULT_WATCHLIST,
     val turkish: Boolean = false,
+    /**
+     * Small-account mode. Buys fractions of a share so $10 can trade, at a cost:
+     * Alpaca takes no bracket order on fractions, so the stop and target are
+     * watched by this phone instead of held at the broker. Off by default.
+     */
+    val fractional: Boolean = false,
 ) {
     companion object {
         val DEFAULT_WATCHLIST = listOf("AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "SPY")

@@ -20,6 +20,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -134,6 +137,28 @@ fun SettingsScreen(
                     if (running) EngineService.restart(context)
                 })
             }
+        }
+
+        SectionTitle(tx("Small account", "Küçük hesap"))
+        Card(highlight = settings.fractional) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(tx("Buy fractions of a share", "Hissenin küsuratını al"), fontWeight = FontWeight.SemiBold)
+                    Text(tx("For balances like \$10, where one whole share is too much.", "10$ gibi, tek hissenin bile fazla geldiği bakiyeler için."),
+                        color = MT.Text3, fontSize = 12.sp)
+                }
+                Switch(
+                    settings.fractional, { onChange(settings.copy(fractional = it)) },
+                    colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = MT.Accent),
+                )
+            }
+            Text(
+                if (settings.fractional) tx("On. Alpaca takes no stop-loss order on fractions, so THIS PHONE watches the stop and target. If the phone is off or asleep, those positions are not protected.",
+                    "Açık. Alpaca küsurata stop-loss emri almıyor, stop ve hedefi BU TELEFON izliyor. Telefon kapalı ya da uykudaysa bu pozisyonlar korumasız.")
+                else tx("Off. Whole shares only, and every stop sits at Alpaca — protected even with the phone off.",
+                    "Kapalı. Sadece tam hisse, her stop Alpaca'da durur — telefon kapalıyken bile korumalı."),
+                color = if (settings.fractional) MT.Down else MT.Text3, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp),
+            )
         }
 
         SectionTitle(tx("Watchlist", "İzleme listesi"))

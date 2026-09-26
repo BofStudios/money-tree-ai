@@ -1,6 +1,13 @@
 package com.bofstudios.moneytree.ui
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -99,12 +106,9 @@ fun MonitorScreen(settings: TradingSettings, toast: (String) -> Unit) {
             items(state.suggestions, key = { it.id }) { ProposalCard(it, asking = false, settings, toast) }
         }
 
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                SectionTitle(tx("AI monitor", "AI monitör"), Modifier.weight(1f))
-                if (running) Pulse(MT.Accent, live = true, size = 7)
-            }
-        }
+        item { SectionTitle(tx("AI monitor", "AI monitör")) }
+        item { NowPanel(steps, running) }
+        item { Spacer(Modifier.height(14.dp)) }
         if (steps.isEmpty()) {
             item {
                 Text(
@@ -223,8 +227,8 @@ private fun ProposalCard(p: Proposal, asking: Boolean, settings: TradingSettings
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    if (asking) tx("Buy ${e.qty} ${e.symbol} at about ${w.usd(e.price)}", "${e.symbol}: ${e.qty} adet al, yaklaşık ${w.usd(e.price)}")
-                    else tx("Would buy ${e.qty} ${e.symbol} at ${w.usd(e.price)}", "${e.symbol}: ${e.qty} adet alırdım, ${w.usd(e.price)}"),
+                    if (asking) tx("Buy ${e.qtyText} ${e.symbol} at about ${w.usd(e.price)}", "${e.symbol}: ${e.qtyText} adet al, yaklaşık ${w.usd(e.price)}")
+                    else tx("Would buy ${e.qtyText} ${e.symbol} at ${w.usd(e.price)}", "${e.symbol}: ${e.qtyText} adet alırdım, ${w.usd(e.price)}"),
                     fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
                 )
                 Text("Stop ${w.usd(e.stop)} · ${tx("target", "hedef")} ${w.usd(e.target)}",
@@ -261,6 +265,87 @@ private fun ProposalCard(p: Proposal, asking: Boolean, settings: TradingSettings
     }
 }
 
+/**
+ * The top of the monitor: what the bot is doing this second, the way an agent
+ * shows the tool it is running. The spinner and clock are tied to a real step
+ * that is open right now; when nothing is running it says so.
+ */
+@Composable
+private fun NowPanel(steps: List<Step>, running: Boolean) {
+    val current = steps.lastOrNull { it.state == StepState.RUNNING }
+    val latest = steps.lastOrNull()
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) { while (true) { delay(200); now = System.currentTimeMillis() } }
+
+    Card(highlight = current != null) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Pulse(if (current != null) MT.Accent else if (running) MT.Text2 else MT.Text3, live = current != null, size = 7)
+            Text(tx("NOW", "ŞU AN"), color = MT.Text3, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
+            Spacer(Modifier.weight(1f))
+            Text("${steps.size} ${tx("steps", "adım")}", color = MT.Text3, fontFamily = MT.Mono, fontSize = 11.sp)
+        }
+        Spacer(Modifier.height(10.dp))
+        // The step itself is the animation's target, so a card fading out keeps
+        // showing the step it was about, not the one replacing it.
+        AnimatedContent(current ?: latest, contentKey = { it?.id }, transitionSpec = {
+            (fadeIn(tween(220)) + slideInVertically(tween(260)) { it / 3 }) togetherWith fadeOut(tween(120))
+        }, label = "now") { step ->
+            Column {
+                when {
+                    step == null && running -> Text(tx("Starting…", "Başlıyor…"), fontSize = 15.sp)
+                    step == null -> Text(tx("Idle. Start the bot and watch it work here.", "Boşta. Botu başlat, burada çalışmasını izle."),
+                        color = MT.Text2, fontSize = 14.sp)
+                    step.state == StepState.RUNNING -> {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(Modifier.size(18.dp), color = MT.Accent, strokeWidth = 2.dp)
+                            Spacer(Modifier.width(10.dp))
+                            Text(step.title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, lineHeight = 20.sp)
+                        }
+                        Text(
+                            String.format(Locale.US, "%.1fs", (now - step.startedAt) / 1000.0),
+                            color = MT.Accent, fontFamily = MT.Mono, fontSize = 12.sp,
+                            modifier = Modifier.padding(start = 28.dp, top = 4.dp),
+                        )
+                    }
+                    else -> {
+                        Text(step.title, fontWeight = FontWeight.Medium, fontSize = 15.sp, lineHeight = 20.sp)
+                        Text(
+                            tx("finished ", "bitti, ") + agoText(now - (step.endedAt ?: step.startedAt)),
+                            color = MT.Text3, fontFamily = MT.Mono, fontSize = 11.5.sp, modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        Row {
+            Stat(steps.count { it.kind == StepKind.ANALYSE && it.state == StepState.DONE }, tx("scans", "tarama"), Modifier.weight(1f))
+            Stat(steps.count { it.kind == StepKind.ORDER && it.state == StepState.DONE }, tx("orders", "emir"), Modifier.weight(1f))
+            Stat(steps.count { it.state == StepState.FAILED || it.kind == StepKind.WARN }, tx("problems", "sorun"), Modifier.weight(1f),
+                warn = true)
+        }
+    }
+}
+
+@Composable
+private fun Stat(value: Int, label: String, modifier: Modifier, warn: Boolean = false) {
+    Column(modifier) {
+        Text(value.toString(), fontFamily = MT.Mono, fontWeight = FontWeight.SemiBold, fontSize = 18.sp,
+            color = if (warn && value > 0) MT.Down else MT.Text)
+        Text(label, color = MT.Text3, fontSize = 11.sp)
+    }
+}
+
+@Composable
+private fun agoText(ms: Long): String {
+    val s = ms / 1000
+    return when {
+        s < 60 -> tx("${s}s ago", "$s sn önce")
+        s < 3600 -> tx("${s / 60}m ago", "${s / 60} dk önce")
+        else -> tx("${s / 3600}h ago", "${s / 3600} sa önce")
+    }
+}
+
 @Composable
 fun Ticker(symbol: String) {
     Box(
@@ -280,17 +365,23 @@ private fun StepRow(step: Step, modifier: Modifier = Modifier) {
     Row(
         modifier
             .fillMaxWidth()
+            .height(IntrinsicSize.Min)
             .clip(RoundedCornerShape(12.dp))
             .clickable(enabled = expandable) { open = !open }
-            .padding(vertical = 8.dp, horizontal = 4.dp)
+            .padding(horizontal = 4.dp)
             .animateContentSize(),
         verticalAlignment = Alignment.Top,
     ) {
-        Box(Modifier.size(28.dp).clip(CircleShape).background(tint.copy(alpha = 0.13f)), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = tint, modifier = Modifier.size(15.dp))
+        // The timeline rail: each step's icon, joined to the next by a line.
+        Column(Modifier.fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Spacer(Modifier.height(8.dp))
+            Box(Modifier.size(28.dp).clip(CircleShape).background(tint.copy(alpha = 0.13f)), contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = tint, modifier = Modifier.size(15.dp))
+            }
+            Box(Modifier.width(1.5.dp).weight(1f).background(MT.Line))
         }
         Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     step.title, Modifier.weight(1f),

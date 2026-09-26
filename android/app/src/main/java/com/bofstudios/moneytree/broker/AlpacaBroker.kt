@@ -162,6 +162,11 @@ class AlpacaBroker(
         return parseOrder(send("POST", url(tradingBase, "/v2/orders"), body) as JSONObject)
     }
 
+    override suspend fun buyFractional(entry: Entry, clientId: String): BrokerOrder {
+        val body = fractionalJson(entry, clientId)
+        return parseOrder(send("POST", url(tradingBase, "/v2/orders"), body) as JSONObject)
+    }
+
     override suspend fun cancelOrder(orderId: String) {
         send("DELETE", url(tradingBase, "/v2/orders/$orderId"), null)
     }
@@ -226,7 +231,7 @@ class AlpacaBroker(
          */
         fun bracketJson(entry: Entry, clientId: String): JSONObject = JSONObject()
             .put("symbol", entry.symbol.uppercase())
-            .put("qty", entry.qty.toString())
+            .put("qty", entry.qtyText)
             .put("side", "buy")
             .put("type", "market")
             .put("time_in_force", "gtc")
@@ -234,6 +239,15 @@ class AlpacaBroker(
             .put("client_order_id", clientId)
             .put("take_profit", JSONObject().put("limit_price", price(entry.target)))
             .put("stop_loss", JSONObject().put("stop_price", price(entry.stop)))
+
+        /** Fractional orders must be plain market orders with DAY time in force. */
+        fun fractionalJson(entry: Entry, clientId: String): JSONObject = JSONObject()
+            .put("symbol", entry.symbol.uppercase())
+            .put("qty", entry.qtyText)
+            .put("side", "buy")
+            .put("type", "market")
+            .put("time_in_force", "day")
+            .put("client_order_id", clientId)
 
         /** Always a dot, never a locale comma — this goes to an API. Stocks at or
          *  above $1 take two decimals; below $1, four. */

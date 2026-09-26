@@ -1,5 +1,10 @@
 package com.bofstudios.moneytree.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -16,7 +21,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -39,6 +47,7 @@ fun PortfolioScreen(prefs: Prefs) {
     val w = Words(LocalTurkish.current)
     // Re-read the journal whenever the feed moves; closes are announced there.
     val trades = remember(steps.size) { prefs.trades().asReversed() }
+    var open by rememberSaveable { mutableStateOf<String?>(null) }
 
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -72,12 +81,20 @@ fun PortfolioScreen(prefs: Prefs) {
         items(state.held, key = { it.position.symbol }) { HeldRow(it, w) }
 
         if (state.snapshots.isNotEmpty()) {
-            item { SectionTitle(tx("Watchlist — last analysis", "İzleme listesi — son analiz")) }
+            item { SectionTitle(tx("Watchlist — tap for the chart", "İzleme listesi — grafik için dokun")) }
             item {
                 Card(padding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)) {
                     state.snapshots.forEachIndexed { i, s ->
                         if (i > 0) HorizontalDivider(color = MT.Line)
-                        SnapshotRow(s, w)
+                        SnapshotRow(s, w, open == s.symbol) { open = if (open == s.symbol) null else s.symbol }
+                        AnimatedVisibility(open == s.symbol, enter = expandVertically() + fadeIn(), exit = shrinkVertically()) {
+                            val held = state.held.firstOrNull { it.position.symbol == s.symbol && it.managed }
+                            CandleChart(
+                                state.bars[s.symbol].orEmpty(),
+                                Modifier.padding(vertical = 10.dp),
+                                stop = held?.stop, target = held?.target,
+                            )
+                        }
                     }
                 }
             }
@@ -125,8 +142,8 @@ private fun HeldRow(h: HeldPosition, w: Words) {
 }
 
 @Composable
-private fun SnapshotRow(s: Snapshot, w: Words) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun SnapshotRow(s: Snapshot, w: Words, open: Boolean, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(s.symbol, Modifier.width(64.dp), fontFamily = MT.Mono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
         if (!s.ready) {
             Text(tx("not enough data", "veri yetersiz"), color = MT.Text3, fontSize = 12.sp)
@@ -138,6 +155,8 @@ private fun SnapshotRow(s: Snapshot, w: Words) {
         Text("RSI ${"%.0f".format(s.rsi)}", color = when {
             s.rsi >= 70 -> MT.Down; s.rsi <= 30 -> MT.Up; else -> MT.Text2
         }, fontFamily = MT.Mono, fontSize = 12.sp)
+        Spacer(Modifier.width(8.dp))
+        Text(if (open) "▴" else "▾", color = MT.Text3, fontSize = 12.sp)
     }
 }
 

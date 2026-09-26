@@ -10,7 +10,7 @@ import java.util.Locale
 
 class AlpacaJsonTest {
 
-    private val entry = Entry("nvda", 7, 218.36, 211.9049, 231.2651, "test")
+    private val entry = Entry("nvda", 7.0, 218.36, 211.9049, 231.2651, "test")
 
     @Test fun aBuyIsAGoodTillCancelledBracket() {
         val j = AlpacaBroker.bracketJson(entry, "mt-1")

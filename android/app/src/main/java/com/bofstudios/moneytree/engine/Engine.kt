@@ -32,6 +32,8 @@ data class EngineState(
     val haltReason: String? = null,
     val lastError: String? = null,
     val baselineEquity: Double? = null,
+    /** Recent candles per symbol, for the phone's chart. */
+    val bars: Map<String, List<Bar>> = emptyMap(),
 )
 
 data class ApprovalResult(val ok: Boolean, val message: String)
@@ -151,7 +153,7 @@ class Engine(
                 ),
                 lines,
             )
-            _state.update { it.copy(snapshots = snapshots) }
+            _state.update { it.copy(snapshots = snapshots, bars = bars.mapValues { e -> e.value.takeLast(CHART_BARS) }) }
             val price = snapshots.filter { it.ready }.associate { it.symbol to it.price }
 
             // ------------------------------------------------ manage what's held
@@ -159,11 +161,24 @@ class Engine(
                 val sym = h.position.symbol
                 val signal = signals[sym]
                 if (signal?.action == Action.CLOSE) {
-                    sell(sym, signal.reason, orders, w)
+                    sell(sym, signal.reason, "signal", orders, w)
                     continue
                 }
                 val last = price[sym] ?: continue
+                val guard = if (h.stopOrderId == null) store.guard(sym) else null
+                // A fractional position has no bracket at Alpaca: this phone is
+                // its stop-loss and target, checked on every look.
+                if (guard != null) {
+                    val (stop, target) = guard
+                    if (last <= stop) { sell(sym, w.phoneStopHit(stop), "stop-loss", orders, w); continue }
+                    if (last >= target) { sell(sym, w.phoneTargetHit(target), "take-profit", orders, w); continue }
+                }
                 val raised = risk.trailingStop(h.position.avgEntry, h.stop, last) ?: continue
+                if (guard != null) {
+                    store.setGuard(sym, raised, guard.second)
+                    monitor.info(StepKind.TRAIL, w.raisingStop(sym, h.stop, raised), w.heldOnPhone())
+                    continue
+                }
                 val id = h.stopOrderId ?: continue
                 attempt {
                     monitor.step(StepKind.TRAIL, w.raisingStop(sym, h.stop, raised), { broker.moveStop(id, raised) })
@@ -187,7 +202,7 @@ class Engine(
                         }
                         val snap = snapshots.first { it.symbol == sym }
                         val available = minOf(account.cash, account.buyingPower)
-                        val entry = risk.plan(sym, signal.reason, snap.price, snap.atr, account.equity, available)
+                        val entry = risk.plan(sym, signal.reason, snap.price, snap.atr, account.equity, available, s.fractional)
                         if (entry == null) { monitor.info(StepKind.INFO, w.tooSmall(sym)); continue }
                         if (s.live && !s.armed) { monitor.info(StepKind.WARN, w.notArmed(sym)); continue }
 
@@ -285,16 +300,22 @@ class Engine(
 
     private suspend fun place(entry: Entry, w: Words, headlines: List<String>): Boolean {
         val order = attempt {
-            monitor.step(StepKind.ORDER, w.placingBracket(entry),
-                { broker.buyBracket(entry, "mt-" + UUID.randomUUID().toString().take(24)) },
-                { w.orderAccepted(it.status) })
+            val clientId = "mt-" + UUID.randomUUID().toString().take(24)
+            if (entry.fractional) {
+                monitor.step(StepKind.ORDER, w.placingFractional(entry),
+                    { broker.buyFractional(entry, clientId) }, { w.fractionalAccepted(it.status) })
+            } else {
+                monitor.step(StepKind.ORDER, w.placingBracket(entry),
+                    { broker.buyBracket(entry, clientId) }, { w.orderAccepted(it.status) })
+            }
         } ?: return false
         store.addOwned(entry.symbol)
+        if (entry.fractional) store.setGuard(entry.symbol, entry.stop, entry.target)
         notifier.orderPlaced(entry)
 
         val ai = explainer ?: return order.id.isNotEmpty()
         val facts = buildString {
-            append("Bought ${entry.qty} ${entry.symbol} at about ${entry.price}. ")
+            append("Bought ${entry.qtyText} ${entry.symbol} at about ${entry.price}. ")
             append("Rule that fired: ${entry.reason}. ")
             append("Stop-loss ${"%.2f".format(java.util.Locale.US, entry.stop)}, target ${"%.2f".format(java.util.Locale.US, entry.target)}. ")
             append("Money at risk if the stop fills: ${"%.2f".format(java.util.Locale.US, entry.riskCash)}. ")
@@ -306,7 +327,7 @@ class Engine(
         return true
     }
 
-    private suspend fun sell(symbol: String, reason: String, orders: List<BrokerOrder>, w: Words) {
+    private suspend fun sell(symbol: String, reason: String, why: String, orders: List<BrokerOrder>, w: Words) {
         attempt {
             monitor.step(StepKind.SELL, w.selling(symbol, reason), {
                 // The bracket's legs reserve the shares; cancel them or the sell is refused.
@@ -320,7 +341,7 @@ class Engine(
                     if (!still) break
                     pause(500)
                 }
-                exitReasons[symbol] = "signal"
+                exitReasons[symbol] = why
                 broker.closePosition(symbol)
             }, { w.sold() })
         }
@@ -337,6 +358,7 @@ class Engine(
             // A bracket that has not filled yet has an open buy and no position.
             if (allOrders.any { it.symbol == sym && it.side == "buy" }) continue
             store.removeOwned(sym)
+            store.clearGuard(sym)
             cooldownUntil[sym] = now() + risk.config.cooldownMinutes * 60_000
             val trade = attempt { lastRoundTrip(sym) }
             if (trade != null) {
@@ -354,8 +376,8 @@ class Engine(
             val targetOrder = sells.firstOrNull { it.type == "limit" }
             HeldPosition(
                 position = p,
-                stop = stopOrder?.stopPrice,
-                target = targetOrder?.limitPrice,
+                stop = stopOrder?.stopPrice ?: store.guard(p.symbol)?.first,
+                target = targetOrder?.limitPrice ?: store.guard(p.symbol)?.second,
                 stopOrderId = stopOrder?.id,
                 managed = p.symbol in managed,
             )
@@ -410,6 +432,7 @@ class Engine(
 
     companion object {
         const val BAR_LIMIT = 300
+        const val CHART_BARS = 90
         const val OPEN_SLEEP = 60_000L
         const val ERROR_SLEEP = 60_000L
         const val BLOCKED_SLEEP = 5 * 60_000L

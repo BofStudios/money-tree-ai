@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import com.bofstudios.moneytree.MoneyTreeApp
 import com.bofstudios.moneytree.R
 import com.bofstudios.moneytree.data.Prefs
 import com.bofstudios.moneytree.engine.TradingSettings
@@ -74,6 +75,7 @@ class MainActivity : FragmentActivity() {
     private var unlocked by mutableStateOf(false)
     private var noScreenLock by mutableStateOf(false)
     private var pausedAt = 0L
+    private var crash by mutableStateOf<String?>(null)
 
     private val notificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -84,6 +86,7 @@ class MainActivity : FragmentActivity() {
         prefs = Prefs(this)
         settings = prefs.settings(Hub.armed.value)
         onboarded = prefs.onboarded
+        crash = MoneyTreeApp.lastCrash(this)
         // Semi-auto approvals arrive as notifications; without this permission
         // they would silently never show. Ask whenever it is missing.
         if (onboarded) askForNotifications()
@@ -133,6 +136,13 @@ class MainActivity : FragmentActivity() {
         Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize()) {
                 Header()
+                crash?.let { report ->
+                    CrashCard(report, onCopy = {
+                        val cm = getSystemService(android.content.ClipboardManager::class.java)
+                        cm.setPrimaryClip(android.content.ClipData.newPlainText("Money Tree crash", report))
+                        toast(if (settings.turkish) "Kopyalandı — bana gönder." else "Copied — send it to me.")
+                    }, onDismiss = { MoneyTreeApp.clearCrash(this@MainActivity); crash = null })
+                }
                 if (noScreenLock) {
                     Text(
                         tx("This phone has no screen lock, so Money Tree opens without one. Set a PIN or fingerprint to protect it.",
@@ -149,6 +159,19 @@ class MainActivity : FragmentActivity() {
                 }
             }
             NavBar(tab, { tab = it }, Modifier.align(Alignment.BottomCenter))
+        }
+    }
+
+    @Composable
+    private fun CrashCard(report: String, onCopy: () -> Unit, onDismiss: () -> Unit) {
+        Card(Modifier.padding(horizontal = 16.dp, vertical = 6.dp), highlight = true) {
+            Text(tx("Money Tree crashed last time", "Money Tree geçen sefer çöktü"), fontWeight = FontWeight.SemiBold, color = MT.Down)
+            Text(report.lineSequence().drop(2).firstOrNull { it.isNotBlank() }.orEmpty().take(160),
+                color = MT.Text2, fontFamily = MT.Mono, fontSize = 11.sp, modifier = Modifier.padding(vertical = 6.dp))
+            Row {
+                PrimaryButton(tx("Copy the report", "Raporu kopyala"), onCopy)
+                GhostButton(tx("Dismiss", "Kapat"), onDismiss)
+            }
         }
     }
 

@@ -61,11 +61,21 @@ class Words(val tr: Boolean) {
     fun newsSummary(count: Int) = if (tr) "$count başlık" else "$count headline(s)"
 
     fun placingBracket(e: Entry) =
-        if (tr) "Emir gönderiyor: ${e.qty} ${e.symbol} al · stop ${usd(e.stop)} · hedef ${usd(e.target)}"
-        else "Placing order: buy ${e.qty} ${e.symbol} · stop ${usd(e.stop)} · target ${usd(e.target)}"
+        if (tr) "Emir gönderiyor: ${e.qtyText} ${e.symbol} al · stop ${usd(e.stop)} · hedef ${usd(e.target)}"
+        else "Placing order: buy ${e.qtyText} ${e.symbol} · stop ${usd(e.stop)} · target ${usd(e.target)}"
     fun orderAccepted(status: String) =
         if (tr) "Alpaca kabul etti ($status). Stop ve hedef Alpaca'da duruyor."
         else "Accepted by Alpaca ($status). The stop and target are held at Alpaca."
+
+    fun placingFractional(e: Entry) =
+        if (tr) "Kesirli emir: ${e.qtyText} ${e.symbol} al (~${usd(e.notional)}) · stop ${usd(e.stop)} telefonda"
+        else "Fractional order: buy ${e.qtyText} ${e.symbol} (~${usd(e.notional)}) · stop ${usd(e.stop)} on this phone"
+    fun fractionalAccepted(status: String) =
+        if (tr) "Alpaca kabul etti ($status). Stop ve hedefi bu telefon izliyor."
+        else "Accepted by Alpaca ($status). This phone is watching the stop and target."
+    fun phoneStopHit(stop: Double) = if (tr) "stop-loss ${usd(stop)} geçildi" else "stop-loss ${usd(stop)} reached"
+    fun phoneTargetHit(target: Double) = if (tr) "hedef ${usd(target)} geldi" else "target ${usd(target)} reached"
+    fun heldOnPhone() = if (tr) "Bu telefonda tutuluyor" else "Held on this phone"
 
     fun raisingStop(symbol: String, from: Double?, to: Double) =
         if (tr) "$symbol stop'unu yükseltiyor: ${from?.let { usd(it) } ?: "—"} → ${usd(to)}"
@@ -84,11 +94,11 @@ class Words(val tr: Boolean) {
     fun askingAi() = if (tr) "AI'a kararı açıklatıyor" else "Asking the AI to explain the decision"
 
     fun waitingApproval(e: Entry) =
-        if (tr) "Onayını bekliyor: ${e.qty} ${e.symbol} al, yaklaşık ${usd(e.price)}"
-        else "Waiting for your OK: buy ${e.qty} ${e.symbol} at about ${usd(e.price)}"
+        if (tr) "Onayını bekliyor: ${e.qtyText} ${e.symbol} al, yaklaşık ${usd(e.price)}"
+        else "Waiting for your OK: buy ${e.qtyText} ${e.symbol} at about ${usd(e.price)}"
     fun suggestion(e: Entry) =
-        if (tr) "Fikir (manuel mod, işlem açılmadı): ${e.qty} ${e.symbol}, yaklaşık ${usd(e.price)}"
-        else "Idea (manual mode, not placed): ${e.qty} ${e.symbol} at about ${usd(e.price)}"
+        if (tr) "Fikir (manuel mod, işlem açılmadı): ${e.qtyText} ${e.symbol}, yaklaşık ${usd(e.price)}"
+        else "Idea (manual mode, not placed): ${e.qtyText} ${e.symbol} at about ${usd(e.price)}"
     fun approvalExpired(symbol: String) = if (tr) "$symbol onay isteğinin süresi doldu" else "$symbol approval request lapsed"
 
     fun tooSmall(symbol: String) =
@@ -129,7 +139,7 @@ class Words(val tr: Boolean) {
     fun approveHeld(symbol: String) = if (tr) "$symbol zaten elimde" else "I already hold $symbol"
     fun approveCap(cap: Int) = if (tr) "$cap pozisyon sınırı dolu" else "the $cap-position cap is full"
     fun didNotBuy(symbol: String, why: String) = if (tr) "$symbol alınmadı: $why." else "Did not buy $symbol: $why."
-    fun bought(e: Entry) = if (tr) "${e.qty} ${e.symbol} alındı, stop ${usd(e.stop)}." else "Bought ${e.qty} ${e.symbol}, stop ${usd(e.stop)}."
+    fun bought(e: Entry) = if (tr) "${e.qtyText} ${e.symbol} alındı, stop ${usd(e.stop)}." else "Bought ${e.qtyText} ${e.symbol}, stop ${usd(e.stop)}."
 
     // ----------------------------------------------------------------- names
     fun tfName(tf: Timeframe) = when (tf) {

@@ -22,15 +22,23 @@ data class RiskConfig(
 /** A buy the engine has sized and priced, before anyone decides to send it. */
 data class Entry(
     val symbol: String,
-    val qty: Int,
+    val qty: Double,
     val price: Double,
     val stop: Double,
     val target: Double,
     val reason: String,
+    /** Fractional entries are plain market orders; their stop lives on the phone. */
+    val fractional: Boolean = false,
 ) {
     val notional: Double get() = qty * price
     val riskCash: Double get() = qty * (price - stop)
+    /** "7" for whole shares, "0.0412" for a fraction — never "7.0". */
+    val qtyText: String get() = formatQty(qty)
 }
+
+fun formatQty(q: Double): String =
+    if (q == kotlin.math.floor(q)) q.toLong().toString()
+    else String.format(java.util.Locale.US, "%.4f", q).trimEnd('0').trimEnd('.')
 
 /**
  * Sizing and protective levels, ported from `RiskManager`.
@@ -67,13 +75,28 @@ class Risk(val config: RiskConfig = RiskConfig()) {
         return floor(allocation / price).toInt().coerceAtLeast(0)
     }
 
+    /**
+     * Fractional size for small accounts: the same risk rule, rounded down to
+     * 1/10,000 of a share. Alpaca refuses orders under $1, so those are null.
+     */
+    fun fractionalShares(equity: Double, available: Double, price: Double, stopPct: Double): Double {
+        if (price <= 0 || stopPct <= 0 || equity <= 0) return 0.0
+        val spendable = minOf(equity * config.maxPositionPct / 100.0, available * (1 - FEE_BUFFER))
+        val riskCash = equity * config.riskPerTradePct / 100.0
+        val allocation = minOf(riskCash / (price * stopPct / 100.0) * price, spendable)
+        return floor(allocation / price * 10_000) / 10_000
+    }
+
     fun plan(
         symbol: String, reason: String, price: Double, atr: Double,
-        equity: Double, available: Double,
+        equity: Double, available: Double, fractional: Boolean = false,
     ): Entry? {
         val stopPct = stopDistancePct(price, atr)
-        val qty = shares(equity, available, price, stopPct)
-        if (qty < 1) return null
+        val qty = if (fractional) {
+            fractionalShares(equity, available, price, stopPct).takeIf { it * price >= MIN_FRACTIONAL_NOTIONAL }
+        } else {
+            shares(equity, available, price, stopPct).takeIf { it >= 1 }?.toDouble()
+        } ?: return null
         val stopFraction = stopPct / 100.0
         return Entry(
             symbol = symbol,
@@ -82,6 +105,7 @@ class Risk(val config: RiskConfig = RiskConfig()) {
             stop = price * (1 - stopFraction),
             target = price * (1 + stopFraction * config.rewardRisk),
             reason = reason,
+            fractional = fractional,
         )
     }
 
@@ -106,5 +130,6 @@ class Risk(val config: RiskConfig = RiskConfig()) {
 
     companion object {
         const val FEE_BUFFER = 0.005
+        const val MIN_FRACTIONAL_NOTIONAL = 1.0
     }
 }

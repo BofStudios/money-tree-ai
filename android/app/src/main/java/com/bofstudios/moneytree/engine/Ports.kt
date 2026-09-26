@@ -29,6 +29,10 @@ interface EngineStore {
     fun setBaselineEquity(live: Boolean, equity: Double)
     fun trades(): List<TradeRecord>
     fun addTrade(trade: TradeRecord)
+    /** Stop and target for a position with no broker-held bracket (fractional). */
+    fun guard(symbol: String): Pair<Double, Double>?
+    fun setGuard(symbol: String, stop: Double, target: Double)
+    fun clearGuard(symbol: String)
 }
 
 /** Things worth putting on the lock screen. */
@@ -48,6 +52,7 @@ class MemoryStore : EngineStore {
     private val owned = LinkedHashSet<String>()
     private val baseline = HashMap<Boolean, Double>()
     private val trades = ArrayList<TradeRecord>()
+    private val guards = HashMap<String, Pair<Double, Double>>()
     override fun ownedSymbols() = synchronized(this) { owned.toSet() }
     override fun addOwned(symbol: String) { synchronized(this) { owned.add(symbol) } }
     override fun removeOwned(symbol: String) { synchronized(this) { owned.remove(symbol) } }
@@ -55,6 +60,9 @@ class MemoryStore : EngineStore {
     override fun setBaselineEquity(live: Boolean, equity: Double) { synchronized(this) { baseline[live] = equity } }
     override fun trades() = synchronized(this) { trades.toList() }
     override fun addTrade(trade: TradeRecord) { synchronized(this) { trades.add(trade) } }
+    override fun guard(symbol: String) = synchronized(this) { guards[symbol] }
+    override fun setGuard(symbol: String, stop: Double, target: Double) { synchronized(this) { guards[symbol] = stop to target } }
+    override fun clearGuard(symbol: String) { synchronized(this) { guards.remove(symbol) } }
 }
 
 object SilentNotifier : Notifier {
