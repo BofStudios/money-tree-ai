@@ -15,6 +15,13 @@
   --up: #32d583;
   --down: #ff6b60;
 
+  /* Brand: the yellow of fear-light. Used for identity and live state —
+     never for profit, where yellow would read as a warning. */
+  --accent: #ffd60a;
+  --accent-deep: #c9a200;
+  --accent-soft: rgba(255, 214, 10, 0.12);
+  --accent-glow: 0 0 18px rgba(255, 214, 10, 0.45);
+
   --r: 16px;
   --r-sm: 10px;
   --mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
@@ -140,7 +147,7 @@ h2 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
 .icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .ping {
   position: absolute; top: 4px; right: 4px;
-  width: 6px; height: 6px; border-radius: 50%; background: var(--up);
+  width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
 }
 
 /* The rail is permanent on desktop, so there is nothing to close. */
@@ -264,13 +271,13 @@ h2 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
 .top-detail { color: var(--text-3); font-family: var(--mono); font-size: 12px; flex: none; }
 
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); flex: none; position: relative; }
-.dot.open { background: var(--up); }
+.dot.open { background: var(--accent); box-shadow: var(--accent-glow); }
 .dot.open::after {
   content: ""; position: absolute; inset: -4px; border-radius: 50%;
-  border: 1px solid var(--up); animation: ripple 2.4s ease-out infinite;
+  border: 1px solid var(--accent); animation: ripple 2.4s ease-out infinite;
 }
 @keyframes ripple { 0% { transform: scale(0.6); opacity: 0.8; } 100% { transform: scale(1.6); opacity: 0; } }
-.dot.on { background: var(--up); }
+.dot.on { background: var(--accent); }
 .dot.off { background: var(--down); }
 
 .top-right { display: flex; align-items: center; gap: 12px; flex: none; }
@@ -421,7 +428,7 @@ h2 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
 }
 .run-of { color: var(--text-3); font-size: 14.5px; margin-top: 10px; }
 .run-value .arrow { color: var(--text-3); font-size: 0.62em; margin: 0 0.12em; }
-.run-value .to { color: var(--up); }
+.run-value .to { color: var(--accent); }
 .run-bar { height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; margin: 22px 0 12px; }
 .run-bar i { display: block; height: 100%; background: var(--text); transition: width 1s var(--ease); }
 .run.won .run-bar i { background: var(--up); }
@@ -442,7 +449,7 @@ h2 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
   transition: background 0.18s var(--ease), color 0.18s var(--ease), transform 0.2s var(--spring);
 }
 .chip:hover { color: var(--text); transform: translateY(-2px); }
-.chip.on { background: var(--text); color: #000; }
+.chip.on { background: var(--accent); color: #000; border-color: var(--accent); }
 
 /* =============================================================== positions */
 
@@ -503,7 +510,7 @@ h2 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
 }
 .symbol-tab:hover { color: var(--text); }
 .symbol-tab.active { background: var(--surface-2); color: var(--text); }
-.symbol-tab.holding::after { content: "·"; margin-left: 5px; color: var(--up); }
+.symbol-tab.holding::after { content: "·"; margin-left: 5px; color: var(--accent); }
 
 .quote { font-family: var(--mono); font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; flex: none; }
 .quote.up { color: var(--up); }
@@ -579,7 +586,7 @@ button.small { font-size: 12.5px; padding: 7px 13px; }
 }
 .cat-days { display: block; font-size: 21px; font-weight: 600; }
 .cat-unit { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.08em; }
-.cat.open .cat-days { color: var(--up); }
+.cat.open .cat-days { color: var(--accent); }
 .cat.past .cat-days { color: var(--text-3); }
 
 .cat-main { flex: 1; min-width: 0; }
@@ -594,7 +601,7 @@ button.small { font-size: 12.5px; padding: 7px 13px; }
   font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 20px;
   background: var(--surface-2); color: var(--text-3);
 }
-.cat-state.open { background: rgba(50,213,131,0.14); color: var(--up); }
+.cat-state.open { background: var(--accent-soft); color: var(--accent); }
 .cat-state.holding { background: var(--text); color: #000; }
 .cat-actions { flex: none; display: flex; flex-direction: column; gap: 6px; }
 
@@ -622,7 +629,7 @@ button.small { font-size: 12.5px; padding: 7px 13px; }
   display: grid; place-items: center; font-family: var(--mono); font-size: 11.5px;
   background: var(--surface-2); color: var(--text-3);
 }
-.step.done .step-num { background: var(--up); color: #000; }
+.step.done .step-num { background: var(--accent); color: #000; }
 .step-body { flex: 1; min-width: 0; }
 .step-title { font-size: 15px; font-weight: 600; letter-spacing: -0.015em; }
 .step.done .step-title { color: var(--text-2); }
@@ -664,7 +671,7 @@ button.small { font-size: 12.5px; padding: 7px 13px; }
   transition: color 0.2s var(--ease), background 0.3s var(--spring);
 }
 .tab:hover { color: var(--text-2); background: none; }
-.tab.active { color: var(--text); background: rgba(255,255,255,0.08); }
+.tab.active { color: var(--accent); background: var(--accent-soft); }
 .tab svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 
 /* ================================================================== mobile */

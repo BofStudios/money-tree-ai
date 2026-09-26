@@ -35,8 +35,8 @@ STATIC = ROOT / "app" / "web" / "static"
 
 BLACK = QColor("#000000")
 WHITE = QColor("#ffffff")
-GREEN = QColor("#32d583")
-GREEN_DEEP = QColor("#1f9d63")  # the shaded half of the canopy
+CANOPY = QColor("#ffd60a")
+CANOPY_DEEP = QColor("#c9a200")  # the shaded half of the canopy
 
 # Canopy discs as (cx, cy, r) fractions. The deep set sits lower and behind the
 # bright set, which is what gives the crown its roundness.
@@ -107,14 +107,15 @@ def draw(size: int, rounded: bool = True) -> QPixmap:
 
     # canopy
     p.setPen(Qt.PenStyle.NoPen)
-    for colour, discs in ((GREEN_DEEP, CANOPY_BACK), (GREEN, CANOPY_FRONT)):
+    for colour, discs in ((CANOPY_DEEP, CANOPY_BACK), (CANOPY, CANOPY_FRONT)):
         p.setBrush(QBrush(colour))
         for cx, cy, r in discs:
             p.drawEllipse(QPointF(size * cx, size * cy), size * r, size * r)
 
     # the dollar sitting in the crown
     s, bar = _dollar(size)
-    pen = QPen(WHITE)
+    # black, not white: white on yellow all but disappears
+    pen = QPen(BLACK)
     pen.setCapStyle(Qt.PenCapStyle.RoundCap)
     pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
     pen.setWidthF(size * 0.032)
@@ -135,20 +136,20 @@ SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="non
   <path d="M38.5 85.5 H61.5" stroke="currentColor" stroke-width="4.6" stroke-linecap="round"/>
   <path d="M50 60 L38.5 49.5 M50 55.5 L61.5 45.5" stroke="currentColor"
         stroke-width="4.2" stroke-linecap="round"/>
-  <g fill="#1f9d63">
+  <g fill="#c9a200">
     <circle cx="32.5" cy="43.5" r="15.5"/>
     <circle cx="67.5" cy="43.5" r="15.5"/>
     <circle cx="50" cy="48.5" r="16.5"/>
   </g>
-  <g fill="#32d583">
+  <g fill="#ffd60a">
     <circle cx="34.5" cy="36" r="13.5"/>
     <circle cx="65.5" cy="36" r="13.5"/>
     <circle cx="50" cy="27.5" r="15.8"/>
   </g>
   <path d="M56 21.5 C56 18 53.3 16 50 16 C46.7 16 44 17.8 44 21 C44 24.2 46.7 25.6 50 27
            C53.3 28.4 56 29.8 56 33 C56 36.2 53.3 38 50 38 C46.7 38 44 36 44 32.5"
-        stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M50 13.2 V40.8" stroke="#ffffff" stroke-width="2.8" stroke-linecap="round"/>
+        stroke="#000000" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M50 13.2 V40.8" stroke="#000000" stroke-width="2.8" stroke-linecap="round"/>
 </svg>
 """
 

@@ -18,6 +18,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/dashboard.css">
   <link rel="stylesheet" href="/research.css">
+  <link rel="stylesheet" href="/home.css">
 </head>
 <body>
 
@@ -28,24 +29,33 @@
     <svg viewBox="0 0 100 100" fill="none">
       <path class="b-trunk" d="M43.6 85.5 C44.2 73 46.6 63 47.2 53 L52.8 53 C53.4 63 55.8 73 56.4 85.5 Z" fill="currentColor"/>
       <path class="b-root" d="M38.5 85.5 H61.5" stroke="currentColor" stroke-width="4.6" stroke-linecap="round"/>
-      <g fill="#1f9d63">
+      <g fill="#c9a200">
         <circle class="b-leaf" cx="32.5" cy="43.5" r="15.5"/>
         <circle class="b-leaf" cx="67.5" cy="43.5" r="15.5"/>
         <circle class="b-leaf" cx="50" cy="48.5" r="16.5"/>
       </g>
-      <g fill="#32d583">
+      <g fill="#ffd60a">
         <circle class="b-leaf" cx="34.5" cy="36" r="13.5"/>
         <circle class="b-leaf" cx="65.5" cy="36" r="13.5"/>
         <circle class="b-leaf" cx="50" cy="27.5" r="15.8"/>
       </g>
       <path class="b-cash" d="M56 21.5 C56 18 53.3 16 50 16 C46.7 16 44 17.8 44 21 C44 24.2 46.7 25.6 50 27
                C53.3 28.4 56 29.8 56 33 C56 36.2 53.3 38 50 38 C46.7 38 44 36 44 32.5"
-            stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
-      <path class="b-cash" d="M50 13.2 V40.8" stroke="#ffffff" stroke-width="2.8" stroke-linecap="round"/>
+            stroke="#000000" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path class="b-cash" d="M50 13.2 V40.8" stroke="#000000" stroke-width="2.8" stroke-linecap="round"/>
     </svg>
   </span>
   <b class="boot-name">Money Tree AI</b>
   <span class="boot-step" id="bootStep">connecting…</span>
+</div>
+
+<!-- First-run questions. Every answer changes what the bot does; nothing is
+     asked just to fill a profile. Built and driven by home.js. -->
+<div class="onboard" id="onboard" hidden role="dialog" aria-modal="true">
+  <div class="onboard-card">
+    <div class="onboard-progress"><i id="onboardBar"></i></div>
+    <div id="onboardBody"></div>
+  </div>
 </div>
 
 <div class="shell">
@@ -57,18 +67,18 @@
         <svg viewBox="0 0 100 100" fill="none">
           <path d="M43.6 85.5 C44.2 73 46.6 63 47.2 53 L52.8 53 C53.4 63 55.8 73 56.4 85.5 Z" fill="currentColor"/>
           <path d="M38.5 85.5 H61.5" stroke="currentColor" stroke-width="4.6" stroke-linecap="round"/>
-          <g fill="#1f9d63">
+          <g fill="#c9a200">
             <circle cx="32.5" cy="43.5" r="15.5"/><circle cx="67.5" cy="43.5" r="15.5"/>
             <circle cx="50" cy="48.5" r="16.5"/>
           </g>
-          <g fill="#32d583">
+          <g fill="#ffd60a">
             <circle cx="34.5" cy="36" r="13.5"/><circle cx="65.5" cy="36" r="13.5"/>
             <circle cx="50" cy="27.5" r="15.8"/>
           </g>
           <path d="M56 21.5 C56 18 53.3 16 50 16 C46.7 16 44 17.8 44 21 C44 24.2 46.7 25.6 50 27
                    C53.3 28.4 56 29.8 56 33 C56 36.2 53.3 38 50 38 C46.7 38 44 36 44 32.5"
-                stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M50 13.2 V40.8" stroke="#ffffff" stroke-width="2.8" stroke-linecap="round"/>
+                stroke="#000000" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M50 13.2 V40.8" stroke="#000000" stroke-width="2.8" stroke-linecap="round"/>
         </svg>
       </span>
       <div class="ai-title">
@@ -136,6 +146,31 @@
           <div class="figure skeleton" id="heroEquity">$0.00</div>
           <div class="hero-change" id="heroChange"></div>
           <div class="spark" id="equitySpark"></div>
+        </section>
+
+        <!-- What the bot is doing right now, in words — the phone's version of
+             the chat rail, which is tucked away behind a button on a small screen. -->
+        <section class="now" id="nowCard" hidden>
+          <div class="now-head">
+            <i class="now-pulse" aria-hidden="true"></i>
+            <b id="nowTitle"></b>
+            <button class="now-mode" id="nowMode" type="button"></button>
+          </div>
+          <p class="now-sub" id="nowSub"></p>
+          <ul class="now-feed" id="nowFeed"></ul>
+        </section>
+
+        <!-- Buys waiting for a tap (semi-auto) or ideas it will not act on (manual). -->
+        <section class="proposals" id="proposalBox" hidden>
+          <div class="block-head"><h2 id="proposalTitle"></h2></div>
+          <div id="proposalList"></div>
+        </section>
+
+        <!-- The one number people actually want: what has it made or lost me. -->
+        <section class="perf" id="perfCard" hidden>
+          <span class="perf-label" id="perfLabel"></span>
+          <div class="perf-figure" id="perfFigure"></div>
+          <p class="perf-sub" id="perfSub"></p>
         </section>
 
         <!-- Where this money actually came from. Never let a made-up balance
@@ -412,6 +447,12 @@
           <div class="chips tagset" id="sLanguage"></div>
         </section>
 
+        <!-- Live controls on the bot itself; drawn by home.js. -->
+        <section class="block">
+          <div class="block-head"><h2 data-i18n="settings.trading"></h2></div>
+          <div id="sTrading"></div>
+        </section>
+
         <section class="block">
           <div class="block-head"><h2 data-i18n="settings.aiSetup"></h2></div>
           <div class="rows">
@@ -513,6 +554,7 @@
 <script src="/vendor/lightweight-charts.js"></script>
 <script src="/chart.js"></script>
 <script type="module" src="/research.js"></script>
+<script type="module" src="/home.js"></script>
 <script>
   // Service workers only run in a secure context: https, or localhost. Over
   // plain http on the home Wi-Fi the phone still gets a home-screen icon from

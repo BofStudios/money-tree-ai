@@ -195,6 +195,34 @@ class Narrator:
             intent.symbol,
         )
 
+    def awaiting_approval(self, intent: TradeIntent, minutes: int) -> None:
+        self.say(
+            SIGNAL,
+            f"I want to buy {intent.qty:g} {intent.symbol} at about {intent.price:,.2f}. "
+            f"You are on semi-auto, so I am waiting for your Approve — the request "
+            f"lapses in {minutes} minutes if you do not answer.",
+            intent.symbol,
+        )
+
+    def suggested(self, intent: TradeIntent) -> None:
+        self.say(
+            SIGNAL,
+            f"I would buy {intent.qty:g} {intent.symbol} at about {intent.price:,.2f} "
+            f"({intent.reason}). You are on manual, so I am not placing it.",
+            intent.symbol,
+        )
+
+    def autonomy_changed(self, mode: str) -> None:
+        text = {
+            "full": "Full auto: I will buy and sell on my own.",
+            "semi": "Semi-auto: I will ask before every buy. Sells and stops stay automatic.",
+            "manual": (
+                "Manual: I will not open anything new, only tell you what I see. "
+                "Anything already open keeps its stop-loss."
+            ),
+        }.get(mode, mode)
+        self.say(ACTION, text)
+
     def protective_exit(self, position: Position, price: float, reason: str) -> None:
         self.say(
             WARN,

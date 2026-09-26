@@ -201,6 +201,28 @@ def status_message(status: dict) -> str:
     return "\n".join(lines)
 
 
+def proposal_message(proposal: dict) -> str:
+    """A semi-auto buy waiting for a tap, or a manual-mode suggestion."""
+    asking = proposal["kind"] == "approval"
+    head = (
+        f"*Approve buying {proposal['symbol']}?*" if asking
+        else f"*Idea: {proposal['symbol']}* (manual — I am not placing it)"
+    )
+    lines = [
+        head,
+        "",
+        f"{proposal['qty']:g} shares at about `{money(proposal['price'])}` "
+        f"(`${money(proposal['qty'] * proposal['price'])}`)",
+    ]
+    if proposal.get("stop_loss"):
+        lines.append(f"Stop `{money(proposal['stop_loss'])}` · "
+                     f"Target `{money(proposal.get('take_profit'))}`")
+    lines.append(f"_{proposal.get('reason', '')}_")
+    if asking:
+        lines += ["", "Expires in 15 minutes. It is re-checked against the price when you tap."]
+    return "\n".join(lines)
+
+
 def heartbeat_message(status: dict, uptime_seconds: float) -> str:
     """The periodic "still here" ping — one glance, not a report.
 

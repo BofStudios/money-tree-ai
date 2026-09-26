@@ -28,6 +28,7 @@ from app.risk.risk_manager import RiskManager
 from app.storage.db import create_session_factory
 from app.storage.repository import Repository
 from app.strategy.ema_rsi import EmaRsiStrategy
+from app.engine.autonomy import HORIZON_TIMEFRAMES, resolve_autonomy
 from app.research.analyst import Analyst
 from app.research.service import ResearchService
 from app.research.user_profile import ProfileStore
@@ -143,6 +144,14 @@ def main() -> None:
     research = ResearchService(YahooResearch(), YahooData(), timeframe="1d")
     analyst = Analyst(claude)
     profiles = ProfileStore(settings.user_profile_path)
+
+    # The onboarding answers change what the bot does, so apply them before the
+    # first scan. An unanswered question keeps the config's behaviour, except
+    # that real money never defaults to buying without asking.
+    chosen = profiles.get()
+    engine.set_autonomy(resolve_autonomy(chosen.autonomy, settings.app.mode))
+    if chosen.trading_horizon in HORIZON_TIMEFRAMES:
+        engine.set_horizon(chosen.trading_horizon)
 
     telegram = TelegramNotifier(
         token="" if args.no_telegram else settings.secrets.telegram_bot_token,

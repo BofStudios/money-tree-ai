@@ -437,6 +437,19 @@ class TelegramNotifier:
 
         if action in ("taken", "skipped"):
             await self._resolve_signal(query, action, payload)
+            return
+
+        if action == "apr":
+            # approve() may place a real order over the network; keep it off
+            # the event loop so the bot stays responsive while it runs.
+            result = await asyncio.to_thread(self.engine.approve, payload)
+            await query.edit_message_text(f"{query.message.text}\n\n— {result['message']}")
+            return
+
+        if action == "apx":
+            done = self.engine.skip_proposal(payload)
+            note = "Skipped." if done else "No longer open."
+            await query.edit_message_text(f"{query.message.text}\n\n— {note}")
 
     async def _resolve_signal(self, query, action: str, signal_id: str) -> None:
         executor = self.engine.executor
@@ -561,6 +574,12 @@ class TelegramNotifier:
             self.broadcast_sync(
                 fmt.signal_message(signal), _signal_buttons(signal["id"])
             )
+        elif kind == "approval_needed":
+            # Always pushed: on semi-auto nothing happens until someone answers.
+            proposal = event["proposal"]
+            self.broadcast_sync(fmt.proposal_message(proposal), _approval_buttons(proposal["id"]))
+        elif kind == "suggestion" and self.config.push_signals:
+            self.broadcast_sync(fmt.proposal_message(event["proposal"]))
         elif kind == "trade_opened" and self.config.push_fills:
             position = event["position"]
             self.broadcast_sync(
@@ -584,6 +603,15 @@ class TelegramNotifier:
             line = event["line"]
             if line["level"] in ("signal", "action", "warn", "result"):
                 self.broadcast_sync(f"`{line['clock']}` {line['text']}")
+
+
+def _approval_buttons(proposal_id: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        [[
+            InlineKeyboardButton("Approve", callback_data=f"apr:{proposal_id}"),
+            InlineKeyboardButton("Skip", callback_data=f"apx:{proposal_id}"),
+        ]]
+    )
 
 
 def _signal_buttons(signal_id: str) -> InlineKeyboardMarkup:

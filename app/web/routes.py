@@ -13,6 +13,7 @@ from app.config import Settings, write_secret
 from app.engine.portfolio_engine import PortfolioEngine
 from app.execution.signal_executor import SignalExecutor, _build_trade
 from app.mentor.ai import AIMentor
+from app.engine.autonomy import HORIZON_TIMEFRAMES, resolve_autonomy
 from app.mentor.providers import BUILDERS
 from app.mentor.narrator import Narrator
 from app.research.analyst import Analyst, build_plan
@@ -617,7 +618,61 @@ def build_router(
     def patch_profile(changes: dict = Body(...)) -> dict:
         if profiles is None:
             raise HTTPException(status_code=503, detail="Profiles are not configured.")
-        return {"profile": profiles.update(changes).to_dict()}
+        profile = profiles.update(changes)
+        # Two of the answers are live controls on the bot, not just preferences.
+        if "autonomy" in changes:
+            engine.set_autonomy(resolve_autonomy(profile.autonomy, engine.mode))
+        if "trading_horizon" in changes and profile.trading_horizon in HORIZON_TIMEFRAMES:
+            engine.set_horizon(profile.trading_horizon)
+        return {"profile": profile.to_dict(), "autonomy": engine.autonomy,
+                "timeframe": engine.timeframe}
+
+    # --------------------------------------------------------------- approvals
+
+    @router.post("/proposals/{proposal_id}/approve", dependencies=guarded)
+    def approve_proposal(proposal_id: str) -> dict:
+        result = engine.approve(proposal_id)
+        if not result["ok"]:
+            raise HTTPException(status_code=409, detail=result["message"])
+        return result
+
+    @router.post("/proposals/{proposal_id}/skip", dependencies=guarded)
+    def skip_proposal(proposal_id: str) -> dict:
+        if not engine.skip_proposal(proposal_id):
+            raise HTTPException(status_code=404, detail="That request is no longer open.")
+        return {"ok": True}
+
+    # ------------------------------------------------------------- performance
+
+    @router.get("/performance", dependencies=guarded)
+    def performance() -> dict:
+        """What the bot has made or lost for the owner, in one honest number.
+
+        Realised is closed trades. Unrealised is what the open positions are
+        worth right now relative to what was paid — it can still change.
+        """
+        stats = repo.trade_stats(engine.mode)
+        status = engine.status()
+        unrealised = round(sum(p.get("unrealized_pnl") or 0.0 for p in status["positions"]), 2)
+        realised = stats["total_pnl"]
+        start = (
+            engine.config.risk.starting_paper_balance if engine.mode == "paper" else None
+        )
+        return {
+            "mode": engine.mode,
+            "practice": engine.mode != "live",
+            "equity": status["equity"],
+            "starting_balance": start,
+            "realised": realised,
+            "unrealised": unrealised,
+            "total": round(realised + unrealised, 2),
+            "trades": stats["total_trades"],
+            "wins": stats["wins"],
+            "losses": stats["losses"],
+            "win_rate": stats["win_rate"],
+            "best_trade": stats["best_trade"],
+            "worst_trade": stats["worst_trade"],
+        }
 
     @router.post("/profile/reset", dependencies=guarded)
     def reset_profile() -> dict:

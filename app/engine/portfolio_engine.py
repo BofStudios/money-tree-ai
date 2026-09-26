@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from dataclasses import replace
 from datetime import datetime, timezone
 
 import pandas as pd
@@ -19,6 +20,13 @@ from app.common.models import (
 )
 from app.config import AppConfig
 from app.data.base import MarketDataSource
+from app.engine.autonomy import (
+    APPROVAL_MINUTES,
+    AUTONOMY_MODES,
+    HORIZON_TIMEFRAMES,
+    MAX_DRIFT_PCT,
+    ProposalBook,
+)
 from app.execution.base import Executor
 from app.execution.signal_executor import SignalExecutor
 from app.mentor.narrator import Narrator
@@ -70,6 +78,10 @@ class PortfolioEngine:
         self.symbols = list(config.watchlist)
         self.timeframe = config.timeframe
         self.mode = config.mode
+        # Who pulls the trigger on a buy — see app/engine/autonomy.py. Full
+        # until main() applies the owner's choice from their profile.
+        self.autonomy = "full"
+        self.proposals = ProposalBook()
 
         self._history: dict[str, pd.DataFrame] = {}
         self._snapshots: dict[str, dict] = {}
@@ -184,6 +196,10 @@ class PortfolioEngine:
             "pending_signals": self._pending_signal_dicts(),
             "challenge": self._challenge_dict(),
             "locks": self.protections.active_locks(),
+            "autonomy": self.autonomy,
+            "approvals": [p.to_dict() for p in self.proposals.pending("approval")],
+            "suggestions": [p.to_dict() for p in self.proposals.pending("suggestion")],
+            "proposal_history": [p.to_dict() for p in self.proposals.recent(8)],
         }
 
     def _challenge_dict(self) -> dict | None:
@@ -380,6 +396,8 @@ class PortfolioEngine:
 
         if isinstance(self.executor, SignalExecutor):
             self.executor.expire_stale()
+        for stale in self.proposals.expire():
+            self.events.publish("proposal_expired", {"proposal": stale.to_dict()})
 
         if self.challenges is not None:
             with self._lock:
@@ -425,6 +443,10 @@ class PortfolioEngine:
             return True
 
         if isinstance(self.executor, SignalExecutor) and self.executor.has_pending_for(symbol):
+            return False
+        # A buy already waiting on the owner (or already suggested) is not
+        # re-proposed every minute while the same bar is still the latest.
+        if position is None and self.proposals.has_pending_for(symbol):
             return False
 
         locked = self.protections.blocked(symbol)
@@ -482,6 +504,21 @@ class PortfolioEngine:
         self.mentor.explain_entry(intent, snapshot, balance.total)
         self.events.publish("intent", {"intent": intent.to_dict()})
 
+        # The autonomy gate. Signal mode already defers every order to the
+        # owner, so it only applies to executors that would act on their own.
+        if self.executor.is_automatic and self.autonomy != "full":
+            kind = "approval" if self.autonomy == "semi" else "suggestion"
+            proposal = self.proposals.add(kind, intent)
+            if proposal is None:
+                return False
+            if kind == "approval":
+                self.mentor.awaiting_approval(intent, APPROVAL_MINUTES)
+                self.events.publish("approval_needed", {"proposal": proposal.to_dict()})
+            else:
+                self.mentor.suggested(intent)
+                self.events.publish("suggestion", {"proposal": proposal.to_dict()})
+            return True
+
         opened = self.executor.open_position(intent)
         if opened is None:
             self.mentor.awaiting_confirmation(intent)
@@ -521,6 +558,110 @@ class PortfolioEngine:
 
         self.events.publish("trade_closed", _trade_event(trade))
         self.events.publish("status", self.status())
+
+    # ------------------------------------------------------------- autonomy
+
+    def set_autonomy(self, mode: str) -> None:
+        if mode not in AUTONOMY_MODES:
+            raise ValueError(f"autonomy must be one of {AUTONOMY_MODES}")
+        if mode == self.autonomy:
+            return
+        self.autonomy = mode
+        # Waiting requests were raised under the old rule. Left alone, a switch
+        # to manual would leave buys that can still be approved.
+        self.proposals.clear_pending()
+        self.mentor.autonomy_changed(mode)
+        self.events.publish("status", self.status())
+
+    def set_horizon(self, horizon: str) -> str:
+        timeframe = HORIZON_TIMEFRAMES.get(horizon)
+        if timeframe is None:
+            raise ValueError(f"horizon must be one of {tuple(HORIZON_TIMEFRAMES)}")
+        if timeframe != self.timeframe:
+            with self._lock:
+                self.timeframe = timeframe
+                # Indicators computed on 15-minute bars mean nothing on daily ones.
+                self._history.clear()
+                self._snapshots.clear()
+                self._last_signal.clear()
+            self.proposals.clear_pending()
+            self.mentor.note(f"Now reading {timeframe} candles.")
+            self.scan_now()
+        return timeframe
+
+    def approve(self, proposal_id: str) -> dict:
+        """The owner tapped Approve on a semi-auto buy.
+
+        Re-checked against the market as it is now, not as it was when the
+        request went out: the owner may have answered minutes later.
+        """
+        proposal = self.proposals.take(proposal_id)
+        if proposal is None:
+            return {"ok": False, "message": "That request expired or was already answered."}
+        intent = proposal.intent
+        symbol = intent.symbol
+
+        def fail(message: str) -> dict:
+            self.proposals.finish(proposal, "failed", message)
+            self.mentor.rejected(symbol, "make the buy you approved", message)
+            self.events.publish("proposal_resolved", {"proposal": proposal.to_dict()})
+            return {"ok": False, "message": f"Did not buy {symbol}: {message}."}
+
+        if not self.clock.state().is_open:
+            return fail("the market is closed")
+        if self.mode == "live" and not self.risk.armed:
+            return fail("live trading is not armed")
+
+        with self._lock:
+            held = symbol in self._positions
+            open_count = len(self._positions)
+            history = self._history.get(symbol)
+        if held:
+            return fail(f"I already hold {symbol}")
+        _, max_positions, _ = self._effective_limits()
+        if open_count + self._pending_entry_count() >= max_positions:
+            return fail(f"that would exceed the {max_positions}-position cap")
+        if history is None or history.empty:
+            return fail("I have no current price for it")
+
+        price = float(history["close"].iloc[-1])
+        drift = abs(price - intent.price) / intent.price * 100.0
+        if drift > MAX_DRIFT_PCT:
+            return fail(f"the price moved {drift:.1f}% since I asked, over the {MAX_DRIFT_PCT}% limit")
+        buying = intent.side is Side.BUY
+        if intent.stop_loss is not None and (
+            price <= intent.stop_loss if buying else price >= intent.stop_loss
+        ):
+            return fail("the price is already through the stop-loss")
+        if intent.take_profit is not None and (
+            price >= intent.take_profit if buying else price <= intent.take_profit
+        ):
+            return fail("the price already reached the target")
+
+        # Filled at today's price, never the one from when the request was raised.
+        opened = self.executor.open_position(replace(intent, price=price))
+        if opened is None:
+            return fail("the order was not filled")
+
+        self._register_position(opened, intent.reason)
+        self.mentor.opened(opened, True)
+        self.proposals.finish(proposal, "approved")
+        self.events.publish("trade_opened", {"position": opened.to_dict(), "reason": intent.reason})
+        self.events.publish("proposal_resolved", {"proposal": proposal.to_dict()})
+        self.events.publish("status", self.status())
+        return {
+            "ok": True,
+            "message": f"Bought {opened.qty:g} {symbol} at {opened.entry_price:,.2f}.",
+            "position": opened.to_dict(),
+        }
+
+    def skip_proposal(self, proposal_id: str) -> bool:
+        proposal = self.proposals.skip(proposal_id)
+        if proposal is None:
+            return False
+        self.events.publish("proposal_resolved", {"proposal": proposal.to_dict()})
+        self.events.publish("status", self.status())
+        return True
 
     # ---------------------------------------------- signal-mode confirmations
 
@@ -617,9 +758,12 @@ class PortfolioEngine:
         return rounded
 
     def _pending_entry_count(self) -> int:
+        # Approvals hold a slot: approving them all must never exceed the cap.
+        # Suggestions do not — manual mode never turns them into positions.
+        waiting = len(self.proposals.pending("approval"))
         if not isinstance(self.executor, SignalExecutor):
-            return 0
-        return sum(1 for s in self.executor.pending_signals() if not s.is_exit)
+            return waiting
+        return waiting + sum(1 for s in self.executor.pending_signals() if not s.is_exit)
 
     def _pending_signal_dicts(self) -> list[dict]:
         if not isinstance(self.executor, SignalExecutor):

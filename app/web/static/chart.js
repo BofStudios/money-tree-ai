@@ -288,6 +288,9 @@ function pushLine(line) {
   const key = `${line.time}|${line.text}`;
   if (seen.has(key)) return;
   seen.add(key);
+  (window.mtLines = window.mtLines || []).push(line);
+  if (window.mtLines.length > 40) window.mtLines.shift();
+  window.dispatchEvent(new CustomEvent("mt:line", { detail: line }));
   addMessage({ text: line.text, level: line.level, time: line.clock });
 }
 
@@ -585,6 +588,10 @@ function renderRealCheck(s) {
 
 function renderStatus(s) {
   state = s;
+  // home.js (a module, so it can use the translations) draws the live and
+  // money cards from the same status; it listens rather than being called.
+  window.mtState = s;
+  window.dispatchEvent(new CustomEvent("mt:status", { detail: s }));
   renderMarket(s.market);
 
   const mode = $("modeChip");
@@ -919,6 +926,7 @@ function connect() {
 
   socket.onmessage = (e) => {
     const msg = JSON.parse(e.data);
+    window.dispatchEvent(new CustomEvent("mt:ws", { detail: msg }));
     if (msg.type === "status") renderStatus(msg);
     else if (msg.type === "mentor") pushLine(msg.line);
     else if (msg.type === "challenge") loadRun().catch(() => {});

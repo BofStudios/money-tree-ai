@@ -34,6 +34,10 @@ CHOICES = {
     ],
     "language": ["en", "tr"],
     "tone": ["concise", "balanced", "detailed"],
+    # These two drive the trading bot itself, not just how the AI talks:
+    # horizon picks the candle size, autonomy who approves a buy.
+    "trading_horizon": ["short", "medium", "long", "unknown"],
+    "autonomy": ["manual", "semi", "full", "unknown"],
 }
 
 DEFAULTS = {
@@ -49,6 +53,8 @@ DEFAULTS = {
     "tone": "balanced",
     "advanced_mode": False,
     "onboarded": False,
+    "trading_horizon": "unknown",
+    "autonomy": "unknown",
 }
 
 MULTI = ("focus", "attention")
@@ -68,6 +74,8 @@ class UserProfile:
     tone: str = "balanced"
     advanced_mode: bool = False
     onboarded: bool = False
+    trading_horizon: str = "unknown"
+    autonomy: str = "unknown"
 
     def to_dict(self) -> dict:
         return asdict(self)
