@@ -1,0 +1,352 @@
+package com.bofstudios.moneytree.ui
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.bofstudios.moneytree.engine.EngineState
+import com.bofstudios.moneytree.engine.Proposal
+import com.bofstudios.moneytree.engine.Step
+import com.bofstudios.moneytree.engine.StepKind
+import com.bofstudios.moneytree.engine.StepState
+import com.bofstudios.moneytree.engine.TradingSettings
+import com.bofstudios.moneytree.engine.Words
+import com.bofstudios.moneytree.service.EngineService
+import com.bofstudios.moneytree.service.Hub
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+@Composable
+fun MonitorScreen(settings: TradingSettings, toast: (String) -> Unit) {
+    val steps by Hub.steps.collectAsState()
+    val state by Hub.state.collectAsState()
+    val running by Hub.running.collectAsState()
+    val armed by Hub.armed.collectAsState()
+
+    LazyColumn(
+        Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 110.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp),
+    ) {
+        item { StatusCard(state, settings, running, armed) }
+
+        if (state.approvals.isNotEmpty() || state.suggestions.isNotEmpty()) {
+            item { SectionTitle(if (state.approvals.isNotEmpty()) tx("Waiting for your OK", "Onayını bekliyor") else tx("Ideas (manual)", "Fikirler (manuel)")) }
+            items(state.approvals, key = { it.id }) { ProposalCard(it, asking = true, settings, toast) }
+            items(state.suggestions, key = { it.id }) { ProposalCard(it, asking = false, settings, toast) }
+        }
+
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SectionTitle(tx("AI monitor", "AI monitör"), Modifier.weight(1f))
+                if (running) Pulse(MT.Accent, live = true, size = 7)
+            }
+        }
+        if (steps.isEmpty()) {
+            item {
+                Text(
+                    tx("Nothing yet. Start the bot and every step it takes will appear here, as it happens.",
+                        "Henüz bir şey yok. Botu başlat, attığı her adım burada anında görünecek."),
+                    color = MT.Text3, fontSize = 13.sp, modifier = Modifier.padding(vertical = 8.dp),
+                )
+            }
+        }
+        // Newest first: on a phone the latest thing belongs at the top.
+        items(steps.asReversed(), key = { it.id }) { step ->
+            StepRow(step, Modifier.animateItem(fadeInSpec = spring(stiffness = Spring.StiffnessLow)))
+        }
+    }
+}
+
+@Composable
+private fun StatusCard(state: EngineState, settings: TradingSettings, running: Boolean, armed: Boolean) {
+    val context = LocalContext.current
+    val w = Words(LocalTurkish.current)
+    val account = state.account
+    val live = running && state.marketOpen == true && state.lastError == null
+
+    Card(highlight = live) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Pulse(
+                color = when {
+                    !running -> MT.Text3
+                    state.lastError != null -> MT.Down
+                    state.marketOpen == true -> MT.Accent
+                    else -> MT.Text2
+                },
+                live = live,
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                when {
+                    !running -> tx("Stopped", "Durdu")
+                    state.lastError != null -> tx("Problem — retrying", "Sorun — yeniden deniyor")
+                    state.marketOpen == true -> tx("Running · market open", "Çalışıyor · piyasa açık")
+                    state.marketOpen == false -> tx("Running · market closed", "Çalışıyor · piyasa kapalı")
+                    else -> tx("Starting…", "Başlıyor…")
+                },
+                Modifier.weight(1f), fontWeight = FontWeight.SemiBold, fontSize = 15.sp,
+            )
+            Tag(if (settings.live) (if (armed) tx("REAL · ARMED", "GERÇEK · DEVREDE") else tx("REAL", "GERÇEK")) else "PAPER",
+                if (settings.live) MT.Down else MT.Accent)
+        }
+
+        Spacer(Modifier.height(14.dp))
+        Text(
+            if (settings.live) tx("Your real balance", "Gerçek bakiyen") else tx("Practice balance (Alpaca paper)", "Deneme bakiyesi (Alpaca paper)"),
+            color = MT.Text3, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
+        )
+        Text(account?.let { w.usd(it.equity) } ?: "—", style = Figure, color = MT.Text)
+
+        if (account != null) {
+            val today = account.equity - account.lastEquity
+            Text("${w.signed(today)} ${tx("today", "bugün")}", color = today.tone(), fontFamily = MT.Mono, fontSize = 13.sp)
+            state.baselineEquity?.let { base ->
+                val since = account.equity - base
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(MT.Surface2).padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        if (since < 0) tx("Money Tree has lost you", "Money Tree sana kaybettirdi")
+                        else tx("Money Tree has made you", "Money Tree sana kazandırdı"),
+                        Modifier.weight(1f), color = MT.Text2, fontSize = 13.sp,
+                    )
+                    Text(w.signed(since), color = since.tone(), fontFamily = MT.Mono, fontWeight = FontWeight.SemiBold)
+                }
+                Text(
+                    tx("Since you connected this account · ${w.usd(base)} then", "Bu hesabı bağladığından beri · o zaman ${w.usd(base)}"),
+                    color = MT.Text3, fontSize = 11.sp, modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+        }
+
+        state.haltReason?.let {
+            Spacer(Modifier.height(10.dp))
+            Text(it, color = MT.Down, fontSize = 12.5.sp)
+        }
+
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Tag(w.autonomyName(settings.autonomy))
+            Tag(w.tfName(settings.horizon.timeframe))
+            Spacer(Modifier.weight(1f))
+            if (running) {
+                GhostButton(tx("Look now", "Şimdi bak"), { EngineService.scanNow(context) }, color = MT.Accent)
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        if (running) {
+            GhostButton(tx("Stop the bot", "Botu durdur"), { EngineService.stop(context) }, Modifier.fillMaxWidth())
+        } else {
+            PrimaryButton(tx("Start Money Tree", "Money Tree'yi başlat"), { EngineService.start(context) }, Modifier.fillMaxWidth())
+        }
+    }
+}
+
+@Composable
+private fun ProposalCard(p: Proposal, asking: Boolean, settings: TradingSettings, toast: (String) -> Unit) {
+    val w = Words(LocalTurkish.current)
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(p.id) { while (true) { delay(1000); now = System.currentTimeMillis() } }
+    val e = p.entry
+
+    Card(highlight = asking, modifier = Modifier.padding(bottom = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Ticker(e.symbol)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    if (asking) tx("Buy ${e.qty} ${e.symbol} at about ${w.usd(e.price)}", "${e.symbol}: ${e.qty} adet al, yaklaşık ${w.usd(e.price)}")
+                    else tx("Would buy ${e.qty} ${e.symbol} at ${w.usd(e.price)}", "${e.symbol}: ${e.qty} adet alırdım, ${w.usd(e.price)}"),
+                    fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
+                )
+                Text("Stop ${w.usd(e.stop)} · ${tx("target", "hedef")} ${w.usd(e.target)}",
+                    color = MT.Text3, fontFamily = MT.Mono, fontSize = 11.sp)
+                Text(e.reason, color = MT.Text3, fontSize = 11.5.sp)
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (asking) {
+                val left = ((p.expiresAt - now) / 60_000).coerceAtLeast(0)
+                Text(tx("lapses in $left min", "$left dk içinde düşer"), color = MT.Accent,
+                    fontFamily = MT.Mono, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                GhostButton(tx("Skip", "Geç"), { Hub.engine?.skip(p.id) })
+                PrimaryButton(tx("Approve", "Onayla"), enabled = !busy, onClick = {
+                    val engine = Hub.engine ?: return@PrimaryButton
+                    busy = true
+                    scope.launch {
+                        val r = engine.approve(p.id)
+                        busy = false
+                        toast(r.message)
+                    }
+                })
+            } else {
+                Spacer(Modifier.weight(1f))
+                GhostButton(tx("Dismiss", "Kapat"), { Hub.engine?.skip(p.id) })
+            }
+        }
+        if (asking && settings.live) {
+            Text(tx("Real money. Re-checked against the live price when you tap.",
+                "Gerçek para. Dokunduğunda güncel fiyatla tekrar kontrol edilir."),
+                color = MT.Down, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+        }
+    }
+}
+
+@Composable
+fun Ticker(symbol: String) {
+    Box(
+        Modifier.size(38.dp).clip(RoundedCornerShape(11.dp)).background(MT.Surface2),
+        contentAlignment = Alignment.Center,
+    ) { Text(symbol.take(2), fontFamily = MT.Mono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = MT.Text) }
+}
+
+/** One thing the engine did, drawn like a tool call: spinner, then a mark. */
+@Composable
+private fun StepRow(step: Step, modifier: Modifier = Modifier) {
+    var open by rememberSaveable(step.id) { mutableStateOf(false) }
+    val expandable = step.lines.isNotEmpty() || (step.detail?.length ?: 0) > 70
+    val time = remember(step.startedAt) { SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(step.startedAt)) }
+    val (tint, icon) = kindLook(step)
+
+    Row(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(enabled = expandable) { open = !open }
+            .padding(vertical = 8.dp, horizontal = 4.dp)
+            .animateContentSize(),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(Modifier.size(28.dp).clip(CircleShape).background(tint.copy(alpha = 0.13f)), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = tint, modifier = Modifier.size(15.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    step.title, Modifier.weight(1f),
+                    color = if (step.state == StepState.RUNNING) MT.Text else MT.Text.copy(alpha = 0.92f),
+                    fontSize = 13.5.sp, fontWeight = if (step.state == StepState.RUNNING) FontWeight.SemiBold else FontWeight.Medium,
+                )
+                Spacer(Modifier.width(8.dp))
+                StateMark(step.state)
+            }
+            step.detail?.let {
+                Text(it, color = if (step.state == StepState.FAILED) MT.Down else MT.Text2,
+                    fontSize = 12.5.sp, maxLines = if (open) 30 else 2, lineHeight = 17.sp)
+            }
+            Text(time + (step.endedAt?.let { e -> if (e > step.startedAt) " · ${(e - step.startedAt)} ms" else "" } ?: ""),
+                color = MT.Text3, fontFamily = MT.Mono, fontSize = 10.sp)
+            AnimatedVisibility(open && step.lines.isNotEmpty(), enter = expandVertically() + fadeIn(), exit = shrinkVertically()) {
+                Column(
+                    Modifier.padding(top = 6.dp).fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                        .background(MT.Surface2).padding(10.dp),
+                ) {
+                    step.lines.forEach {
+                        Text(it, color = MT.Text2, fontFamily = MT.Mono, fontSize = 11.sp, lineHeight = 16.sp)
+                    }
+                }
+            }
+            if (!open && step.lines.isNotEmpty()) {
+                Text(tx("${step.lines.size} details — tap", "${step.lines.size} detay — dokun"),
+                    color = MT.Text3, fontSize = 10.5.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StateMark(state: StepState) {
+    when (state) {
+        StepState.RUNNING -> CircularProgressIndicator(Modifier.size(14.dp), color = MT.Accent, strokeWidth = 2.dp)
+        StepState.DONE -> Icon(Icons.Filled.Check, null, tint = MT.Accent, modifier = Modifier.size(16.dp))
+        StepState.FAILED -> Icon(Icons.Filled.Close, null, tint = MT.Down, modifier = Modifier.size(16.dp))
+        StepState.INFO -> Unit
+    }
+}
+
+private fun kindLook(step: Step): Pair<Color, ImageVector> = when (step.kind) {
+    StepKind.CLOCK -> MT.Text2 to Icons.Filled.DateRange
+    StepKind.ACCOUNT -> MT.Text2 to Icons.Filled.AccountCircle
+    StepKind.POSITIONS -> MT.Text2 to Icons.AutoMirrored.Filled.List
+    StepKind.BARS -> MT.Text2 to Icons.Filled.Refresh
+    StepKind.ANALYSE -> MT.Accent to Icons.Filled.Search
+    StepKind.NEWS -> MT.Text2 to Icons.Filled.Email
+    StepKind.ORDER -> MT.Up to Icons.Filled.ShoppingCart
+    StepKind.TRAIL -> MT.Up to Icons.Filled.KeyboardArrowUp
+    StepKind.SELL -> MT.Accent to Icons.AutoMirrored.Filled.ExitToApp
+    StepKind.AI -> MT.Accent to Icons.Filled.Star
+    StepKind.APPROVAL -> MT.Accent to Icons.Filled.Notifications
+    StepKind.WAIT -> MT.Text3 to Icons.Filled.Done
+    StepKind.WARN -> MT.Down to Icons.Filled.Warning
+    StepKind.INFO -> MT.Text2 to Icons.Filled.Info
+}.let { if (step.state == StepState.FAILED) MT.Down to it.second else it }
