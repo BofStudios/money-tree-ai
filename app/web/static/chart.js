@@ -1,4 +1,15 @@
-const TOKEN = new URLSearchParams(location.search).get("token") || "";
+/* Launched from the phone's home screen, the app opens at the manifest's bare
+   start_url and the ?token= from the first visit is gone. So the token is
+   remembered on this device the first time it arrives in the URL. */
+const TOKEN = (() => {
+  const fromUrl = new URLSearchParams(location.search).get("token");
+  try {
+    if (fromUrl) localStorage.setItem("mt_token", fromUrl);
+    return fromUrl || localStorage.getItem("mt_token") || "";
+  } catch {
+    return fromUrl || "";
+  }
+})();
 const q = (p) => (TOKEN ? `${p}${p.includes("?") ? "&" : "?"}token=${encodeURIComponent(TOKEN)}` : p);
 const $ = (id) => document.getElementById(id);
 const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -194,6 +205,14 @@ function showView(name) {
   document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.dataset.view === name));
   window.scrollTo({ top: 0, behavior: "instant" });
+  // On a phone the tab bar scrolls sideways; keep the chosen tab in view.
+  const bar = $("nav");
+  const tab = bar && bar.querySelector(`.tab[data-tab="${name}"]`);
+  if (tab && bar.scrollWidth > bar.clientWidth) {
+    // Instant, not smooth: smooth scrolling is driven by animation frames and
+    // silently does nothing when the page is backgrounded or throttled.
+    bar.scrollLeft = tab.offsetLeft - (bar.clientWidth - tab.offsetWidth) / 2;
+  }
   if (name === "chart" && selected) loadChart(selected).catch(() => {});
   if (name === "live") loadSetup().catch(() => {});
   if (name === "catalysts") loadCatalysts().catch(() => {});

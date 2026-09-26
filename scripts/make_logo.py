@@ -168,6 +168,14 @@ def main() -> None:
     # the dashboard serves its favicon straight out of the static folder
     draw(256).save(str(STATIC / "logo.png"), "PNG")
 
+    # Home-screen install on a phone. Rendered from the geometry at each size
+    # rather than scaled from the 256 favicon, which would blur at 512.
+    draw(192).save(str(STATIC / "icon-192.png"), "PNG")
+    draw(512).save(str(STATIC / "icon-512.png"), "PNG")
+    # Android crops "maskable" icons to its own shape, so this one is square
+    # and full-bleed — its own rounding would otherwise show as a frame.
+    draw(512, rounded=False).save(str(STATIC / "icon-maskable-512.png"), "PNG")
+
     print(f"wrote {ASSETS / 'logo.png'}")
     print(f"wrote {ASSETS / 'logo.ico'}")
     print(f"wrote {ASSETS / 'mark.svg'}")

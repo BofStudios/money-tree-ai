@@ -13,7 +13,15 @@
 import { t, setLanguage, getLanguage, applyTranslations, LANGUAGES } from "/i18n.js";
 
 const $ = (id) => document.getElementById(id);
-const TOKEN = new URLSearchParams(location.search).get("token") || "";
+// Same device-remembered token as chart.js, for launches from the home screen.
+const TOKEN = (() => {
+  const fromUrl = new URLSearchParams(location.search).get("token");
+  try {
+    return fromUrl || localStorage.getItem("mt_token") || "";
+  } catch {
+    return fromUrl || "";
+  }
+})();
 const q = (p) => (TOKEN ? `${p}${p.includes("?") ? "&" : "?"}token=${encodeURIComponent(TOKEN)}` : p);
 
 let symbol = null;

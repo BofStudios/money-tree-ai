@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+import time
 from datetime import datetime, timezone
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -146,8 +147,24 @@ class TelegramNotifier:
             log.debug("could not set the command menu", exc_info=True)
         log.info("telegram bot listening")
         await self.broadcast("Bot is up. Send /help to see what I can do.")
+
+        started = time.monotonic()
+        interval = self.config.heartbeat_hours * 3600
+        next_beat = started + interval if interval else None
         while True:
-            await asyncio.sleep(3600)
+            await asyncio.sleep(60)
+            if next_beat is not None and time.monotonic() >= next_beat:
+                await self._heartbeat(time.monotonic() - started)
+                next_beat = time.monotonic() + interval
+
+    async def _heartbeat(self, uptime_seconds: float) -> None:
+        try:
+            # status() may touch the broker over the network; keep it off the
+            # event loop so Telegram stays responsive while it runs.
+            status = await asyncio.to_thread(self.engine.status)
+            await self.broadcast(fmt.heartbeat_message(status, uptime_seconds))
+        except Exception:
+            log.exception("heartbeat failed")
 
     async def _shutdown(self) -> None:
         try:

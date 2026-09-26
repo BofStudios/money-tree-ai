@@ -193,6 +193,9 @@ class TelegramConfig(BaseModel):
     push_fills: bool = True
     push_mentor: bool = False  # mentor chatter can be noisy on a phone
     daily_summary: bool = True
+    # A "still up" ping every N hours, so silence itself becomes a signal that
+    # the bot or the PC has gone down. 0 turns it off.
+    heartbeat_hours: float = Field(default=6.0, ge=0)
 
 
 class WebConfig(BaseModel):

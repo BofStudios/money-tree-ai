@@ -201,6 +201,30 @@ def status_message(status: dict) -> str:
     return "\n".join(lines)
 
 
+def heartbeat_message(status: dict, uptime_seconds: float) -> str:
+    """The periodic "still here" ping — one glance, not a report.
+
+    The point is that silence becomes meaningful: if these stop arriving, the
+    bot (or the PC it runs on) is down. So it also says plainly when the bot is
+    up but not actually doing its job.
+    """
+    hours, rem = divmod(int(uptime_seconds), 3600)
+    minutes = rem // 60
+    uptime = f"{hours}h {minutes}m" if hours else f"{minutes}m"
+    market = "open" if status["market"]["is_open"] else "closed"
+
+    lines = [
+        f"*Money Tree is still up* — {uptime}",
+        f"{status['mode']} mode · equity *${money(status['equity'])}* · "
+        f"{len(status['positions'])} open · market {market}",
+    ]
+    if not status["running"]:
+        lines.append("_Engine is stopped — it is not scanning._")
+    if status.get("last_error"):
+        lines.append(f"_Last error:_ `{str(status['last_error'])[:120]}`")
+    return "\n".join(lines)
+
+
 def watchlist_message(rows: list[dict]) -> str:
     ready = [r for r in rows if r.get("ready")]
     if not ready:
