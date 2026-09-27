@@ -19,6 +19,7 @@
   <link rel="stylesheet" href="/dashboard.css">
   <link rel="stylesheet" href="/research.css">
   <link rel="stylesheet" href="/home.css">
+  <link rel="stylesheet" href="/live.css">
 </head>
 <body>
 
@@ -56,6 +57,16 @@
     <div class="onboard-progress"><i id="onboardBar"></i></div>
     <div id="onboardBody"></div>
   </div>
+</div>
+
+<!-- Typed confirmation before real money; drawn by money.js. -->
+<div class="onboard" id="confirmReal" hidden role="dialog" aria-modal="true"></div>
+
+<!-- Shown while the app restarts on new keys or another money mode. -->
+<div class="boot restart-overlay" id="restartOverlay" hidden>
+  <span class="restart-spin" aria-hidden="true"></span>
+  <b class="boot-name">Money Tree AI</b>
+  <span class="boot-step" id="restartText"></span>
 </div>
 
 <div class="shell">
@@ -141,11 +152,23 @@
       <!-- ============================================================= home -->
       <section class="view active" data-view="home">
 
-        <section class="hero">
-          <div class="hero-label">Portfolio<span class="hero-state" id="heroMode"></span></div>
+        <!-- Whose money this is comes first, every time: real, practice or
+             simulated. Drawn by money.js; the number itself by chart.js. -->
+        <section class="hero moneycard" id="moneyCard">
+          <div class="mc-top">
+            <span class="mc-tag" id="mcTag"><i></i>…</span>
+            <span class="hero-state" id="heroMode"></span>
+          </div>
           <div class="figure skeleton" id="heroEquity">$0.00</div>
+          <div class="mc-empty" id="mcEmpty" hidden>
+            <b data-i18n="mc.empty"></b>
+            <p data-i18n="mc.emptyBody"></p>
+          </div>
           <div class="hero-change" id="heroChange"></div>
+          <p class="mc-sub" id="mcSub"></p>
+          <div class="mc-result" id="mcResult" hidden></div>
           <div class="spark" id="equitySpark"></div>
+          <div class="mc-actions" id="mcActions"></div>
         </section>
 
         <!-- What the bot is doing right now, in words — the phone's version of
@@ -172,10 +195,6 @@
           <div class="perf-figure" id="perfFigure"></div>
           <p class="perf-sub" id="perfSub"></p>
         </section>
-
-        <!-- Where this money actually came from. Never let a made-up balance
-             sit on screen looking like the real thing. -->
-        <div class="realcheck" id="realCheck" hidden></div>
 
         <section class="block">
           <div class="block-head">
@@ -333,25 +352,48 @@
       </section>
 
       <!-- ============================================================= live -->
+      <!-- Every step the engine takes, as it takes it. Driven by live.js. -->
       <section class="view" data-view="live">
+        <div class="lv-head">
+          <i class="lv-state" id="liveDot" data-state="idle" aria-hidden="true"></i>
+          <b class="lv-status" id="liveStatus">…</b>
+          <button class="primary sm" id="liveLook" data-i18n="live.lookNow">Look now</button>
+        </div>
+        <div class="chips tagset lv-filter" id="liveFilter">
+          <button class="chip pickable on" data-filter="all" data-i18n="live.filterAll"></button>
+          <button class="chip pickable" data-filter="trades" data-i18n="live.filterTrades"></button>
+          <button class="chip pickable" data-filter="problems" data-i18n="live.filterProblems"></button>
+        </div>
+        <div class="lv-feed" id="liveFeed" aria-live="polite"></div>
+        <p class="note faint" id="liveEmpty" data-i18n="live.empty"></p>
+      </section>
+
+      <!-- ============================================================ money -->
+      <section class="view" data-view="money">
         <div class="block-head standalone">
-          <h2>Trading real money</h2>
+          <h2 data-i18n="mv.title">Money</h2>
+          <button class="link-accent" data-back-home data-i18n="mv.back">← Home</button>
+        </div>
+        <div id="moneyView"></div>
+      </section>
+
+      <!-- ============================================================ setup -->
+      <section class="view" data-view="setup">
+        <div class="block-head standalone">
+          <h2 data-i18n="setup.title">Trading real money</h2>
           <span class="muted" id="setupProgress">—</span>
         </div>
 
-        <p class="prose"><b>Midas has no API.</b> Their own broker listing says so, so
-          nothing can place an order there. In signal mode the bot tells you what to buy
-          and you place it yourself.</p>
-        <p class="prose">For the bot to trade on its own you need a broker with an API.
-          <b>Alpaca</b> accepts Turkish residents and is commission-free on US stocks.</p>
-        <p class="prose warn">Real money means real losses. Do step three properly.</p>
+        <p class="prose" data-i18n="setup.p1"></p>
+        <p class="prose" data-i18n="setup.p2"></p>
+        <p class="prose warn" data-i18n="setup.p3"></p>
 
         <ol class="steps" id="setupSteps"></ol>
 
-        <div class="block-head standalone"><h2>Safety rails</h2></div>
+        <div class="block-head standalone"><h2 data-i18n="setup.rails">Safety rails</h2></div>
         <div class="rows" id="railGrid"></div>
 
-        <div class="block-head standalone"><h2>Connections</h2></div>
+        <div class="block-head standalone"><h2 data-i18n="setup.connections">Connections</h2></div>
         <div class="rows" id="connGrid"></div>
       </section>
 
@@ -442,6 +484,12 @@
       <section class="view" data-view="settings">
         <div class="block-head standalone"><h2 data-i18n="settings.title"></h2></div>
 
+        <!-- Which account the bot trades, and the keys for it; drawn by money.js. -->
+        <section class="block money-block" id="sMoneyBlock">
+          <div class="block-head"><h2 data-i18n="sm.title">Money &amp; keys</h2></div>
+          <div id="sMoney"></div>
+        </section>
+
         <section class="block">
           <div class="block-head"><h2 data-i18n="settings.language"></h2></div>
           <div class="chips tagset" id="sLanguage"></div>
@@ -513,6 +561,11 @@
         <svg viewBox="0 0 20 20"><path d="M3 9.5 10 4l7 5.5M5.5 8.5V16h9V8.5"/></svg>
         <span data-i18n="nav.home">Home</span>
       </button>
+      <button class="tab" data-tab="live">
+        <svg viewBox="0 0 20 20"><path d="M2.5 10h3l2-5 3 10 2-6.5 1.5 1.5h3.5"/></svg>
+        <span data-i18n="nav.live">Live</span>
+        <i class="tab-dot live-dot" id="liveTabDot" hidden></i>
+      </button>
       <button class="tab" data-tab="research">
         <svg viewBox="0 0 20 20"><circle cx="9" cy="9" r="5.5"/><path d="m13.5 13.5 3 3"/></svg>
         <span data-i18n="nav.research">Research</span>
@@ -539,9 +592,9 @@
         <svg viewBox="0 0 20 20"><path d="M10 5.5V10l3 1.8M17 10a7 7 0 1 1-2.05-4.95"/></svg>
         <span data-i18n="nav.activity">Activity</span>
       </button>
-      <button class="tab" data-tab="live">
+      <button class="tab" data-tab="setup">
         <svg viewBox="0 0 20 20"><path d="M10 3.5v8m0 0 3.2-3.2M10 11.5 6.8 8.3M4.5 15h11"/></svg>
-        <span data-i18n="nav.live">Live</span>
+        <span data-i18n="nav.setup">Setup</span>
       </button>
       <button class="tab" data-tab="settings">
         <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="2.6"/><path d="M10 3.2v2M10 15v1.8M16.8 10h-1.8M5 10H3.2M14.8 5.2l-1.3 1.3M6.5 13.5l-1.3 1.3M14.8 14.8l-1.3-1.3M6.5 6.5 5.2 5.2"/></svg>
@@ -555,6 +608,8 @@
 <script src="/chart.js"></script>
 <script type="module" src="/research.js"></script>
 <script type="module" src="/home.js"></script>
+<script type="module" src="/live.js"></script>
+<script type="module" src="/money.js"></script>
 <script>
   // Service workers only run in a secure context: https, or localhost. Over
   // plain http on the home Wi-Fi the phone still gets a home-screen icon from

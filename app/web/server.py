@@ -14,6 +14,7 @@ from app.engine.portfolio_engine import PortfolioEngine
 from app.mentor.ai import AIMentor
 from app.mentor.narrator import Narrator
 from app.storage.repository import Repository
+from app.web.money_routes import build_money_router
 from app.web.routes import build_router
 from app.web.ws import WebSocketHub
 
@@ -35,6 +36,10 @@ def create_app(
     research=None,
     analyst=None,
     profiles=None,
+    keystore=None,
+    restarter=None,
+    config_path=None,
+    key_problems=None,
 ) -> FastAPI:
     api = FastAPI(title="Money Tree AI", docs_url=None, redoc_url=None)
     hub = WebSocketHub(events)
@@ -46,8 +51,11 @@ def create_app(
     api.include_router(
         build_router(
             engine, repo, mentor, claude, hub, token, settings, catalysts, news,
-            research, analyst, profiles,
+            research, analyst, profiles, keystore,
         )
+    )
+    api.include_router(
+        build_money_router(engine, repo, settings, keystore, restarter, token, config_path, key_problems)
     )
     @api.middleware("http")
     async def _revalidate_static(request, call_next):
@@ -87,9 +95,33 @@ class WebServer:
         return f"http://127.0.0.1:{self.port}"
 
     def start(self) -> None:
+        # After an in-app restart the previous copy may still be letting go of
+        # the port; give it a moment instead of failing to bind.
+        _wait_for_port(self.host, self.port, timeout=15.0)
         self._thread = threading.Thread(target=self._server.run, name="web-server", daemon=True)
         self._thread.start()
         log.info("dashboard serving on %s (and on your LAN IP for phones)", self.local_url)
 
     def stop(self) -> None:
         self._server.should_exit = True
+
+    def join(self, timeout: float | None = None) -> None:
+        if self._thread is not None:
+            self._thread.join(timeout)
+
+
+def _wait_for_port(host: str, port: int, timeout: float) -> None:
+    """Wait while something still answers on the port (the previous copy)."""
+    import socket
+    import time
+
+    target = "127.0.0.1" if host in ("0.0.0.0", "", "::") else host
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            with socket.create_connection((target, port), timeout=0.5):
+                pass
+        except OSError:
+            return  # nothing listening: free
+        time.sleep(0.5)
+    log.warning("port %s is still answering; starting anyway", port)

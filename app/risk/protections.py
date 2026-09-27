@@ -76,6 +76,12 @@ class Protections:
 
     # ------------------------------------------------------------------ input
 
+    def cool_down(self, symbol: str, now: datetime | None = None) -> None:
+        """The cooldown alone, for a position that vanished with no trade to record."""
+        if self.config.enabled and self.config.cooldown_minutes:
+            now = now or _now()
+            self._add(Lock(now + timedelta(minutes=self.config.cooldown_minutes), COOLDOWN, symbol))
+
     def record_trade(self, trade: ClosedTrade, equity: float, now: datetime | None = None) -> list[str]:
         """Fold a closed trade in and return any locks it just triggered."""
         if not self.config.enabled:

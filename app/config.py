@@ -53,9 +53,15 @@ class Secrets(BaseSettings):
     )
 
     # Alpaca — only needed for paper/live execution. Signal mode works without it.
+    # The older single pair plus ALPACA_PAPER still works; the separate paper and
+    # live pairs (usually entered in Settings, see app/common/keystore.py) win.
     alpaca_api_key: str = ""
     alpaca_api_secret: str = ""
     alpaca_paper: bool = True
+    alpaca_paper_key: str = ""
+    alpaca_paper_secret: str = ""
+    alpaca_live_key: str = ""
+    alpaca_live_secret: str = ""
 
     # Telegram — from @BotFather. Leave empty to run without Telegram.
     telegram_bot_token: str = ""
@@ -77,6 +83,19 @@ class Secrets(BaseSettings):
             "groq": self.groq_api_key,
             "anthropic": self.anthropic_api_key,
         }
+
+    def alpaca_keys(self, live: bool) -> tuple[str, str]:
+        """The key pair for Alpaca's paper or live account, or empty strings."""
+        if live:
+            key, secret = self.alpaca_live_key, self.alpaca_live_secret
+        else:
+            key, secret = self.alpaca_paper_key, self.alpaca_paper_secret
+        if key and secret:
+            return key, secret
+        # Legacy: one pair in .env, with ALPACA_PAPER saying which account it is.
+        if self.alpaca_api_key and self.alpaca_api_secret and self.alpaca_paper != live:
+            return self.alpaca_api_key, self.alpaca_api_secret
+        return "", ""
 
     @property
     def allowed_chat_ids(self) -> set[int]:
@@ -243,7 +262,10 @@ class Settings(BaseModel):
         return DATA_DIR / "user_profile.json"
 
 
-def load_settings(config_path: Path | None = None) -> Settings:
+KEYSTORE_PATH = DATA_DIR / "keys.dat"
+
+
+def load_settings(config_path: Path | None = None, keystore_path: Path | None = None) -> Settings:
     path = config_path or (CONFIG_DIR / "config.yaml")
     if not path.exists():
         path = CONFIG_DIR / "config.example.yaml"
@@ -251,4 +273,35 @@ def load_settings(config_path: Path | None = None) -> Settings:
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     DATA_DIR.mkdir(exist_ok=True)
     LOG_DIR.mkdir(exist_ok=True)
-    return Settings(app=AppConfig(**raw), secrets=Secrets())
+    secrets = Secrets()
+    apply_keystore(secrets, keystore_path or KEYSTORE_PATH)
+    return Settings(app=AppConfig(**raw), secrets=secrets)
+
+
+def apply_keystore(secrets: Secrets, path: Path) -> None:
+    """Keys saved in the app override the same keys in .env."""
+    from app.common.keystore import NAMES, KeyStore
+
+    store = KeyStore(path)
+    for name in NAMES:
+        value = store.get(name)
+        if value:
+            setattr(secrets, name, value)
+
+
+def set_config_value(key: str, value: str, config_path: Path | None = None) -> None:
+    """Change one top-level scalar in config.yaml, keeping every comment."""
+    import re
+
+    path = config_path or (CONFIG_DIR / "config.yaml")
+    if not path.exists():
+        example = CONFIG_DIR / "config.example.yaml"
+        path.write_text(example.read_text(encoding="utf-8") if example.exists() else "", encoding="utf-8")
+    text = path.read_text(encoding="utf-8")
+    # Up to a comment or the end of the line: "mode: paper   # note" keeps its note.
+    pattern = re.compile(rf"^{re.escape(key)}:[^\n#]*?(?=[ \t]*(#|$))", re.MULTILINE)
+    if pattern.search(text):
+        text = pattern.sub(f"{key}: {value}", text, count=1)
+    else:
+        text = f"{key}: {value}\n" + text
+    path.write_text(text, encoding="utf-8")

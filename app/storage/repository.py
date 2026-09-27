@@ -101,7 +101,11 @@ class Repository:
 
     def save_open_position(self, position: Position, mode: str, entry_reason: str = "") -> None:
         with self._write_lock, self._session_factory() as session:
-            session.execute(delete(OpenPositionRow).where(OpenPositionRow.symbol == position.symbol))
+            session.execute(
+                delete(OpenPositionRow).where(
+                    OpenPositionRow.symbol == position.symbol, OpenPositionRow.mode == mode
+                )
+            )
             session.add(
                 OpenPositionRow(
                     mode=mode,
@@ -117,9 +121,12 @@ class Repository:
             )
             session.commit()
 
-    def clear_open_position(self, symbol: str) -> None:
+    def clear_open_position(self, symbol: str, mode: str | None = None) -> None:
+        query = delete(OpenPositionRow).where(OpenPositionRow.symbol == symbol)
+        if mode is not None:
+            query = query.where(OpenPositionRow.mode == mode)
         with self._write_lock, self._session_factory() as session:
-            session.execute(delete(OpenPositionRow).where(OpenPositionRow.symbol == symbol))
+            session.execute(query)
             session.commit()
 
     def load_open_position(self, symbol: str, mode: str) -> tuple[Position | None, str]:
@@ -131,18 +138,15 @@ class Repository:
             )
         if row is None:
             return None, ""
-        return (
-            Position(
-                symbol=row.symbol,
-                side=Side(row.side),
-                qty=row.qty,
-                entry_price=row.entry_price,
-                opened_at=row.opened_at,
-                stop_loss=row.stop_loss,
-                take_profit=row.take_profit,
-            ),
-            row.entry_reason,
-        )
+        return _open_position(row), row.entry_reason
+
+    def load_open_positions(self, mode: str) -> list[tuple[Position, str]]:
+        """Every position the engine had open in `mode`, with why it was entered."""
+        with self._session_factory() as session:
+            rows = session.scalars(
+                select(OpenPositionRow).where(OpenPositionRow.mode == mode)
+            ).all()
+        return [(_open_position(row), row.entry_reason) for row in rows]
 
     def record_equity(self, equity: float, mode: str) -> None:
         with self._write_lock, self._session_factory() as session:
@@ -227,3 +231,19 @@ class Repository:
         )
         frame["timestamp"] = pd.to_datetime(frame["timestamp"], utc=True)
         return frame.set_index("timestamp")
+
+
+def _open_position(row: OpenPositionRow) -> Position:
+    opened_at = row.opened_at
+    if opened_at.tzinfo is None:
+        # SQLite drops the zone on the way back; everything is stored in UTC.
+        opened_at = opened_at.replace(tzinfo=timezone.utc)
+    return Position(
+        symbol=row.symbol,
+        side=Side(row.side),
+        qty=row.qty,
+        entry_price=row.entry_price,
+        opened_at=opened_at,
+        stop_loss=row.stop_loss,
+        take_profit=row.take_profit,
+    )

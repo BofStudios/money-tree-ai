@@ -5,19 +5,27 @@ import logging
 import os
 import socket
 import sys
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.catalysts.manager import CatalystManager
 from app.catalysts.news import NewsFeed
 from app.challenge.manager import ChallengeManager
+from app.common import activity
+from app.common.activity import Monitor
 from app.common.events import EventBus
+from app.common.keystore import KeyStore
 from app.common.logging_config import setup_logging
-from app.config import APP_NAME, LOG_DIR, Settings, load_settings
+from app.common.restart import Restarter, relaunch
+from app.config import APP_NAME, KEYSTORE_PATH, LOG_DIR, Settings, load_settings
 from app.data.base import MarketDataSource
 from app.data.yahoo import YahooData
+from app.engine.markets import watchlist_for
 from app.engine.portfolio_engine import PortfolioEngine
+from app.engine.words import Words
 from app.execution.base import Executor
 from app.execution.paper_executor import PaperExecutor
 from app.execution.signal_executor import SignalExecutor
@@ -38,39 +46,100 @@ from app.web.server import WebServer, create_app
 log = logging.getLogger(__name__)
 
 
-def build_data_source(settings: Settings) -> MarketDataSource:
-    secrets = settings.secrets
-    if secrets.alpaca_api_key and secrets.alpaca_api_secret:
-        from app.data.alpaca_data import AlpacaData
-
-        return AlpacaData(secrets.alpaca_api_key, secrets.alpaca_api_secret)
-    # No keys: free public candles. This is what makes signal mode work on day one.
-    return YahooData()
+# A warning for the Live tab, written once the owner's language is known.
+Notice = Callable[[Words], str]
 
 
-def build_executor(settings: Settings, events: EventBus) -> Executor:
+def probe_alpaca(key: str, secret: str, paper: bool) -> str | None:
+    """Why Alpaca refuses these keys, or None when they work or it cannot be reached.
+
+    Only a clear refusal counts: offline or a hiccup keeps the keys, and the
+    engine's steps show the failures until the connection is back.
+    """
+    try:
+        from alpaca.trading.client import TradingClient
+
+        TradingClient(key, secret, paper=paper).get_account()
+        return None
+    except Exception as exc:
+        try:
+            status = getattr(exc, "status_code", None)
+        except Exception:
+            status = None
+        if status in (401, 403):
+            return f"HTTP {status}"
+        log.warning("could not check the Alpaca keys at startup: %s", exc)
+        return None
+
+
+@dataclass
+class Brokerage:
+    """What startup settled on: the executor, and what to tell the owner."""
+
+    executor: Executor
+    notice: Notice | None = None
+    keys: tuple[str, str] | None = None           # the pair Alpaca accepted
+    refused: dict[str, str] = field(default_factory=dict)  # "paper"/"live" -> why
+
+
+def build_executor(settings: Settings, events: EventBus) -> Brokerage:
+    """The executor for the money mode.
+
+    signal — Midas: the bot only tells you what to trade.
+    paper  — Alpaca's paper account when its keys are saved, else a local simulation.
+    live   — Alpaca's live account. Without working live keys it falls back to the
+             simulation and says so: nothing real can happen without them.
+    """
     mode = settings.app.mode
     secrets = settings.secrets
     starting = settings.app.risk.starting_paper_balance
 
     if mode == "signal":
-        return SignalExecutor(events=events, starting_balance=starting)
+        return Brokerage(SignalExecutor(events=events, starting_balance=starting))
 
-    if mode == "paper":
-        return PaperExecutor(starting_balance=starting)
+    live = mode == "live"
+    account = "live" if live else "paper"
+    key, secret = secrets.alpaca_keys(live)
+    choice = Brokerage(PaperExecutor(starting_balance=starting))
+    if key and secret:
+        problem = probe_alpaca(key, secret, paper=not live)
+        if problem is None:
+            from app.execution.alpaca_executor import AlpacaExecutor
 
-    if not (secrets.alpaca_api_key and secrets.alpaca_api_secret):
-        raise SystemExit(
-            "Live mode needs ALPACA_API_KEY and ALPACA_API_SECRET in .env.\n"
-            "Copy config/.env.example to .env and fill them in, or switch to\n"
-            "  mode: signal   (Midas — the bot tells you what to trade)\n"
-            "  mode: paper    (simulated money, no account needed)"
-        )
-    from app.execution.alpaca_executor import AlpacaExecutor
+            return Brokerage(AlpacaExecutor(key, secret, paper=not live), keys=(key, secret))
+        choice.refused[account] = problem
+        choice.notice = lambda w: w.keys_refused(live, problem)
+    elif live:
+        choice.notice = lambda w: w.live_without_keys()
 
-    return AlpacaExecutor(
-        secrets.alpaca_api_key, secrets.alpaca_api_secret, paper=secrets.alpaca_paper
-    )
+    if live:
+        settings.app.mode = "paper"
+    return choice
+
+
+def data_keys(settings: Settings, choice: Brokerage) -> tuple[str, str] | None:
+    """Keys for prices and news: the ones that just worked, else any saved pair
+    that Alpaca has not already refused."""
+    if choice.keys:
+        return choice.keys
+    for live in (False, True):
+        if ("live" if live else "paper") in choice.refused:
+            continue
+        key, secret = settings.secrets.alpaca_keys(live)
+        if key and secret:
+            return key, secret
+    return None
+
+
+def build_data_source(keys: tuple[str, str] | None) -> MarketDataSource:
+    if keys:
+        from app.data.alpaca_data import AlpacaData
+        from app.data.fallback import FallbackData
+
+        # Yahoo fills whatever Alpaca leaves out, including everything when the keys fail.
+        return FallbackData(AlpacaData(*keys), YahooData())
+    # No keys: free public candles. This is what makes signal mode work on day one.
+    return YahooData()
 
 
 def lan_ip() -> str:
@@ -89,14 +158,23 @@ def main() -> None:
     parser.add_argument("--headless", action="store_true", help="run without the desktop window")
     parser.add_argument("--mode", choices=["signal", "paper", "live"], default=None)
     parser.add_argument("--no-telegram", action="store_true")
+    parser.add_argument("--host", default=None, help="bind address (default from config: all interfaces)")
+    parser.add_argument("--port", type=int, default=None, help="dashboard port (default from config)")
     args = parser.parse_args()
 
     setup_logging(LOG_DIR)
     settings = load_settings()
     if args.mode:
         settings.app.mode = args.mode
+    if args.host:
+        settings.app.web.host = args.host
+    if args.port:
+        settings.app.web.port = args.port
 
     events = EventBus()
+    monitor = Monitor(events)
+    keystore = KeyStore(KEYSTORE_PATH)
+    restarter = Restarter()
     mentor = Narrator(settings.app.mentor, events)
     claude = AIMentor(
         settings.app.mentor, settings.secrets.mentor_keys, settings.mentor_memory_path
@@ -111,8 +189,10 @@ def main() -> None:
         rsi_oversold=strategy_config.rsi_oversold,
     )
 
-    data = build_data_source(settings)
-    executor = build_executor(settings, events)
+    brokerage = build_executor(settings, events)
+    executor, notice = brokerage.executor, brokerage.notice
+    keys = data_keys(settings, brokerage)
+    data = build_data_source(keys)
     session_factory = create_session_factory(settings.db_path)
     repo = Repository(session_factory)
     risk = RiskManager(settings.app.risk, mode=settings.app.mode)
@@ -134,10 +214,13 @@ def main() -> None:
         events=events,
         mentor=mentor,
         challenges=challenges,
+        monitor=monitor,
     )
 
     catalysts = CatalystManager(session_factory, events)
-    news = NewsFeed(settings.secrets.alpaca_api_key, settings.secrets.alpaca_api_secret)
+    news = NewsFeed(*(keys or ("", "")))
+    engine.news = news
+    engine.explainer = claude
 
     # Company research runs off its own free provider and its own daily candles,
     # so it keeps working in signal mode where no brokerage is connected at all.
@@ -149,9 +232,16 @@ def main() -> None:
     # first scan. An unanswered question keeps the config's behaviour, except
     # that real money never defaults to buying without asking.
     chosen = profiles.get()
+    engine.set_language(chosen.language)
     engine.set_autonomy(resolve_autonomy(chosen.autonomy, settings.app.mode))
     if chosen.trading_horizon in HORIZON_TIMEFRAMES:
         engine.set_horizon(chosen.trading_horizon)
+    market = watchlist_for(chosen.market)
+    if market:
+        engine.set_watchlist(market)
+    engine.config.risk.fractional_shares = chosen.small_account
+    if notice:
+        monitor.info(activity.WARN, notice(Words(chosen.language == "tr")))
 
     telegram = TelegramNotifier(
         token="" if args.no_telegram else settings.secrets.telegram_bot_token,
@@ -168,26 +258,32 @@ def main() -> None:
     token = settings.secrets.dashboard_token
     api = create_app(
         engine, repo, mentor, claude, events, token, settings, catalysts, news,
-        research, analyst, profiles,
+        research, analyst, profiles, keystore=keystore, restarter=restarter,
+        key_problems=brokerage.refused,
     )
     web = WebServer(api, settings.app.web.host, settings.app.web.port)
     web.start()
 
     suffix = f"?token={token}" if token else ""
     phone_url = f"http://{lan_ip()}:{settings.app.web.port}/{suffix}"
-    _print_banner(settings, web.local_url + "/" + suffix, phone_url, telegram, claude, data)
+    _print_banner(settings, executor, web.local_url + "/" + suffix, phone_url, telegram, claude, data)
 
     engine.start()
 
     if args.headless:
+        restarter.on_request(engine.stop)
         try:
-            engine._thread.join()
+            while engine.running:
+                engine.join(1.0)
         except KeyboardInterrupt:
             pass
         finally:
             engine.stop()
             telegram.stop()
             web.stop()
+        if restarter.requested.is_set():
+            web.join(5.0)
+            relaunch()
         return
 
     from PySide6.QtWidgets import QApplication
@@ -197,18 +293,24 @@ def main() -> None:
     qt_app = QApplication(sys.argv)
     qt_app.setQuitOnLastWindowClosed(False)
 
-    window = MainWindow(engine, f"{web.local_url}/{suffix}", phone_url)
+    window = MainWindow(engine, f"{web.local_url}/{suffix}", phone_url, events)
+    restarter.on_request(window.restart_requested.emit)
     window.show()
 
     exit_code = qt_app.exec()
     engine.stop()
     telegram.stop()
     web.stop()
+    if restarter.requested.is_set():
+        web.join(5.0)
+        relaunch()
+        exit_code = 0
     sys.exit(exit_code)
 
 
 def _print_banner(
     settings: Settings,
+    executor: Executor,
     desktop_url: str,
     phone_url: str,
     telegram: TelegramNotifier,
@@ -218,9 +320,10 @@ def _print_banner(
     app = settings.app
     mode_note = {
         "signal": "analysis only — you place the trades in Midas",
-        "paper": "simulated money on real prices",
-        "live": "REAL MONEY (still needs arming in the dashboard)",
-    }[app.mode]
+        "simulation": "simulated money on real prices",
+        "alpaca_paper": "Alpaca paper account — practice money",
+        "alpaca_live": "REAL MONEY at Alpaca (still needs arming in the dashboard)",
+    }.get(executor.broker, app.mode)
 
     print(f"\n  {APP_NAME} — US stocks, {app.timeframe}")
     print(f"  Mode     : {app.mode} — {mode_note}")
@@ -229,7 +332,8 @@ def _print_banner(
     print(f"  Desktop  : {desktop_url}")
     print(f"  Phone    : {phone_url}")
     print(f"  Telegram : {'on' if telegram.enabled else 'off (set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_IDS)'}")
-    print(f"  Mentor   : {'Claude' if claude.available else 'rule-based (set ANTHROPIC_API_KEY for more)'}")
+    ai = claude.backend
+    print(f"  AI       : {ai['provider'] + ' · ' + ai['model'] if ai['available'] else 'rule-based (connect a free Groq key in Settings)'}")
     if not settings.secrets.dashboard_token:
         print("  Warning  : no DASHBOARD_TOKEN — anyone on your Wi-Fi can control the bot.")
     print()

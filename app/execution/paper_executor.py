@@ -17,6 +17,7 @@ class PaperExecutor(Executor):
     """Simulated money against real prices. No brokerage account involved."""
 
     name = "paper"
+    broker = "simulation"
     is_automatic = True
 
     def __init__(

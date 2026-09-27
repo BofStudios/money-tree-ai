@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, Index, Integer, String
+from sqlalchemy import DateTime, Float, Index, Integer, String, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -33,10 +33,12 @@ class OpenPositionRow(Base):
     """The engine's authoritative view of what is open, so a restart can resume."""
 
     __tablename__ = "open_positions"
+    # Practice and real money can hold the same stock at the same time.
+    __table_args__ = (UniqueConstraint("mode", "symbol", name="uq_open_positions_mode_symbol"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     mode: Mapped[str] = mapped_column(String(8))
-    symbol: Mapped[str] = mapped_column(String(24), unique=True)
+    symbol: Mapped[str] = mapped_column(String(24))
     side: Mapped[str] = mapped_column(String(8))
     qty: Mapped[float] = mapped_column(Float)
     entry_price: Mapped[float] = mapped_column(Float)

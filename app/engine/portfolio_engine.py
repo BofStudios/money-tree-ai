@@ -1,12 +1,26 @@
+"""The trading loop: look at the market, manage what is held, act on signals.
+
+Every piece of real work is also a step in the Live tab (app/common/activity.py):
+opened before the work starts, closed when it ends, in the owner's language.
+Nothing on that screen moves without an operation behind it.
+
+With a brokerage behind the executor (Alpaca), each look also reconciles with
+it: positions a bracket leg closed while the bot was not looking are recorded
+from their real fills, and positions the bot did not open are shown but never
+touched.
+"""
 from __future__ import annotations
 
 import logging
 import threading
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from typing import Protocol
 
 import pandas as pd
 
+from app.common import activity
+from app.common.activity import Monitor
 from app.common.events import EventBus
 from app.common.market_clock import MarketClock
 from app.common.models import (
@@ -27,7 +41,8 @@ from app.engine.autonomy import (
     MAX_DRIFT_PCT,
     ProposalBook,
 )
-from app.execution.base import Executor
+from app.engine.words import Words
+from app.execution.base import AccountSummary, BrokerView, Executor, Holding, tick
 from app.execution.signal_executor import SignalExecutor
 from app.mentor.narrator import Narrator
 from app.challenge.manager import ChallengeManager
@@ -41,6 +56,14 @@ log = logging.getLogger(__name__)
 HISTORY_BARS = 400
 CLOSED_MARKET_SLEEP = 300
 ERROR_BACKOFF = 30
+
+class Explainer(Protocol):
+    """Anything that can put a buy into plain words (app/mentor/ai.py)."""
+
+    @property
+    def available(self) -> bool: ...
+
+    def explain_entry(self, facts: str, turkish: bool) -> str | None: ...
 
 
 class PortfolioEngine:
@@ -62,6 +85,7 @@ class PortfolioEngine:
         events: EventBus,
         mentor: Narrator,
         challenges: "ChallengeManager | None" = None,
+        monitor: Monitor | None = None,
     ) -> None:
         self.config = config
         self.data = data
@@ -74,6 +98,7 @@ class PortfolioEngine:
         self.challenges = challenges
         self.protections = Protections(config.protections)
         self.clock = MarketClock()
+        self.monitor = monitor or Monitor(events)
 
         self.symbols = list(config.watchlist)
         self.timeframe = config.timeframe
@@ -82,6 +107,11 @@ class PortfolioEngine:
         # until main() applies the owner's choice from their profile.
         self.autonomy = "full"
         self.proposals = ProposalBook()
+        self.language = "en"
+        # Optional helpers wired in by main(): headlines before a buy, and an
+        # AI that explains a buy in plain words after it fills.
+        self.news = None
+        self.explainer: Explainer | None = None
 
         self._history: dict[str, pd.DataFrame] = {}
         self._snapshots: dict[str, dict] = {}
@@ -93,10 +123,25 @@ class PortfolioEngine:
         self._started_at: datetime | None = None
         self._last_error: str | None = None
 
+        # What the brokerage said on the last look.
+        self._broker_stops: set[str] = set()      # symbols whose stop sits at the broker
+        self._unmanaged: list[Holding] = []       # positions this app did not open
+        self._account: AccountSummary | None = None
+
+        self._focus: str | None = None            # the symbol being looked at right now
+        self._next_look_at: datetime | None = None
+        self._force_look = False
+        self._closed_reviewed = False
+
         self._lock = threading.RLock()
+        # One trading action at a time: a scan, a manual close, an approval.
+        self._trade_lock = threading.RLock()
         self._stop = threading.Event()
         self._wake = threading.Event()
         self._thread: threading.Thread | None = None
+
+    def words(self) -> Words:
+        return Words(self.language == "tr")
 
     # ---------------------------------------------------------------- lifecycle
 
@@ -108,6 +153,10 @@ class PortfolioEngine:
         self._thread = threading.Thread(target=self._run, name="portfolio-engine", daemon=True)
         self._thread.start()
         self.mentor.boot(self.mode, self.symbols, self.timeframe, self.executor.name)
+        self.monitor.info(
+            activity.INFO,
+            self.words().started(self.mode, self.executor.broker, self.autonomy, self.timeframe),
+        )
 
     def stop(self) -> None:
         self._stop.set()
@@ -115,7 +164,13 @@ class PortfolioEngine:
         self.mentor.note("Stopping. Open positions stay open — I just stop watching them.")
         self.events.publish("status", self.status())
 
+    def join(self, timeout: float | None = None) -> None:
+        if self._thread is not None:
+            self._thread.join(timeout)
+
     def scan_now(self) -> None:
+        """Look again right away — with a full review even while the market is closed."""
+        self._force_look = True
         self._wake.set()
 
     @property
@@ -133,13 +188,14 @@ class PortfolioEngine:
         self.events.publish("status", self.status())
 
     def close_position_now(self, symbol: str, reason: str = "manual close") -> bool:
-        with self._lock:
-            position = self._positions.get(symbol)
-        if position is None:
-            return False
-        price = position.current_price or position.entry_price
-        self._exit(position, price, reason)
-        return True
+        with self._trade_lock:
+            with self._lock:
+                position = self._positions.get(symbol)
+            if position is None:
+                return False
+            price = position.current_price or position.entry_price
+            self._exit(position, price, reason)
+            return True
 
     def add_symbol(self, symbol: str) -> bool:
         symbol = symbol.strip().upper()
@@ -164,21 +220,65 @@ class PortfolioEngine:
         self.mentor.note(f"Removed {symbol} from the watchlist.")
         return True
 
+    def set_watchlist(self, symbols: list[str]) -> list[str]:
+        """Swap the whole list, e.g. when the owner picks another market.
+
+        Stocks already held stay under management: they keep being priced and
+        their stops keep being watched, they just stop being bought again.
+        """
+        clean: list[str] = []
+        for symbol in symbols:
+            symbol = symbol.strip().upper()
+            if symbol and symbol not in clean:
+                clean.append(symbol)
+        if not clean:
+            raise ValueError("the watchlist cannot be empty")
+        with self._lock:
+            if clean == self.symbols:
+                return clean
+            self.symbols = clean
+            for symbol in list(self._history):
+                if symbol not in clean and symbol not in self._positions:
+                    self._history.pop(symbol, None)
+                    self._snapshots.pop(symbol, None)
+                    self._last_signal.pop(symbol, None)
+        self.proposals.clear_pending()
+        self.mentor.note(f"Now watching {', '.join(clean)}.")
+        self.scan_now()
+        return clean
+
+    def set_small_account(self, enabled: bool) -> None:
+        """Fractional shares, for an account too small to buy a whole share."""
+        self.config.risk.fractional_shares = bool(enabled)
+        self.events.publish("status", self.status())
+
+    def set_language(self, language: str) -> None:
+        self.language = "tr" if language == "tr" else "en"
+
     # ------------------------------------------------------------------- status
 
     def status(self) -> dict:
         market = self.clock.state()
         balance = self.executor.get_balance()
+        try:
+            account = self.executor.account_summary()
+        except Exception:
+            account = self._account
         with self._lock:
-            positions = [p.to_dict() for p in self._positions.values()]
+            positions = [
+                {**p.to_dict(), "stop_at_broker": p.symbol in self._broker_stops}
+                for p in self._positions.values()
+            ]
             snapshots = dict(self._snapshots)
             scanned = self._scan_count
             last_scan = self._last_scan_at
             error = self._last_error
+            unmanaged = [h.to_dict() for h in self._unmanaged]
 
         return {
             "mode": self.mode,
             "executor": self.executor.name,
+            "broker": self.executor.broker,
             "automatic": self.executor.is_automatic,
             "data_source": self.data.name,
             "timeframe": self.timeframe,
@@ -186,13 +286,19 @@ class PortfolioEngine:
             "market": market.to_dict(),
             "balance": balance.to_dict(),
             "equity": round(balance.total, 2),
+            "account": account.to_dict() if account else None,
             "positions": positions,
+            "unmanaged": unmanaged,
             "watchlist": self.watchlist_rows(snapshots),
             "scans": scanned,
             "last_scan_at": last_scan.isoformat() if last_scan else None,
+            "next_look_at": self._next_look_at.isoformat() if self._next_look_at else None,
+            "focus": self._focus,
             "started_at": self._started_at.isoformat() if self._started_at else None,
             "last_error": error,
             "risk": self.risk.snapshot(balance.total),
+            "small_account": self.config.risk.fractional_shares,
+            "language": self.language,
             "pending_signals": self._pending_signal_dicts(),
             "challenge": self._challenge_dict(),
             "locks": self.protections.active_locks(),
@@ -200,6 +306,15 @@ class PortfolioEngine:
             "approvals": [p.to_dict() for p in self.proposals.pending("approval")],
             "suggestions": [p.to_dict() for p in self.proposals.pending("suggestion")],
             "proposal_history": [p.to_dict() for p in self.proposals.recent(8)],
+        }
+
+    def look_state(self) -> dict:
+        """What the Live tab's header needs between steps."""
+        return {
+            "running": self.running,
+            "focus": self._focus,
+            "next_look_at": self._next_look_at.isoformat() if self._next_look_at else None,
+            "language": self.language,
         }
 
     def _challenge_dict(self) -> dict | None:
@@ -213,7 +328,7 @@ class PortfolioEngine:
             snaps = snapshots if snapshots is not None else dict(self._snapshots)
             positions = dict(self._positions)
             signals = dict(self._last_signal)
-            symbols = list(self.symbols)
+            symbols = self._scan_symbols()
 
         rows = []
         for symbol in symbols:
@@ -321,6 +436,7 @@ class PortfolioEngine:
         announced: bool | None = None  # last market-open state the mentor commented on
 
         while not self._stop.is_set():
+            forced, self._force_look = self._force_look, False
             market = self.clock.state()
             try:
                 if announced != market.is_open:
@@ -328,68 +444,61 @@ class PortfolioEngine:
                     announced = market.is_open
 
                 if market.is_open:
+                    self._closed_reviewed = False
                     self._scan(market)
                     delay = self.config.scan_interval_seconds
                 else:
-                    # Refresh charts once so the dashboard is not blank out of hours.
-                    if self._scan_count == 0:
+                    # One full review so the screen shows real, current work on
+                    # a weekend; after that the closed market is left alone
+                    # until the open, unless the owner asks for another look.
+                    if forced or not self._closed_reviewed:
                         self._scan(market, trade=False)
-                    delay = CLOSED_MARKET_SLEEP
+                        self._closed_reviewed = True
+                    delay = _closed_delay(market)
                 self._last_error = None
             except Exception as exc:
                 self._last_error = str(exc)
                 log.exception("scan failed")
                 self.mentor.error("Scan", str(exc))
+                self.monitor.info(activity.WARN, self.words().cycle_failed(), _short(exc))
                 self.events.publish("error", {"message": str(exc)})
                 delay = ERROR_BACKOFF
+            finally:
+                self._focus = None
 
+            self._next_look_at = datetime.now(timezone.utc) + timedelta(seconds=delay)
+            self.events.publish("status", self.status())
             self._wake.wait(delay)
             self._wake.clear()
 
     def _scan(self, market, trade: bool = True) -> None:
-        with self._lock:
-            symbols = list(self.symbols)
+        with self._trade_lock:
+            self._scan_locked(market, trade)
 
+    def _scan_locked(self, market, trade: bool) -> None:
+        w = self.words()
+        m = self.monitor
+        is_open = bool(getattr(market, "is_open", False))
+        if is_open:
+            m.info(activity.CLOCK, w.market_open(getattr(market, "next_close", None)))
+        else:
+            m.info(activity.CLOCK, w.market_closed(getattr(market, "next_open", None)))
+            m.info(activity.INFO, w.closed_review())
+
+        self._read_account(w)
+        self._sync_broker(w)
+
+        with self._lock:
+            symbols = self._scan_symbols()
         self.mentor.scan_start(len(symbols), self.timeframe)
-        frames = self.data.get_many_ohlcv(symbols, self.timeframe, limit=HISTORY_BARS)
-        if not frames:
-            raise RuntimeError(f"no market data returned for {len(symbols)} symbols")
+        frames = self._fetch_bars(symbols, w)
+        looked = self._analyse(symbols, frames, trade, w)
 
         signals_raised = 0
-        for symbol in symbols:
-            history = frames.get(symbol)
-            if history is None or history.empty:
-                continue
-
-            snapshot = self.strategy.snapshot(history)
-            price = float(history["close"].iloc[-1])
-
-            with self._lock:
-                self._history[symbol] = history
-                self._snapshots[symbol] = snapshot
-                position = self._positions.get(symbol)
-
-            self.executor.update_price(symbol, price)
-            if position is not None:
-                position.current_price = price
-
-            self.mentor.observe(symbol, snapshot, position)
-
-            if not trade:
-                continue
-
-            if position is not None and self._check_protective_exit(position, price):
-                continue
-
-            with self._lock:
-                position = self._positions.get(symbol)
-
-            signal = self.strategy.on_bar(history, position)
-            with self._lock:
-                self._last_signal[symbol] = signal
-
-            if signal.is_actionable and self._act(symbol, signal, snapshot, price):
-                signals_raised += 1
+        if trade:
+            for symbol, snapshot, price, signal in looked:
+                if self._manage(symbol, snapshot, price, signal, w):
+                    signals_raised += 1
 
         self._scan_count += 1
         self._last_scan_at = datetime.now(timezone.utc)
@@ -410,28 +519,221 @@ class PortfolioEngine:
         with self._lock:
             holding = len(self._positions)
         self.mentor.scan_summary(len(symbols), holding, signals_raised, balance.total)
+        if is_open:
+            m.info(activity.WAIT, w.scan_done(holding, self.config.scan_interval_seconds))
+        else:
+            m.info(activity.WAIT, w.waiting_for_open(getattr(market, "next_open", None)))
         self.events.publish("status", self.status())
+
+    # ------------------------------------------------------------ scan steps
+
+    def _read_account(self, w: Words) -> AccountSummary | None:
+        handle = self.monitor.begin(activity.ACCOUNT, w.reading_account())
+        try:
+            account = self.executor.account_summary()
+        except Exception as exc:
+            handle.fail(_short(exc))
+            return None
+        self._account = account
+        handle.done(w.account_summary(account.equity, account.cash, account.today))
+        if account.blocked:
+            self.monitor.info(activity.WARN, w.account_blocked())
+        return account
+
+    def _sync_broker(self, w: Words) -> BrokerView | None:
+        handle = self.monitor.begin(activity.POSITIONS, w.checking_positions())
+        try:
+            view = self.executor.broker_view()
+        except Exception as exc:
+            handle.fail(_short(exc))
+            return None
+        if view is None:
+            with self._lock:
+                held = len(self._positions)
+            handle.done(w.positions_summary(held, None))
+            return None
+
+        closed, dropped = self._reconcile(view)
+        with self._lock:
+            held = len(self._positions)
+            unmanaged = list(self._unmanaged)
+        handle.done(
+            w.positions_summary(held, view.open_orders),
+            [w.unmanaged_line(h.symbol, h.qty, h.unrealized_pl) for h in unmanaged],
+        )
+        for trade in closed:
+            self.monitor.info(
+                activity.SELL,
+                w.closed_at_broker(trade.symbol, trade.exit_reason, trade.pnl),
+                w.fill_detail(trade.qty, trade.entry_price, trade.exit_price),
+            )
+        for symbol in dropped:
+            self.monitor.info(activity.WARN, w.lost_track(symbol))
+        return view
+
+    def _reconcile(self, view: BrokerView) -> tuple[list[ClosedTrade], list[str]]:
+        """Bring the engine's positions in line with what the broker holds."""
+        closed: list[ClosedTrade] = []
+        dropped: list[str] = []
+        with self._lock:
+            held = dict(self._positions)
+
+        for symbol, position in held.items():
+            before = (position.qty, position.entry_price, position.stop_loss, position.take_profit)
+            fill = view.fills.get(symbol)
+            if fill is not None:
+                position.qty, position.entry_price = fill
+            holding = view.holdings.get(symbol)
+            if holding is not None:
+                # Shares the owner sold by hand in Alpaca's app are gone for us too.
+                position.qty = min(position.qty, holding.qty)
+                position.current_price = holding.price
+                position.stop_loss = view.stops.get(symbol, position.stop_loss)
+                position.take_profit = view.targets.get(symbol, position.take_profit)
+                if before != (position.qty, position.entry_price, position.stop_loss, position.take_profit):
+                    self.repo.save_open_position(position, self.mode, self._entry_reasons.get(symbol, ""))
+                continue
+            if symbol in view.open_buys:
+                continue  # the entry is still working
+
+            # Gone at the broker: a stop or target filled, or the owner sold it.
+            try:
+                trade = self.executor.closing_trade(position)
+            except Exception:
+                log.exception("could not read how %s was closed", symbol)
+                continue
+            if trade is None:
+                self._forget_position(symbol)
+                dropped.append(symbol)
+            else:
+                self._record_closed(trade)
+                closed.append(trade)
+
+        with self._lock:
+            self._broker_stops = {s for s in view.stops if s in self._positions}
+            self._unmanaged = [
+                holding for symbol, holding in sorted(view.holdings.items())
+                if symbol not in self._positions
+            ]
+        return closed, dropped
+
+    def _fetch_bars(self, symbols: list[str], w: Words) -> dict[str, pd.DataFrame]:
+        # One batched request: that is how both data sources work, so the step
+        # stays open for exactly as long as that request takes.
+        handle = self.monitor.begin(activity.BARS, w.fetching_bars(len(symbols), self.timeframe))
+        try:
+            frames = self.data.get_many_ohlcv(symbols, self.timeframe, limit=HISTORY_BARS)
+        except Exception as exc:
+            handle.fail(_short(exc))
+            raise
+        frames = {s: f for s, f in (frames or {}).items() if f is not None and not f.empty}
+        if not frames:
+            handle.fail(w.no_data(len(symbols)))
+            raise RuntimeError(f"no market data returned for {len(symbols)} symbols")
+        missing = [w.no_data_for(s) for s in symbols if s not in frames]
+        handle.done(w.bars_summary(len(frames), len(symbols)), missing)
+        return frames
+
+    def _analyse(
+        self, symbols: list[str], frames: dict[str, pd.DataFrame], trade: bool, w: Words
+    ) -> list[tuple[str, dict, float, Signal]]:
+        handle = self.monitor.begin(activity.ANALYSE, w.analysing(len(frames)))
+        looked: list[tuple[str, dict, float, Signal]] = []
+        lines: list[str] = []
+        buys = sells = 0
+        for index, symbol in enumerate(symbols, 1):
+            history = frames.get(symbol)
+            if history is None:
+                continue
+            self._focus = symbol
+            handle.progress(f"{symbol} · {index}/{len(symbols)}")
+
+            snapshot = self.strategy.snapshot(history)
+            price = float(history["close"].iloc[-1])
+            with self._lock:
+                self._history[symbol] = history
+                self._snapshots[symbol] = snapshot
+                position = self._positions.get(symbol)
+            self.executor.update_price(symbol, price)
+            if position is not None:
+                position.current_price = price
+            self.mentor.observe(symbol, snapshot, position)
+
+            # Worked out on a closed market too, so the review says what the
+            # rules would do at the open; only an open-market scan acts on it.
+            signal = self.strategy.on_bar(history, position)
+            if trade:
+                with self._lock:
+                    self._last_signal[symbol] = signal
+            action = signal.action.value if signal.is_actionable else "hold"
+            if action == "buy":
+                buys += 1
+            elif action == "close" and position is not None:
+                sells += 1
+            lines.append(w.analysis_line(symbol, snapshot, action))
+            looked.append((symbol, snapshot, price, signal))
+        self._focus = None
+        handle.done(w.analysis_summary(buys, sells, trade), lines)
+        return looked
+
+    def _manage(self, symbol: str, snapshot: dict, price: float, signal: Signal, w: Words) -> bool:
+        with self._lock:
+            position = self._positions.get(symbol)
+        if position is not None and self._protect(position, price, w):
+            return False
+        if not signal.is_actionable:
+            return False
+        return self._act(symbol, signal, snapshot, price, w)
 
     # ------------------------------------------------------------------ actions
 
-    def _check_protective_exit(self, position: Position, price: float) -> bool:
-        # Ratchet the stop up behind a winner before testing whether it is hit,
-        # so a trade that ran and then turned still exits in profit.
+    def _protect(self, position: Position, price: float, w: Words) -> bool:
+        """Trail the stop behind a winner, then exit if a stop or target is hit.
+
+        Returns True when the position was sold. A stop held at Alpaca is moved
+        there; the exits themselves are left to Alpaca, which sees every trade
+        rather than one price a minute, and the next look records the fill.
+        """
+        symbol = position.symbol
+        with self._lock:
+            at_broker = symbol in self._broker_stops
+
+        old = position.stop_loss
         raised = self.risk.update_trailing_stop(position, price)
         if raised is not None:
-            self.repo.save_open_position(
-                position, self.mode, self._entry_reasons.get(position.symbol, "")
-            )
-            self.mentor.trailing_stop(position, raised)
+            position.stop_loss = tick(raised)
+            if at_broker:
+                handle = self.monitor.begin(activity.TRAIL, w.raising_stop(symbol, old, position.stop_loss))
+                try:
+                    moved = self.executor.move_stop(position, position.stop_loss)
+                except Exception as exc:
+                    position.stop_loss = old  # the broker still has the old one
+                    handle.fail(_short(exc))
+                else:
+                    if not moved:
+                        # Its stop is gone at the broker; this PC holds it from now.
+                        at_broker = False
+                        with self._lock:
+                            self._broker_stops.discard(symbol)
+                    handle.done(w.stop_moved(moved))
+            else:
+                self.monitor.info(
+                    activity.TRAIL, w.raising_stop(symbol, old, position.stop_loss), w.stop_moved(False)
+                )
+            if position.stop_loss != old:
+                self.repo.save_open_position(position, self.mode, self._entry_reasons.get(symbol, ""))
+                self.mentor.trailing_stop(position, position.stop_loss)
 
+        if at_broker:
+            return False
         reason = self.risk.check_protective_exit(position, price)
         if not reason:
             return False
         self.mentor.protective_exit(position, price, reason)
-        self._exit(position, price, reason)
+        self._exit(position, price, reason, w)
         return True
 
-    def _act(self, symbol: str, signal: Signal, snapshot: dict, price: float) -> bool:
+    def _act(self, symbol: str, signal: Signal, snapshot: dict, price: float, w: Words) -> bool:
         with self._lock:
             position = self._positions.get(symbol)
             open_count = len(self._positions)
@@ -439,7 +741,7 @@ class PortfolioEngine:
         if signal.action is Action.CLOSE:
             if position is None:
                 return False
-            self._exit(position, price, signal.reason)
+            self._exit(position, price, signal.reason, w)
             return True
 
         if isinstance(self.executor, SignalExecutor) and self.executor.has_pending_for(symbol):
@@ -452,6 +754,7 @@ class PortfolioEngine:
         locked = self.protections.blocked(symbol)
         if position is None and locked:
             self.mentor.rejected(symbol, f"buy on '{signal.reason}'", locked)
+            self.monitor.info(activity.INFO, w.not_placed(symbol, locked))
             return False
 
         balance, max_positions, position_pct = self._effective_limits()
@@ -468,6 +771,9 @@ class PortfolioEngine:
             self.mentor.rejected(
                 symbol, f"buy on '{signal.reason}'", f"{held}, and my cap is {max_positions}"
             )
+            self.monitor.info(
+                activity.INFO, w.cap_reached(symbol, open_count, committed - open_count, max_positions)
+            )
             return False
 
         order, rejection = self.risk.validate(
@@ -477,6 +783,8 @@ class PortfolioEngine:
         if order is None:
             if rejection:
                 self.mentor.rejected(symbol, f"buy on '{signal.reason}'", rejection)
+                self.monitor.info(activity.WARN if self.risk.is_live else activity.INFO,
+                                  w.not_placed(symbol, rejection))
                 self.events.publish(
                     "rejected",
                     {"symbol": symbol, "reason": signal.reason, "rejection": rejection},
@@ -499,6 +807,7 @@ class PortfolioEngine:
             unit = "one share" if not self.config.risk.fractional_shares else \
                 f"the ${self.config.risk.min_order_value:.0f} minimum order"
             self.mentor.rejected(symbol, "buy", f"the position would be under {unit}")
+            self.monitor.info(activity.INFO, w.too_small(symbol))
             return False
 
         self.mentor.explain_entry(intent, snapshot, balance.total)
@@ -513,51 +822,172 @@ class PortfolioEngine:
                 return False
             if kind == "approval":
                 self.mentor.awaiting_approval(intent, APPROVAL_MINUTES)
+                self.monitor.info(
+                    activity.APPROVAL, w.waiting_approval(symbol, intent.qty, price), w.reason(intent.reason)
+                )
                 self.events.publish("approval_needed", {"proposal": proposal.to_dict()})
             else:
                 self.mentor.suggested(intent)
+                self.monitor.info(
+                    activity.INFO, w.suggestion(symbol, intent.qty, price), w.reason(intent.reason)
+                )
                 self.events.publish("suggestion", {"proposal": proposal.to_dict()})
             return True
 
-        opened = self.executor.open_position(intent)
+        headlines = self._read_news(symbol, w)
+        opened, _ = self._place(intent, w)
         if opened is None:
-            self.mentor.awaiting_confirmation(intent)
-            return True
+            # Signal mode: raised for the owner to act on in Midas.
+            return not self.executor.is_automatic
 
         self._register_position(opened, intent.reason)
         self.mentor.opened(opened, self.executor.is_automatic)
         self.events.publish(
             "trade_opened", {"position": opened.to_dict(), "reason": intent.reason}
         )
+        self._explain(intent, opened, headlines, w)
         return True
 
-    def _exit(self, position: Position, price: float, reason: str) -> None:
-        trade = self.executor.close_position(position, price, reason)
-        if trade is None:
-            # Signal mode: the exit is a recommendation until you confirm it.
-            return
+    def _place(self, intent: TradeIntent, w: Words) -> tuple[Position | None, str | None]:
+        """Send the order as a Live step. Returns (position, why it failed)."""
+        symbol = intent.symbol
+        if not self.executor.is_automatic:
+            self.executor.open_position(intent)  # raises the signal for the owner
+            self.mentor.awaiting_confirmation(intent)
+            self.monitor.info(
+                activity.ORDER, w.signal_sent(symbol, intent.qty, intent.price), w.signal_detail()
+            )
+            return None, None
 
+        where = self._stop_home(intent.qty)
+        handle = self.monitor.begin(
+            activity.ORDER, w.placing(symbol, intent.qty, intent.stop_loss, intent.take_profit, where)
+        )
+        try:
+            opened = self.executor.open_position(intent)
+        except Exception as exc:
+            handle.fail(_short(exc))
+            self.mentor.rejected(symbol, "place the buy", str(exc))
+            return None, str(exc)
+        if opened is None:
+            handle.fail(w.order_not_filled())
+            return None, "the order was not filled"
+        handle.done(w.filled(opened.qty, symbol, opened.entry_price, where))
+        if where == "broker":
+            with self._lock:
+                self._broker_stops.add(symbol)
+        return opened, None
+
+    def _stop_home(self, qty: float) -> str:
+        """Where a new position's stop will live: at Alpaca, on this PC, or simulated."""
+        if self.executor.broker == "simulation":
+            return "sim"
+        if self.executor.holds_brackets and qty == int(qty):
+            return "broker"
+        return "pc"
+
+    def _read_news(self, symbol: str, w: Words) -> list:
+        feed = self.news
+        if feed is None or not getattr(feed, "available", False):
+            return []
+        handle = self.monitor.begin(activity.NEWS, w.reading_news(symbol))
+        try:
+            headlines = feed.for_symbol(symbol, limit=3)
+        except Exception as exc:
+            handle.fail(_short(exc))
+            return []
+        handle.done(w.news_summary(len(headlines)), [f"{h.source}: {h.headline}" for h in headlines])
+        return headlines
+
+    def _explain(self, intent: TradeIntent, opened: Position, headlines: list, w: Words) -> None:
+        explainer = self.explainer
+        if explainer is None or not explainer.available:
+            return
+        facts = (
+            f"Bought {opened.qty:g} {opened.symbol} at {opened.entry_price:.2f}. "
+            f"Rule that fired: {intent.reason}. "
+        )
+        if opened.stop_loss and opened.take_profit:
+            risk = abs(opened.entry_price - opened.stop_loss) * opened.qty
+            facts += (
+                f"Stop-loss {opened.stop_loss:.2f}, target {opened.take_profit:.2f}. "
+                f"Money at risk if the stop fills: {risk:.2f} USD. "
+            )
+        if headlines:
+            facts += "Recent headlines: " + "; ".join(f"{h.source}: {h.headline}" for h in headlines) + "."
+        handle = self.monitor.begin(activity.AI, w.asking_ai())
+        try:
+            text = explainer.explain_entry(facts, self.language == "tr")
+        except Exception as exc:
+            handle.fail(_short(exc))
+            return
+        if not text:
+            handle.fail(w.ai_silent())
+            return
+        handle.done(text.strip()[:700])
+
+    def _exit(self, position: Position, price: float, reason: str, w: Words | None = None) -> bool:
+        w = w or self.words()
+        symbol = position.symbol
+        automatic = self.executor.is_automatic
+        title = w.selling(symbol, reason) if automatic else w.exit_signal(symbol, reason)
+        handle = self.monitor.begin(activity.SELL, title)
+        try:
+            trade = self.executor.close_position(position, price, reason)
+        except Exception as exc:
+            handle.fail(_short(exc))
+            return False
+
+        if trade is None:
+            if automatic:
+                # Its bracket may already be cancelled; watch the stop here.
+                with self._lock:
+                    self._broker_stops.discard(symbol)
+                handle.fail(w.sell_failed())
+            else:
+                # Signal mode: the exit is a recommendation until you confirm it.
+                handle.done(w.exit_sent())
+            return False
+
+        self._record_closed(trade)
+        handle.done(
+            w.sold(symbol, trade.pnl), [w.fill_detail(trade.qty, trade.entry_price, trade.exit_price)]
+        )
+        return True
+
+    def _record_closed(self, trade: ClosedTrade) -> None:
+        """Book a finished trade: storage, risk, protections, challenge, screens."""
         with self._lock:
-            self._positions.pop(position.symbol, None)
-            entry_reason = self._entry_reasons.pop(position.symbol, "")
+            self._positions.pop(trade.symbol, None)
+            entry_reason = self._entry_reasons.pop(trade.symbol, "")
+            self._broker_stops.discard(trade.symbol)
 
         self.repo.save_closed_trade(trade, self.mode, self.executor.name, entry_reason)
-        self.repo.clear_open_position(position.symbol)
-        self.risk.record_closed_trade(trade, self.executor.get_balance().total)
+        self.repo.clear_open_position(trade.symbol, self.mode)
+        equity = self.executor.get_balance().total
+        self.risk.record_closed_trade(trade, equity)
 
         self.mentor.closed(trade)
-        equity = self.executor.get_balance().total
         for lock in self.protections.record_trade(trade, equity):
             self.mentor.protection_lock(lock, self.protections.active_locks())
         self._credit_challenge(trade)
         if not self.risk.armed and self.risk.disarm_reason == "daily loss limit reached":
-            equity = self.executor.get_balance().total
             self.mentor.kill_switch(
                 self.risk.daily_realized_pnl, self.risk.daily_loss_limit(equity)
             )
 
         self.events.publish("trade_closed", _trade_event(trade))
         self.events.publish("status", self.status())
+
+    def _forget_position(self, symbol: str) -> None:
+        with self._lock:
+            self._positions.pop(symbol, None)
+            self._entry_reasons.pop(symbol, None)
+            self._broker_stops.discard(symbol)
+        self.repo.clear_open_position(symbol, self.mode)
+        # Whatever took it away, do not buy it straight back.
+        self.protections.cool_down(symbol)
+        self.mentor.note(f"{symbol} is no longer in the account, so I stopped tracking it.")
 
     # ------------------------------------------------------------- autonomy
 
@@ -595,15 +1025,21 @@ class PortfolioEngine:
         Re-checked against the market as it is now, not as it was when the
         request went out: the owner may have answered minutes later.
         """
+        with self._trade_lock:
+            return self._approve(proposal_id)
+
+    def _approve(self, proposal_id: str) -> dict:
         proposal = self.proposals.take(proposal_id)
         if proposal is None:
             return {"ok": False, "message": "That request expired or was already answered."}
         intent = proposal.intent
         symbol = intent.symbol
+        w = self.words()
 
         def fail(message: str) -> dict:
             self.proposals.finish(proposal, "failed", message)
             self.mentor.rejected(symbol, "make the buy you approved", message)
+            self.monitor.info(activity.WARN, w.not_placed(symbol, message))
             self.events.publish("proposal_resolved", {"proposal": proposal.to_dict()})
             return {"ok": False, "message": f"Did not buy {symbol}: {message}."}
 
@@ -639,9 +1075,9 @@ class PortfolioEngine:
             return fail("the price already reached the target")
 
         # Filled at today's price, never the one from when the request was raised.
-        opened = self.executor.open_position(replace(intent, price=price))
+        opened, error = self._place(replace(intent, price=price), w)
         if opened is None:
-            return fail("the order was not filled")
+            return fail(error or "the order was not filled")
 
         self._register_position(opened, intent.reason)
         self.mentor.opened(opened, True)
@@ -672,17 +1108,7 @@ class PortfolioEngine:
         self.events.publish("trade_opened", {"position": position.to_dict(), "reason": reason})
 
     def register_confirmed_exit(self, trade: ClosedTrade) -> None:
-        with self._lock:
-            self._positions.pop(trade.symbol, None)
-            entry_reason = self._entry_reasons.pop(trade.symbol, "")
-
-        self.repo.save_closed_trade(trade, self.mode, self.executor.name, entry_reason)
-        self.repo.clear_open_position(trade.symbol)
-        self.risk.record_closed_trade(trade, self.executor.get_balance().total)
-        self.mentor.closed(trade)
-        self._credit_challenge(trade)
-        self.events.publish("trade_closed", _trade_event(trade))
-        self.events.publish("status", self.status())
+        self._record_closed(trade)
 
     # ---------------------------------------------------------------- internals
 
@@ -706,14 +1132,13 @@ class PortfolioEngine:
         self.repo.save_open_position(position, self.mode, reason)
 
     def _restore_positions(self) -> None:
+        """Pick up what was open last time — every stock, not only the watched ones,
+        so a market switch never leaves a held position without its stop."""
         restored = 0
-        for symbol in list(self.symbols):
-            stored, reason = self.repo.load_open_position(symbol, self.mode)
-            if stored is None:
-                continue
+        for stored, reason in self.repo.load_open_positions(self.mode):
             with self._lock:
-                self._positions[symbol] = stored
-                self._entry_reasons[symbol] = reason
+                self._positions[stored.symbol] = stored
+                self._entry_reasons[stored.symbol] = reason
             self.executor.adopt_position(stored)
             restored += 1
         if restored:
@@ -721,6 +1146,11 @@ class PortfolioEngine:
                 f"Picked up {restored} open position{'s' if restored > 1 else ''} "
                 "from last session."
             )
+            self.monitor.info(activity.INFO, self.words().restored(restored))
+
+    def _scan_symbols(self) -> list[str]:
+        """The watchlist plus anything held that is not on it. Call under the lock."""
+        return list(self.symbols) + [s for s in self._positions if s not in self.symbols]
 
     def _effective_limits(self) -> tuple[Balance, int, float | None]:
         """Money and caps for the next entry, honouring an active challenge.
@@ -747,9 +1177,14 @@ class PortfolioEngine:
         )
 
     def _round_qty(self, qty: float, price: float) -> float:
-        """Shares the broker will actually accept, or 0 if the order is too small."""
+        """Shares the broker will actually accept, or 0 if the order is too small.
+
+        When at least one whole share fits and the broker can hold a bracket,
+        whole shares win even in small-account mode: rounding down never adds
+        risk, and it puts the stop-loss at Alpaca instead of on this PC.
+        """
         risk = self.config.risk
-        if risk.fractional_shares:
+        if risk.fractional_shares and not (qty >= 1 and self.executor.holds_brackets):
             rounded = round(qty, 6)
         else:
             rounded = float(int(qty))
@@ -769,6 +1204,20 @@ class PortfolioEngine:
         if not isinstance(self.executor, SignalExecutor):
             return []
         return [s.to_dict() for s in self.executor.pending_signals()]
+
+
+def _closed_delay(market) -> float:
+    """Sleep while closed, but wake in time for the open."""
+    seconds = getattr(market, "seconds_until_open", None)
+    if seconds is None:
+        return CLOSED_MARKET_SLEEP
+    return max(5.0, min(float(CLOSED_MARKET_SLEEP), seconds + 2.0))
+
+
+def _short(exc: BaseException) -> str:
+    """An error as one readable line for the Live tab."""
+    text = str(exc).strip().splitlines()[0] if str(exc).strip() else type(exc).__name__
+    return text[:240]
 
 
 def _trade_event(trade: ClosedTrade) -> dict:

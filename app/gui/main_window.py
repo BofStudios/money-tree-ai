@@ -2,15 +2,49 @@ from __future__ import annotations
 
 import logging
 
-from PySide6.QtCore import QPointF, QUrl, Qt
-from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPen, QPixmap
+from PySide6.QtCore import QPointF, QUrl, Qt, Signal
+from PySide6.QtGui import QAction, QColor, QDesktopServices, QIcon, QPainter, QPen, QPixmap
+from PySide6.QtWebEngineCore import QWebEnginePage
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import QMainWindow, QMenu, QMessageBox, QSystemTrayIcon
 
+from app.common.events import EventBus
 from app.config import APP_NAME, ASSETS
 from app.engine.portfolio_engine import PortfolioEngine
+from app.gui.notices import notice_for
 
 log = logging.getLogger(__name__)
+
+
+class _DashboardPage(QWebEnginePage):
+    """The dashboard stays in the window; every other site opens in the
+    system browser (Alpaca's funding pages, news articles, docs)."""
+
+    def __init__(self, home: QUrl, parent=None) -> None:
+        super().__init__(parent)
+        self._home = home
+
+    def acceptNavigationRequest(self, url: QUrl, nav_type, is_main_frame: bool) -> bool:
+        if is_main_frame and not _same_origin(url, self._home):
+            QDesktopServices.openUrl(url)
+            return False
+        return super().acceptNavigationRequest(url, nav_type, is_main_frame)
+
+    def createWindow(self, _type) -> QWebEnginePage:
+        # A link with target=_blank: its first navigation goes to the system browser.
+        return _ExternalPage(self)
+
+
+class _ExternalPage(QWebEnginePage):
+    def acceptNavigationRequest(self, url: QUrl, nav_type, is_main_frame: bool) -> bool:
+        if url.scheme() in ("http", "https"):
+            QDesktopServices.openUrl(url)
+        self.deleteLater()
+        return False
+
+
+def _same_origin(url: QUrl, home: QUrl) -> bool:
+    return (url.scheme(), url.host(), url.port()) == (home.scheme(), home.host(), home.port())
 
 
 class MainWindow(QMainWindow):
@@ -20,24 +54,39 @@ class MainWindow(QMainWindow):
     bot stays live and reachable from your phone.
     """
 
-    def __init__(self, engine: PortfolioEngine, dashboard_url: str, lan_url: str) -> None:
+    # Emitted from other threads (web server, engine); Qt delivers them on the window's.
+    restart_requested = Signal()
+    notify_requested = Signal(str, str)
+
+    def __init__(
+        self,
+        engine: PortfolioEngine,
+        dashboard_url: str,
+        lan_url: str,
+        events: EventBus | None = None,
+    ) -> None:
         super().__init__()
         self.engine = engine
         self.lan_url = lan_url
         self._really_quitting = False
 
-        self.setWindowTitle(
-            f"Money Tree AI — {len(engine.symbols)} US stocks, "
-            f"{engine.timeframe} [{engine.mode}]"
-        )
+        money = {"alpaca_live": "REAL MONEY", "alpaca_paper": "Alpaca paper",
+                 "simulation": "simulation", "signal": "signals"}.get(engine.executor.broker, engine.mode)
+        self.setWindowTitle(f"{APP_NAME} — {money}")
         self.resize(1480, 960)
         self.setWindowIcon(_app_icon())
 
+        home = QUrl(dashboard_url)
         self.view = QWebEngineView()
-        self.view.load(QUrl(dashboard_url))
+        self.view.setPage(_DashboardPage(home, self.view))
+        self.view.load(home)
         self.setCentralWidget(self.view)
 
         self._build_tray()
+        self.restart_requested.connect(self._restart_now)
+        self.notify_requested.connect(self._notify)
+        if events is not None:
+            events.subscribe(self._on_event)
 
     def _build_tray(self) -> None:
         self.tray = QSystemTrayIcon(_app_icon(), self)
@@ -104,6 +153,27 @@ class MainWindow(QMainWindow):
             )
             if answer != QMessageBox.StandardButton.Yes:
                 return
+
+        self._really_quitting = True
+        self.tray.hide()
+        QApplication.quit()
+
+    def _on_event(self, event: dict) -> None:
+        # The engine's thread: only work out the text here, show it on Qt's.
+        notice = notice_for(event, self.engine.words())
+        if notice:
+            self.notify_requested.emit(*notice)
+
+    def _notify(self, title: str, body: str) -> None:
+        """A Windows notification for a buy, a sell or a buy awaiting approval —
+        unless the dashboard is already in front, where the page shows it."""
+        if self.isVisible() and self.isActiveWindow():
+            return
+        self.tray.showMessage(title, body, QSystemTrayIcon.MessageIcon.Information, 8000)
+
+    def _restart_now(self) -> None:
+        """Leave the event loop without asking; main() starts the new copy."""
+        from PySide6.QtWidgets import QApplication
 
         self._really_quitting = True
         self.tray.hide()

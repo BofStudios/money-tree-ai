@@ -38,6 +38,8 @@ CHOICES = {
     # horizon picks the candle size, autonomy who approves a buy.
     "trading_horizon": ["short", "medium", "long", "unknown"],
     "autonomy": ["manual", "semi", "full", "unknown"],
+    # Which stocks it watches: see app/engine/markets.py.
+    "market": ["us", "europe", "both", "unknown"],
 }
 
 DEFAULTS = {
@@ -55,6 +57,9 @@ DEFAULTS = {
     "onboarded": False,
     "trading_horizon": "unknown",
     "autonomy": "unknown",
+    "market": "unknown",
+    # Fractional shares, so a few dollars can still buy something.
+    "small_account": True,
 }
 
 MULTI = ("focus", "attention")
@@ -76,6 +81,8 @@ class UserProfile:
     onboarded: bool = False
     trading_horizon: str = "unknown"
     autonomy: str = "unknown"
+    market: str = "unknown"
+    small_account: bool = True
 
     def to_dict(self) -> dict:
         return asdict(self)

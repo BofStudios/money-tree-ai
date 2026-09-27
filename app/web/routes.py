@@ -14,6 +14,7 @@ from app.engine.portfolio_engine import PortfolioEngine
 from app.execution.signal_executor import SignalExecutor, _build_trade
 from app.mentor.ai import AIMentor
 from app.engine.autonomy import HORIZON_TIMEFRAMES, resolve_autonomy
+from app.engine.markets import watchlist_for
 from app.mentor.providers import BUILDERS
 from app.mentor.narrator import Narrator
 from app.research.analyst import Analyst, build_plan
@@ -40,6 +41,7 @@ def build_router(
     research: ResearchService | None = None,
     analyst: Analyst | None = None,
     profiles: ProfileStore | None = None,
+    keystore=None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api")
 
@@ -154,7 +156,10 @@ def build_router(
                     detail="That key was rejected by the provider. Double-check it and try again.",
                 )
 
-            write_secret(f"{provider.upper()}_API_KEY", key)
+            if keystore is not None:
+                keystore.set(f"{provider}_api_key", key)   # encrypted on this PC
+            else:
+                write_secret(f"{provider.upper()}_API_KEY", key)
             setattr(settings.secrets, f"{provider}_api_key", key)
         else:
             raise HTTPException(status_code=400, detail="mode must be groq_free or manual")
@@ -283,8 +288,11 @@ def build_router(
         Reports booleans only — key values never leave the server.
         """
         secrets = settings.secrets if settings else None
-        has_alpaca = bool(secrets and secrets.alpaca_api_key and secrets.alpaca_api_secret)
+        has_paper = bool(secrets and all(secrets.alpaca_keys(False)))
+        has_live = bool(secrets and all(secrets.alpaca_keys(True)))
+        has_alpaca = has_paper or has_live
         mode = engine.mode
+        broker = engine.executor.broker
         stats = repo.trade_stats("paper")
 
         checks = [
@@ -303,46 +311,44 @@ def build_router(
             },
             {
                 "id": "keys",
-                "title": "Put your API keys in .env",
+                "title": "Paste your API keys in Settings",
                 "body": (
-                    "From the Alpaca dashboard generate an API key pair, then add them to "
-                    "the .env file in the project folder. They stay on this machine."
+                    "In Alpaca, open API Keys and generate a pair, then paste the key and "
+                    "the secret into Settings → Money in this app. They are checked with "
+                    "Alpaca first and stored encrypted on this PC; the page never shows "
+                    "them again."
                 ),
-                "code": "ALPACA_API_KEY=your_key_here\nALPACA_API_SECRET=your_secret_here\nALPACA_PAPER=true",
                 "done": has_alpaca,
             },
             {
                 "id": "paper_proof",
-                "title": "Prove the strategy on paper first",
+                "title": "Prove the strategy on practice money first",
                 "body": (
-                    "Run mode: paper for a while and look at the numbers. If it loses money "
-                    "on fake money it will lose money on real money — tune the settings in "
-                    "config.yaml until the backtest and paper results hold up."
+                    "Run on practice money for a while and look at the numbers. If it loses "
+                    "money on fake money it will lose money on real money."
                 ),
                 "done": stats["total_trades"] >= 20,
-                "detail": f"{stats['total_trades']} paper trades so far, "
+                "detail": f"{stats['total_trades']} practice trades so far, "
                           f"{stats['win_rate']}% win rate, {stats['total_pnl']:+.2f} total",
             },
             {
                 "id": "live_mode",
-                "title": "Switch config.yaml to live",
+                "title": "Switch to real money",
                 "body": (
-                    "Set ALPACA_PAPER=false in .env and mode: live in config/config.yaml, "
-                    "then restart the bot. This only permits real orders — it does not "
-                    "place any yet."
+                    "Add your live keys, then choose Real money in Settings → Money. The app "
+                    "restarts on your live account. This only permits real orders — it does "
+                    "not place any yet."
                 ),
-                "code": "mode: live",
-                "done": mode == "live",
+                "done": broker == "alpaca_live",
             },
             {
                 "id": "arm",
                 "title": "Arm live trading",
                 "body": (
                     "The final switch. The bot starts disarmed on every launch and disarms "
-                    "itself if the daily loss limit is hit. Start with a small "
-                    "max_position_pct until you trust it."
+                    "itself if the daily loss limit is hit."
                 ),
-                "done": bool(engine.risk.armed and mode == "live"),
+                "done": bool(engine.risk.armed and broker == "alpaca_live"),
             },
         ]
 
@@ -624,8 +630,16 @@ def build_router(
             engine.set_autonomy(resolve_autonomy(profile.autonomy, engine.mode))
         if "trading_horizon" in changes and profile.trading_horizon in HORIZON_TIMEFRAMES:
             engine.set_horizon(profile.trading_horizon)
+        if "market" in changes:
+            symbols = watchlist_for(profile.market)
+            if symbols:
+                engine.set_watchlist(symbols)
+        if "small_account" in changes:
+            engine.set_small_account(profile.small_account)
+        if "language" in changes:
+            engine.set_language(profile.language)
         return {"profile": profile.to_dict(), "autonomy": engine.autonomy,
-                "timeframe": engine.timeframe}
+                "timeframe": engine.timeframe, "watchlist": list(engine.symbols)}
 
     # --------------------------------------------------------------- approvals
 

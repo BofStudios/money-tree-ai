@@ -15,6 +15,7 @@ from app.common.models import (
     Side,
     TradeIntent,
 )
+from app.execution.base import Executor
 
 log = logging.getLogger(__name__)
 
@@ -52,7 +53,7 @@ class PendingSignal:
         }
 
 
-class SignalExecutor:
+class SignalExecutor(Executor):
     """Midas mode: the bot never places an order, it tells you what to place.
 
     Flow: the engine produces an intent -> this stores it as a pending signal
@@ -62,6 +63,7 @@ class SignalExecutor:
     """
 
     name = "signal"
+    broker = "signal"
     is_automatic = False
     requires_confirmation = True
 

@@ -126,20 +126,24 @@ function tickCountdown() {
 }
 setInterval(tickCountdown, 1000);
 
-const WEEKDAY = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+// Translations live in the i18n module; this classic script borrows its t().
+const tr = (key, vars, fallback) => {
+  const out = window.mtT ? window.mtT(key, vars) : fallback;
+  return out === key ? fallback : out;
+};
+const uiLocale = () => (window.mtLocale ? window.mtLocale() : "en-US");
 
 function renderMarket(m) {
   $("marketLed").className = "dot " + (m.is_open ? "open" : "closed");
   if (m.is_open) {
-    $("marketHeadline").textContent = "Market open";
+    $("marketHeadline").textContent = tr("market.open", null, "Market open");
   } else if (m.next_open) {
-    const when = new Date(m.next_open);
-    const ist = new Intl.DateTimeFormat("en-GB", {
-      timeZone: "Europe/Istanbul", hour: "2-digit", minute: "2-digit", hour12: false,
-    }).format(when);
-    $("marketHeadline").textContent = `Closed until ${WEEKDAY[when.getDay()]} ${ist}`;
+    const when = new Intl.DateTimeFormat(uiLocale(), {
+      timeZone: "Europe/Istanbul", weekday: "long", hour: "2-digit", minute: "2-digit", hour12: false,
+    }).format(new Date(m.next_open));
+    $("marketHeadline").textContent = tr("market.closedUntil", { when }, `Closed until ${when}`);
   } else {
-    $("marketHeadline").textContent = "Market closed";
+    $("marketHeadline").textContent = tr("market.closed", null, "Market closed");
   }
   tickCountdown();
 }
@@ -214,9 +218,11 @@ function showView(name) {
     bar.scrollLeft = tab.offsetLeft - (bar.clientWidth - tab.offsetWidth) / 2;
   }
   if (name === "chart" && selected) loadChart(selected).catch(() => {});
-  if (name === "live") loadSetup().catch(() => {});
+  if (name === "setup") loadSetup().catch(() => {});
   if (name === "catalysts") loadCatalysts().catch(() => {});
   if (name === "news") loadNews().catch(() => {});
+  // The modules (live, money) load their own data when their view opens.
+  window.dispatchEvent(new CustomEvent("mt:view", { detail: name }));
 }
 
 $("nav").onclick = (e) => {
@@ -540,51 +546,7 @@ $("catalystForm").onsubmit = async (e) => {
 
 /* ================================================================= render */
 
-/* Says plainly whose money the big number on screen is. A simulated balance
-   that looks identical to a real one is the easiest way to mislead someone,
-   so paper and signal modes are labelled every time the status refreshes. */
-function renderRealCheck(s) {
-  const box = $("realCheck");
-  const armed = s.risk && s.risk.armed;
-
-  const card = {
-    paper: {
-      cls: "practice",
-      tag: "Practice money",
-      body: `You have not deposited anything. The bot is trading <b>pretend money</b>
-             against real live prices so you can watch how it behaves before any of
-             your own money is involved. Nothing here can be withdrawn.`,
-      line: ["Your real money at risk", "$0.00"],
-    },
-    signal: {
-      cls: "practice",
-      tag: "Midas mode · scorecard only",
-      body: `The bot holds no money. Your money is in <b>Midas</b>, where only you can
-             move it. The figure above is a running score of what its calls would have
-             made, so you can judge them before you follow one.`,
-      line: ["Money the bot controls", "$0.00"],
-    },
-    live: {
-      cls: "livemoney",
-      tag: armed ? "Real money · armed" : "Real money · not armed",
-      body: armed
-        ? `This is your <b>real money</b> and the bot is allowed to place
-           orders with it. Losses here are real.`
-        : `This is your <b>real money</b>. The bot is watching but not
-           allowed to place orders until you arm it.`,
-      line: ["Your real money at risk", "$" + money(s.equity)],
-    },
-  }[s.mode];
-
-  if (!card) { box.hidden = true; return; }
-
-  box.hidden = false;
-  box.className = "realcheck " + card.cls;
-  box.innerHTML = `
-    <span class="rc-tag"><i></i>${card.tag}</span>
-    <p class="rc-body">${card.body}</p>
-    <div class="rc-line"><span>${card.line[0]}</span><b>${card.line[1]}</b></div>`;
-}
+window.addEventListener("mt:lang", () => { if (state && state.market) renderStatus(state); });
 
 function renderStatus(s) {
   state = s;
@@ -594,23 +556,28 @@ function renderStatus(s) {
   window.dispatchEvent(new CustomEvent("mt:status", { detail: s }));
   renderMarket(s.market);
 
+  // Named after the money actually behind the bot, not the mode asked for:
+  // real money without working keys runs on the simulation, and says so.
   const mode = $("modeChip");
-  if (s.mode === "signal") { mode.textContent = "Midas"; mode.className = "top-mode"; }
-  else if (s.mode === "paper") { mode.textContent = "Paper"; mode.className = "top-mode"; }
-  else { mode.textContent = s.risk.armed ? "Armed" : "Live"; mode.className = "top-mode " + (s.risk.armed ? "armed" : "live"); }
+  const broker = s.broker || s.mode;
+  if (broker === "signal") { mode.textContent = "Midas"; mode.className = "top-mode"; }
+  else if (broker === "alpaca_paper") { mode.textContent = "Alpaca paper"; mode.className = "top-mode"; }
+  else if (broker === "alpaca_live") { mode.textContent = s.risk.armed ? "REAL · armed" : "REAL"; mode.className = "top-mode " + (s.risk.armed ? "armed" : "live"); }
+  else { mode.textContent = "Simulation"; mode.className = "top-mode"; }
 
   $("heroEquity").classList.remove("skeleton");
   setNumber($("heroEquity"), s.equity, (v) => "$" + money(v));
-  $("heroMode").textContent = s.running ? (s.last_error ? "retrying" : "running") : "stopped";
+  const run = s.running ? (s.last_error ? "retrying" : "running") : "stopped";
+  $("heroMode").textContent = tr(`hero.${run}`, null, run);
 
   const daily = s.risk.daily_realized_pnl;
   const startOfDay = s.equity - daily;
   const dailyPct = startOfDay ? (daily / startOfDay) * 100 : 0;
   const change = $("heroChange");
-  change.textContent = `${signed(daily)} (${signed(dailyPct)}%) today`;
+  const moved = `${signed(daily)} (${signed(dailyPct)}%)`;
+  change.textContent = tr("mc.today", { amount: moved }, `${moved} today`);
   tone(change, daily);
 
-  renderRealCheck(s);
 
   $("stripCash").textContent = `${money(s.balance.available)} ${s.balance.currency}`;
   setNumber($("stripDaily"), daily, (v) => signed(v));
@@ -838,7 +805,7 @@ function renderSetup(data) {
   const c = data.integrations;
   $("connGrid").innerHTML = [
     ["Broker", c.alpaca], ["Telegram", c.telegram],
-    ["Claude", c.claude], ["Dashboard token", c.dashboard_token],
+    ["AI", c.claude], ["Dashboard token", c.dashboard_token],
   ].map(([k, on]) => `<div class="row"><span>${k}</span><b class="plain">${on ? "connected" : "not set"}</b></div>`).join("");
 }
 
@@ -958,9 +925,8 @@ async function loadNews() {
       : "";
 
     if (!data.available) {
-      host.innerHTML =
-        '<div class="empty">The news feed needs broker keys in .env. '
-        + "Everything else still works.</div>";
+      host.innerHTML = `<div class="empty">${escapeHtml(tr("news.needKeys", null,
+        "The news feed needs Alpaca keys: add them in Settings. Everything else still works."))}</div>`;
       return;
     }
     if (!data.news.length) {

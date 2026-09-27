@@ -76,11 +76,25 @@ function renderNow(s) {
   renderFeed();
 }
 
+const hhmm = (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+
 function renderFeed() {
+  // The engine's own steps when there are any (live.js publishes them), else
+  // the mentor's lines.
+  const steps = window.mtSteps || [];
+  if (steps.length) {
+    $("nowFeed").innerHTML = steps.map((st) => `
+      <li class="step-${esc(st.state)} k-${esc(st.kind)}"><span>${esc(hhmm(st.started_at))}</span>${esc(st.title)}${
+        st.detail ? ` <em>⎿ ${esc(st.detail)}</em>` : ""}</li>`).join("");
+    return;
+  }
   const lines = (window.mtLines || []).slice(-3).reverse();
   $("nowFeed").innerHTML = lines.map((l) => `
     <li class="lvl-${esc(l.level)}"><span>${esc(l.clock || "")}</span>${esc(l.text)}</li>`).join("");
 }
+
+$("nowFeed").addEventListener("click", () => window.showView?.("live"));
+$("nowTitle").addEventListener("click", () => window.showView?.("live"));
 
 // "last look 12s ago" should tick, not jump every 20 seconds.
 setInterval(() => {
@@ -200,12 +214,20 @@ function renderPerf(p) {
 /* ------------------------------------------------------------- onboarding */
 
 let profile = null;
-const answers = { trading_horizon: "unknown", autonomy: "unknown", technical_level: "beginner" };
+const answers = { market: "unknown", trading_horizon: "unknown", autonomy: "unknown", technical_level: "beginner" };
 // Only answers the owner actually gave are highlighted — a default is not
 // a choice, and showing "Not sure" pre-selected reads as if they picked it.
 const touched = new Set();
 
 const STEPS = [
+  {
+    field: "market", q: "ob.q0",
+    options: [
+      ["us", "ob.us", "ob.usHint"],
+      ["europe", "ob.europe", "ob.europeHint"],
+      ["both", "ob.both", "ob.bothHint"],
+    ],
+  },
   {
     field: "trading_horizon", q: "ob.q1",
     options: [
@@ -293,14 +315,16 @@ function drawOnboarding() {
   const tf = { short: "15m", medium: "1h", long: "1d" }[horizon];
   const autonomy = answers.autonomy !== "unknown"
     ? answers.autonomy : (mode === "live" ? "semi" : "full");
+  const market = answers.market === "unknown" ? null : answers.market;
   const sentences = [
+    market ? t("ob.sumMarket", { market: t(`market.${market}`) }) : null,
     t("ob.sumHorizon", { tf: t(`tf.${tf}`).toLowerCase() }),
     t({ full: "ob.sumFull", semi: "ob.sumSemi", manual: "ob.sumManual" }[autonomy]),
     t(mode === "live" ? "ob.sumReal" : "ob.sumPractice"),
   ];
   body.innerHTML = `
     <h2>${esc(t("ob.doneTitle"))}</h2>
-    <ul class="onboard-summary">${sentences.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
+    <ul class="onboard-summary">${sentences.filter(Boolean).map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
     <div class="onboard-actions">
       <button class="primary" data-ob="finish">${esc(t("ob.go"))}</button>
       <button class="ghost" data-ob="back">${esc(t("action.back"))}</button>
@@ -345,19 +369,24 @@ async function saveProfile(changes) {
 /* --------------------------------------------------------------- settings */
 
 const TRADING_FIELDS = [
+  ["market", "sm.market", [["us", "ob.us"], ["europe", "ob.europe"], ["both", "ob.both"]]],
   ["trading_horizon", "settings.horizon", [["short", "horizon.short"], ["medium", "horizon.medium"], ["long", "horizon.long"]]],
   ["autonomy", "settings.autonomy", [["full", "autonomy.full"], ["semi", "autonomy.semi"], ["manual", "autonomy.manual"]]],
+  ["small_account", "sm.small", [["true", "sm.smallOn"], ["false", "sm.smallOff"]], "sm.smallHint"],
 ];
 
 function renderTradingSettings() {
   const host = $("sTrading");
   if (!host || !profile) return;
   const live = window.mtState || {};
+  const small = live.small_account ?? profile.small_account;
   const current = {
+    market: profile.market,
     trading_horizon: HORIZON_BY_TF[live.timeframe] || profile.trading_horizon,
     autonomy: live.autonomy || profile.autonomy,
+    small_account: small === undefined ? undefined : String(Boolean(small)),
   };
-  host.innerHTML = TRADING_FIELDS.map(([field, label, options]) => `
+  host.innerHTML = TRADING_FIELDS.map(([field, label, options, hint]) => `
     <div class="field-block">
       <label>${esc(t(label))}</label>
       <div class="chips tagset">
@@ -365,6 +394,7 @@ function renderTradingSettings() {
           <button class="chip pickable ${current[field] === value ? "on" : ""}"
                   data-tfield="${field}" data-tvalue="${value}">${esc(t(key))}</button>`).join("")}
       </div>
+      ${hint ? `<p class="note faint">${esc(t(hint))}</p>` : ""}
     </div>`).join("")
     + `<div class="actions"><button class="ghost" data-ob-redo>${esc(t("settings.redoSetup"))}</button></div>`;
 }
@@ -372,7 +402,10 @@ function renderTradingSettings() {
 document.addEventListener("click", async (e) => {
   const chip = e.target.closest("[data-tfield]");
   if (chip) {
-    await saveProfile({ [chip.dataset.tfield]: chip.dataset.tvalue });
+    const field = chip.dataset.tfield;
+    // A switch is a real true/false on the server, not the text "false".
+    const value = field === "small_account" ? chip.dataset.tvalue === "true" : chip.dataset.tvalue;
+    await saveProfile({ [field]: value });
     window.refresh?.().catch(() => {});
     return;
   }
@@ -389,6 +422,7 @@ window.addEventListener("mt:status", (e) => {
 });
 
 window.addEventListener("mt:line", () => { if (!$("nowCard").hidden) renderFeed(); });
+window.addEventListener("mt:steps", () => { if (!$("nowCard").hidden) renderFeed(); });
 
 window.addEventListener("mt:ws", (e) => {
   const msg = e.detail;

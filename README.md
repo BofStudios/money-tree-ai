@@ -18,8 +18,8 @@ It runs in one of three modes:
 | Mode | What it does | What you need |
 |---|---|---|
 | **`signal`** | **Midas mode.** Analyses the market and tells you exactly what to buy or sell; you place it in Midas yourself. | Nothing. No brokerage API. |
-| `paper` | Trades by itself with simulated money on real prices. | Nothing. |
-| `live` | Trades by itself with real money through Alpaca, behind an explicit **Arm** step that starts disarmed every run. | An Alpaca account. |
+| `paper` | Trades by itself with practice money: your Alpaca paper account once its keys are saved, otherwise a simulation on this PC. | Nothing. Alpaca paper keys are optional. |
+| `live` | Trades by itself with real money through Alpaca, behind an explicit **Arm** step that starts disarmed every run. | An Alpaca account and its live keys. |
 
 ## Why signal mode exists
 
@@ -36,8 +36,9 @@ the ticker, share count, entry, stop, target and the reason. You place it, tap
 **Taken**, and the bot tracks that position and tells you when to get out.
 
 If you later want full automation, open a free Alpaca account (it accepts Turkish
-residents — US residency is **not** required), set `mode: live`, and the same
-brain starts placing its own orders. Nothing else changes.
+residents — US residency is **not** required), paste its keys in
+**Settings → Money & keys**, and switch to **Real money** there. The same brain
+starts placing its own orders. Nothing else changes.
 
 ## Setup
 
@@ -55,6 +56,24 @@ copy config\config.example.yaml config\config.yaml
 the watchlist, timeframe and risk limits.
 
 Signal mode needs **no keys at all** — market data comes from a free public feed.
+
+### Alpaca keys
+
+Paste them in the app: **Settings → Money & keys**. Each pair is checked with
+Alpaca before anything is saved, then stored encrypted on this PC with Windows
+DPAPI (`data/keys.dat`) — only your Windows account can read it back, and the page
+never shows a key again, only its last four characters. Paper and live keys are
+kept apart, so practice and real money never mix. Keys in `.env` still work; keys
+saved in the app win.
+
+New keys, or a switch between practice and real money, restart the app. Both are
+refused from other devices unless `DASHBOARD_TOKEN` is set, because they decide
+which account real orders go to. Switching to real money means typing a word, not
+clicking a button — and the bot still starts disarmed.
+
+If Alpaca refuses the saved keys at startup (say you regenerated them on the
+phone), the app does not crash: it runs on the simulation, says so in the Live
+tab, and marks the keys in red in Settings until you paste new ones.
 
 ### Telegram (recommended)
 
@@ -122,18 +141,38 @@ Headless, for a server or a spare machine:
 
 ## What you get
 
-**Dashboard** — six tabs across the top, live New York and İstanbul clocks in the
+**Dashboard** — tabs along the bottom, live New York and İstanbul clocks in the
 header, and a market bar that reads *"Market closed until Monday 16:30 İstanbul
-(09:30 New York) — opens in 2d 4h 51m"* and counts down by the second.
+(09:30 New York) — opens in 2d 4h 51m"* and counts down by the second. Every
+screen is in English and Turkish.
 
 | Tab | What is on it |
 |---|---|
-| **Overview** | The run (below), equity, daily P&L against the loss budget, open positions, performance, and a live feed of what the bot is thinking |
+| **Home** | Money first: whose money this is (real, Alpaca paper or simulated), the balance, today's change, what the AI has made or lost you, and buttons for adding or withdrawing money through Alpaca. Then what the bot is doing right now, buys waiting for your OK, holdings and the day's numbers |
+| **Live** | Every step the engine takes, as it takes it: checking the market, reading the account, fetching bars, analysing each stock, reading the news, placing an order, moving a stop, asking the AI to explain a buy. A step spins for exactly as long as the real call takes, shows its result underneath, and turns red if it failed. Filter to trades or problems, or press **Look now** |
+| **Research** | A full company screen per symbol (below) |
 | **Chart** | Full-height candles with EMAs, entry/stop/target lines drawn on any held position, plus a plain-English read of the symbol |
-| **Watchlist** | Every ticker with price, window change, trend, EMA gap, RSI and volatility. Click a row to jump to its chart |
-| **Mentor** | The live chat (below) |
-| **History** | Every closed trade with entry, exit, P&L and the reason it closed |
-| **Go Live** | The step-by-step guide to trading real money, with live status per step |
+| **Market** | Every ticker with price, window change, trend, EMA gap, RSI and volatility. Click a row to jump to its chart |
+| **News** | Headlines for everything being watched |
+| **Catalysts** | Events you expect to move a stock (below) |
+| **Activity** | Every closed trade with entry, exit, P&L and the reason it closed |
+| **Setup** | The step-by-step guide to trading real money, with live status per step |
+| **Settings** | Money & keys, the market (US, Europe or both), trade length, autonomy, small-account mode, language and the AI |
+
+**Money** — a screen for putting money in and taking it out, taken from Alpaca's
+own funding guide: from Turkey, *Local Currency Transfer* (1.5%, at most $40) or
+an international wire in US dollars, and how withdrawals and their fees work. One
+button opens Alpaca. **The app never shows bank details and never moves money** —
+only send money to the details shown inside your own Alpaca account.
+
+**Windows notifications** — a buy, a sell, or a buy waiting for your OK pops up
+from the tray while the window is not in front, the same moments the phone app
+notifies about.
+
+**Which market** — the first question on first launch: US stocks, European
+companies, or both. Alpaca trades US exchanges only, so European companies are
+bought through their US listings (ASML, SAP, Novo Nordisk, AstraZeneca, Shell,
+TotalEnergies, Unilever) and VGK, a fund of the European market.
 
 **Company research** — a full screen per symbol, built from a free data provider
 (roughly 15 minutes delayed). Company profile, price snapshot, valuation ratios,
@@ -166,8 +205,8 @@ That number is computed, not decorative. Doubling a stake with a 4% target is a 
 shot, and the app says so up front. **No money changes hands — this is paper money, and
 nothing is charged or withdrawn.**
 
-Runs need fractional shares (a $5 stake cannot buy a whole $300 share), which is on by
-default and supported by Alpaca.
+Runs need fractional shares (a $5 stake cannot buy a whole $300 share). That is
+**small-account mode** in Settings, on by default and supported by Alpaca.
 
 **Catalysts** — a calendar of events you expect to move a stock: a game launch, a
 film, an earnings date, a ruling. You add the event, the ticker, the date and why
@@ -333,10 +372,23 @@ what `scripts/run_backtest.py` is for.
 ## Safety model
 
 - **Signal mode cannot spend your money.** It has no brokerage credentials.
+- **Stops live at Alpaca.** A whole-share buy goes in as a GTC bracket, so its
+  stop-loss and target sit at Alpaca and protect the position overnight and while
+  this PC is off (a DAY bracket's stop would expire at the close). A trailing stop
+  is moved at Alpaca too, not just in the app's memory.
+- **Fractional buys are the exception.** Alpaca refuses brackets on them, so their
+  stop is watched by the app, which has to be running. When at least one whole
+  share fits, the bot buys whole shares so the stop can sit at Alpaca.
+- **It only touches what it bought.** Every order carries a `mtd-` client id; a
+  sell cancels only that position's own stop and target, and positions it did not
+  open are listed but never sold. A position a stop closed while the app was off
+  is booked from Alpaca's real fill when it next looks.
+- **Keys are encrypted at rest** and never sent back to the page.
 - Live trading **starts disarmed every time.** Nothing persists the armed state,
   so a crash or restart can never leave it trading unattended.
 - `mode: live` only *permits* live trading. You still press **Arm** and confirm.
-- Every trade gets a **stop-loss and take-profit**, checked on every scan.
+- Every trade gets a **stop-loss and take-profit** — at Alpaca where it can, checked
+  on every scan otherwise.
 - A **daily loss limit** disarms live trading automatically when hit.
 - Position size is capped per trade, and the number of open positions is capped.
 - Telegram only obeys the chat ids in `TELEGRAM_CHAT_IDS`.
@@ -357,8 +409,9 @@ app/
   execution/   signal (Midas), paper, and Alpaca order handling
   strategy/    indicators, Strategy interface, EMA/RSI strategy
   risk/        sizing, stops, arm/disarm, daily loss kill switch
-  engine/      the watchlist scanner and the backtester
-  mentor/      rule-based narrator + optional Claude commentary
+  engine/      the watchlist scanner, the Live feed's words, markets, backtester
+  common/      the Live step monitor, the encrypted key store, in-app restart
+  mentor/      rule-based narrator + optional AI (Groq, Gemini, Ollama, Claude)
   notify/      Telegram bot and message formatting
   storage/     SQLite: trades, open positions, equity curve, candle cache
   web/         FastAPI server, WebSocket, dashboard (HTML/CSS/JS)
@@ -388,9 +441,9 @@ Two traps that already bit this build, in case they come back:
 
 - Yahoo data is delayed roughly 15 minutes. Fine for 15m-and-slower strategies,
   not for scalping. Alpaca keys switch it to a live IEX feed.
-- Stops are enforced by the engine, so the bot must be running for them to fire.
-  In `live` mode orders are sent as Alpaca brackets, so those sit on the exchange
-  and survive the bot being closed.
+- On Alpaca, whole-share positions carry their stop and target at the broker and
+  survive the app being closed. Fractional positions, the simulation and signal
+  mode rely on the app running to enforce their stops.
 - The bot only trades while the US market is open. It idles overnight and at
   weekends, and the dashboard shows the countdown to the next open.
-- Long only, whole shares, one position per symbol.
+- Long only, one position per symbol. US-listed shares only.

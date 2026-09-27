@@ -1,6 +1,6 @@
 .env
 config/config.yaml
-data/
+/data/
 *.db
 *.db-journal
 __pycache__/
