@@ -187,8 +187,26 @@ class PortfolioEngine:
         self.risk.disarm(reason)
         self.events.publish("status", self.status())
 
+    def why_not_close(self, symbol: str) -> str | None:
+        """Why a manual close cannot happen right now, or None when it can.
+
+        With Alpaca, a close cancels the stop and target first. At night the
+        sell would then only queue for the open, leaving the position without
+        its stop for hours, so a closed market refuses instead.
+        """
+        with self._lock:
+            held = symbol in self._positions
+        w = self.words()
+        if not held:
+            return w.no_position(symbol)
+        if self.executor.holds_brackets and not self.clock.state().is_open:
+            return w.market_closed_no_sell(symbol)
+        return None
+
     def close_position_now(self, symbol: str, reason: str = "manual close") -> bool:
         with self._trade_lock:
+            if self.why_not_close(symbol):
+                return False
             with self._lock:
                 position = self._positions.get(symbol)
             if position is None:

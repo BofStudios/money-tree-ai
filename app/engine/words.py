@@ -274,6 +274,17 @@ class Words:
     def notice_approval(self, symbol: str, qty: float, price: float) -> tuple[str, str]:
         return (self._("Your OK is needed", "Onayın gerekiyor"), self.waiting_approval(symbol, qty, price))
 
+    def no_position(self, symbol: str) -> str:
+        return self._(f"No open position in {symbol}.", f"{symbol} için açık pozisyon yok.")
+
+    def market_closed_no_sell(self, symbol: str) -> str:
+        return self._(
+            f"The market is closed. A sell sent now would only wait for the open, and {symbol} "
+            "would lose its stop at Alpaca until then. Try again after the open.",
+            f"Piyasa kapalı. Şimdi gönderilen satış sadece açılışı bekler ve o zamana kadar {symbol} "
+            "Alpaca'daki stop'unu kaybeder. Açılıştan sonra tekrar dene.",
+        )
+
     def keys_refused(self, live: bool, problem: str) -> str:
         account = self._("live", "gerçek") if live else self._("paper", "deneme (paper)")
         return self._(

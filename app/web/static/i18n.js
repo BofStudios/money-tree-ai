@@ -460,6 +460,8 @@ const STRINGS = {
     "sm.keyRefused": "Refused by Alpaca ({why}) — paste new keys",
     "mv.back": "← Home",
     "news.needKeys": "The news feed comes with an Alpaca account: add your keys in Settings → Money & keys. Everything else still works.",
+    "pos.atAlpaca": "stop at Alpaca",
+    "pos.onPc": "stop on this PC",
   },
 
   tr: {
@@ -897,6 +899,8 @@ const STRINGS = {
     "sm.keyRefused": "Alpaca reddetti ({why}) — yeni anahtar yapıştır",
     "mv.back": "← Ana Sayfa",
     "news.needKeys": "Haber akışı Alpaca hesabıyla geliyor: anahtarlarını Ayarlar → Para ve anahtarlar kısmına ekle. Geri kalan her şey çalışıyor.",
+    "pos.atAlpaca": "stop Alpaca'da",
+    "pos.onPc": "stop bu PC'de",
   },
 };
 

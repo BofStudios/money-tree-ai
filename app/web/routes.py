@@ -456,8 +456,11 @@ def build_router(
 
     @router.post("/close/{symbol}", dependencies=guarded)
     def close_position(symbol: str) -> dict:
+        problem = engine.why_not_close(symbol.upper())
+        if problem:
+            raise HTTPException(status_code=409, detail=problem)
         if not engine.close_position_now(symbol.upper()):
-            raise HTTPException(status_code=400, detail="no open position in that symbol")
+            raise HTTPException(status_code=409, detail="The position could not be closed.")
         return engine.status()
 
     @router.post("/watchlist/add", dependencies=guarded)

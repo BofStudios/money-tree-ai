@@ -365,6 +365,10 @@ class TelegramNotifier:
             await update.message.reply_text("Usage: /close AAPL")
             return
         symbol = context.args[0].upper()
+        problem = self.engine.why_not_close(symbol)
+        if problem:
+            await update.message.reply_text(problem)
+            return
         ok = self.engine.close_position_now(symbol, "closed from Telegram")
         await update.message.reply_text(
             f"Closing {symbol}." if ok else f"No open position in {symbol}."

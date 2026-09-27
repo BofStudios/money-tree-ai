@@ -643,13 +643,22 @@ function renderPositions(s) {
   $("positionCount").textContent = s.positions.length;
   const host = $("positionList");
   if (!s.positions.length) { host.innerHTML = '<div class="empty">Nothing open.</div>'; return; }
+  // Where each stop lives matters: at Alpaca it fires with this PC off;
+  // anywhere else the app has to be running for it to fire.
+  const broker = s.broker || s.mode;
+  const home = (p) => p.stop_at_broker ? "atAlpaca" : broker === "alpaca_live" || broker === "alpaca_paper" ? "onPc" : null;
   host.innerHTML = s.positions.map((p) => {
     const c = p.unrealized_pnl >= 0 ? "up" : "down";
+    const where = home(p);
+    const badge = where
+      ? `<span class="stop-home ${where}">${escapeHtml(tr(`pos.${where}`, null, where === "atAlpaca" ? "stop at Alpaca" : "stop on this PC"))}</span>`
+      : "";
     return `<div class="item">
       <span class="ticker">${p.symbol.slice(0, 2)}</span>
       <div class="item-main">
-        <div class="item-title">${p.symbol}</div>
-        <div class="item-sub">${p.qty} @ ${money(p.entry_price)} → ${money(p.current_price)}</div>
+        <div class="item-title">${p.symbol} ${badge}</div>
+        <div class="item-sub">${p.qty} @ ${money(p.entry_price)} → ${money(p.current_price)}${
+          p.stop_loss ? ` · stop ${money(p.stop_loss)}` : ""}</div>
       </div>
       <div class="item-value">
         <b class="${c}">${signed(p.unrealized_pnl)}</b>

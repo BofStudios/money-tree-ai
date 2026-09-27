@@ -243,3 +243,34 @@ def test_switching_markets_keeps_watching_what_is_held(tmp_path):
     assert engine.symbols == ["ASML", "SAP"]
     scanned = {row["symbol"] for row in engine.watchlist_rows()}
     assert held <= scanned
+
+
+# ------------------------------------------------------------ manual close
+
+
+def test_a_manual_close_waits_for_the_open_so_the_stop_stays_at_alpaca(tmp_path):
+    from test_autonomy import ClosedClock, OpenClock
+
+    engine = broker_engine(tmp_path)
+    engine._scan(FakeMarket())
+    held = engine.status()["positions"][0]["symbol"]
+
+    engine.clock = ClosedClock()
+    assert "market is closed" in engine.why_not_close(held)
+    assert engine.close_position_now(held) is False
+    assert held in {p["symbol"] for p in engine.status()["positions"]}
+
+    engine.clock = OpenClock()
+    assert engine.why_not_close(held) is None
+    assert engine.close_position_now(held) is True
+
+
+def test_the_simulation_can_close_at_any_hour(tmp_path):
+    from test_autonomy import ClosedClock
+
+    engine = build(tmp_path)          # PaperExecutor: nothing is held at a broker
+    engine._scan(FakeMarket())
+    held = engine.status()["positions"][0]["symbol"]
+    engine.clock = ClosedClock()
+
+    assert engine.close_position_now(held) is True

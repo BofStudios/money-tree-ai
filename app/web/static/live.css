@@ -268,3 +268,11 @@ button.danger-text { color: var(--down); }
 @media (prefers-reduced-motion: reduce) {
   .lv-step.s-running .lv-dot, .restart-spin { animation-duration: 2.4s !important; }
 }
+
+/* Where a held position's stop lives. */
+.stop-home {
+  margin-left: 6px; padding: 2px 7px; border-radius: 20px; vertical-align: 2px;
+  font-family: var(--mono); font-size: 10px; font-weight: 500;
+}
+.stop-home.atAlpaca { color: var(--up); background: rgba(50, 213, 131, 0.1); }
+.stop-home.onPc { color: var(--accent); background: var(--accent-soft); }

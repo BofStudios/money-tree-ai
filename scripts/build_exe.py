@@ -58,20 +58,17 @@ def main() -> None:
     subprocess.run(args, cwd=ROOT, check=True)
 
     target = DIST / NAME
-    # Ship editable settings next to the exe rather than frozen inside it.
-    for name in ("config", "README.md"):
-        source = ROOT / name
-        if not source.exists():
-            continue
-        destination = target / name
-        if source.is_dir():
-            shutil.copytree(source, destination, dirs_exist_ok=True)
-        else:
-            shutil.copy2(source, destination)
+    # Ship editable settings next to the exe rather than frozen inside it —
+    # the examples only, never this machine's own config.yaml or keys.
+    config_out = target / "config"
+    config_out.mkdir(parents=True, exist_ok=True)
+    for example in (ROOT / "config").glob("*example*"):
+        shutil.copy2(example, config_out / example.name)
+    shutil.copy2(ROOT / "README.md", target / "README.md")
 
     print(f"\ndone -> {target / (NAME + '.exe')}")
     print("Copy the whole folder wherever you like, then make a shortcut to the exe.")
-    print("Remember to put your .env next to it.")
+    print("Keys go in the app: Settings -> Money & keys (or a .env next to the exe).")
 
 
 def os_sep() -> str:
