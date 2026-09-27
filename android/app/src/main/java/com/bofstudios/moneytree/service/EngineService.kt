@@ -125,18 +125,25 @@ class EngineService : Service() {
             }
             Hub.monitor.info(StepKind.INFO, words.started(settings))
             val power = getSystemService(Context.POWER_SERVICE) as PowerManager
+            // The first look after starting is always a full one: the owner just
+            // pressed Start and should see the bot actually work.
+            var asked = true
             while (isActive) {
+                Hub.nextLookAt.value = null
                 // Hold the CPU awake for one look at the market, never longer.
                 val lock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "moneytree:cycle")
                 lock.acquire(3 * 60_000L)
-                val sleep = try { engine.cycle() } finally { if (lock.isHeld) lock.release() }
-                withTimeoutOrNull(sleep) { Hub.wake.receive() }
+                val sleep = try { engine.cycle(forceLook = asked) } finally { if (lock.isHeld) lock.release() }
+                // The real time of the next look, for the Live tab's countdown.
+                Hub.nextLookAt.value = System.currentTimeMillis() + sleep
+                asked = withTimeoutOrNull(sleep) { Hub.wake.receive() } != null
             }
         }
     }
 
     private fun stopBot() {
         prefs.runWanted = false
+        Hub.nextLookAt.value = null
         loop?.cancel()
         Hub.engine = null
         Hub.running.value = false

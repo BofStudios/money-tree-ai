@@ -28,5 +28,8 @@ object Hub {
     /** "Look now" requests from the screen, e.g. after changing settings. */
     val wake = Channel<Unit>(Channel.CONFLATED)
 
+    /** When the loop will next look at the market, while it is waiting. */
+    val nextLookAt = MutableStateFlow<Long?>(null)
+
     @Volatile var engine: Engine? = null
 }

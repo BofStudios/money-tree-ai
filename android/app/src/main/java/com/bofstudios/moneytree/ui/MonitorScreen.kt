@@ -72,6 +72,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bofstudios.moneytree.engine.EngineState
+import com.bofstudios.moneytree.engine.Market
 import com.bofstudios.moneytree.engine.Proposal
 import com.bofstudios.moneytree.engine.Step
 import com.bofstudios.moneytree.engine.StepKind
@@ -86,8 +87,18 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/**
+ * Home: whose money this is and how to move it (first, always), then what the
+ * bot is doing. The full step-by-step view lives in the Live tab.
+ */
 @Composable
-fun MonitorScreen(settings: TradingSettings, toast: (String) -> Unit) {
+fun HomeScreen(
+    settings: TradingSettings,
+    toast: (String) -> Unit,
+    onOpenLive: () -> Unit,
+    onOpenMoney: (withdraw: Boolean) -> Unit,
+    onPickMarket: (Market) -> Unit,
+) {
     val steps by Hub.steps.collectAsState()
     val state by Hub.state.collectAsState()
     val running by Hub.running.collectAsState()
@@ -95,9 +106,11 @@ fun MonitorScreen(settings: TradingSettings, toast: (String) -> Unit) {
 
     LazyColumn(
         Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 110.dp),
-        verticalArrangement = Arrangement.spacedBy(0.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 130.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        item { MoneyCard(settings, onOpenMoney) }
+        if (settings.market == null) item { MarketQuestion(onPickMarket) }
         item { StatusCard(state, settings, running, armed) }
 
         if (state.approvals.isNotEmpty() || state.suggestions.isNotEmpty()) {
@@ -106,24 +119,30 @@ fun MonitorScreen(settings: TradingSettings, toast: (String) -> Unit) {
             items(state.suggestions, key = { it.id }) { ProposalCard(it, asking = false, settings, toast) }
         }
 
-        item { SectionTitle(tx("AI monitor", "AI monitör")) }
-        item { NowPanel(steps, running) }
-        item { Spacer(Modifier.height(14.dp)) }
-        if (steps.isEmpty()) {
-            item {
-                Text(
-                    tx("Nothing yet. Start the bot and every step it takes will appear here, as it happens.",
-                        "Henüz bir şey yok. Botu başlat, attığı her adım burada anında görünecek."),
-                    color = MT.Text3, fontSize = 13.sp, modifier = Modifier.padding(vertical = 8.dp),
-                )
-            }
-        }
-        // Newest first: on a phone the latest thing belongs at the top.
-        items(steps.asReversed(), key = { it.id }) { step ->
-            StepRow(step, Modifier.animateItem(fadeInSpec = spring(stiffness = Spring.StiffnessLow)))
-        }
+        item { NowPanel(steps, running, onOpenLive) }
     }
 }
+
+/** Asked once, for anyone who set up before this question existed. */
+@Composable
+fun MarketQuestion(onPick: (Market) -> Unit) {
+    Card(highlight = true) {
+        Text(tx("Which market should I watch?", "Hangi piyasayı izleyeyim?"), fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Chip(tx("US", "ABD"), false, { onPick(Market.US) })
+            Chip(tx("Europe", "Avrupa"), false, { onPick(Market.EUROPE) })
+            Chip(tx("Both", "İkisi"), false, { onPick(Market.BOTH) })
+        }
+        Text(marketNote(), color = MT.Text3, fontSize = 12.sp, lineHeight = 17.sp, modifier = Modifier.padding(top = 10.dp))
+    }
+}
+
+@Composable
+fun marketNote() = tx(
+    "Alpaca trades on US exchanges only. \"Europe\" means European companies also listed in New York — ASML, SAP, Novo Nordisk, AstraZeneca, Shell and more — plus a Europe ETF, in dollars, during US hours (about 16:30–23:00 Turkey time).",
+    "Alpaca sadece ABD borsalarında işlem yapar. \"Avrupa\", New York'ta da işlem gören Avrupa şirketleri demek — ASML, SAP, Novo Nordisk, AstraZeneca, Shell ve dahası — artı bir Avrupa ETF'i; dolarla, ABD saatlerinde (Türkiye saatiyle yaklaşık 16:30–23:00).",
+)
 
 @Composable
 private fun StatusCard(state: EngineState, settings: TradingSettings, running: Boolean, armed: Boolean) {
@@ -132,7 +151,7 @@ private fun StatusCard(state: EngineState, settings: TradingSettings, running: B
     val account = state.account
     val live = running && state.marketOpen == true && state.lastError == null
 
-    Card(highlight = live) {
+    Card(highlight = live, glow = live) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Pulse(
                 color = when {
@@ -163,7 +182,7 @@ private fun StatusCard(state: EngineState, settings: TradingSettings, running: B
             if (settings.live) tx("Your real balance", "Gerçek bakiyen") else tx("Practice balance (Alpaca paper)", "Deneme bakiyesi (Alpaca paper)"),
             color = MT.Text3, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
         )
-        Text(account?.let { w.usd(it.equity) } ?: "—", style = Figure, color = MT.Text)
+        AnimatedMoney(account?.equity, w::usd, Figure)
 
         if (account != null) {
             val today = account.equity - account.lastEquity
@@ -271,7 +290,7 @@ private fun ProposalCard(p: Proposal, asking: Boolean, settings: TradingSettings
  * that is open right now; when nothing is running it says so.
  */
 @Composable
-private fun NowPanel(steps: List<Step>, running: Boolean) {
+private fun NowPanel(steps: List<Step>, running: Boolean, onOpenLive: () -> Unit) {
     val current = steps.lastOrNull { it.state == StepState.RUNNING }
     val latest = steps.lastOrNull()
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -324,6 +343,8 @@ private fun NowPanel(steps: List<Step>, running: Boolean) {
             Stat(steps.count { it.state == StepState.FAILED || it.kind == StepKind.WARN }, tx("problems", "sorun"), Modifier.weight(1f),
                 warn = true)
         }
+        Spacer(Modifier.height(6.dp))
+        GhostButton(tx("Watch it live →", "Canlı izle →"), onOpenLive, Modifier.fillMaxWidth(), color = MT.Accent)
     }
 }
 
@@ -353,91 +374,3 @@ fun Ticker(symbol: String) {
         contentAlignment = Alignment.Center,
     ) { Text(symbol.take(2), fontFamily = MT.Mono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = MT.Text) }
 }
-
-/** One thing the engine did, drawn like a tool call: spinner, then a mark. */
-@Composable
-private fun StepRow(step: Step, modifier: Modifier = Modifier) {
-    var open by rememberSaveable(step.id) { mutableStateOf(false) }
-    val expandable = step.lines.isNotEmpty() || (step.detail?.length ?: 0) > 70
-    val time = remember(step.startedAt) { SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(step.startedAt)) }
-    val (tint, icon) = kindLook(step)
-
-    Row(
-        modifier
-            .fillMaxWidth()
-            .height(IntrinsicSize.Min)
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(enabled = expandable) { open = !open }
-            .padding(horizontal = 4.dp)
-            .animateContentSize(),
-        verticalAlignment = Alignment.Top,
-    ) {
-        // The timeline rail: each step's icon, joined to the next by a line.
-        Column(Modifier.fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
-            Spacer(Modifier.height(8.dp))
-            Box(Modifier.size(28.dp).clip(CircleShape).background(tint.copy(alpha = 0.13f)), contentAlignment = Alignment.Center) {
-                Icon(icon, null, tint = tint, modifier = Modifier.size(15.dp))
-            }
-            Box(Modifier.width(1.5.dp).weight(1f).background(MT.Line))
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    step.title, Modifier.weight(1f),
-                    color = if (step.state == StepState.RUNNING) MT.Text else MT.Text.copy(alpha = 0.92f),
-                    fontSize = 13.5.sp, fontWeight = if (step.state == StepState.RUNNING) FontWeight.SemiBold else FontWeight.Medium,
-                )
-                Spacer(Modifier.width(8.dp))
-                StateMark(step.state)
-            }
-            step.detail?.let {
-                Text(it, color = if (step.state == StepState.FAILED) MT.Down else MT.Text2,
-                    fontSize = 12.5.sp, maxLines = if (open) 30 else 2, lineHeight = 17.sp)
-            }
-            Text(time + (step.endedAt?.let { e -> if (e > step.startedAt) " · ${(e - step.startedAt)} ms" else "" } ?: ""),
-                color = MT.Text3, fontFamily = MT.Mono, fontSize = 10.sp)
-            AnimatedVisibility(open && step.lines.isNotEmpty(), enter = expandVertically() + fadeIn(), exit = shrinkVertically()) {
-                Column(
-                    Modifier.padding(top = 6.dp).fillMaxWidth().clip(RoundedCornerShape(8.dp))
-                        .background(MT.Surface2).padding(10.dp),
-                ) {
-                    step.lines.forEach {
-                        Text(it, color = MT.Text2, fontFamily = MT.Mono, fontSize = 11.sp, lineHeight = 16.sp)
-                    }
-                }
-            }
-            if (!open && step.lines.isNotEmpty()) {
-                Text(tx("${step.lines.size} details — tap", "${step.lines.size} detay — dokun"),
-                    color = MT.Text3, fontSize = 10.5.sp)
-            }
-        }
-    }
-}
-
-@Composable
-private fun StateMark(state: StepState) {
-    when (state) {
-        StepState.RUNNING -> CircularProgressIndicator(Modifier.size(14.dp), color = MT.Accent, strokeWidth = 2.dp)
-        StepState.DONE -> Icon(Icons.Filled.Check, null, tint = MT.Accent, modifier = Modifier.size(16.dp))
-        StepState.FAILED -> Icon(Icons.Filled.Close, null, tint = MT.Down, modifier = Modifier.size(16.dp))
-        StepState.INFO -> Unit
-    }
-}
-
-private fun kindLook(step: Step): Pair<Color, ImageVector> = when (step.kind) {
-    StepKind.CLOCK -> MT.Text2 to Icons.Filled.DateRange
-    StepKind.ACCOUNT -> MT.Text2 to Icons.Filled.AccountCircle
-    StepKind.POSITIONS -> MT.Text2 to Icons.AutoMirrored.Filled.List
-    StepKind.BARS -> MT.Text2 to Icons.Filled.Refresh
-    StepKind.ANALYSE -> MT.Accent to Icons.Filled.Search
-    StepKind.NEWS -> MT.Text2 to Icons.Filled.Email
-    StepKind.ORDER -> MT.Up to Icons.Filled.ShoppingCart
-    StepKind.TRAIL -> MT.Up to Icons.Filled.KeyboardArrowUp
-    StepKind.SELL -> MT.Accent to Icons.AutoMirrored.Filled.ExitToApp
-    StepKind.AI -> MT.Accent to Icons.Filled.Star
-    StepKind.APPROVAL -> MT.Accent to Icons.Filled.Notifications
-    StepKind.WAIT -> MT.Text3 to Icons.Filled.Done
-    StepKind.WARN -> MT.Down to Icons.Filled.Warning
-    StepKind.INFO -> MT.Text2 to Icons.Filled.Info
-}.let { if (step.state == StepState.FAILED) MT.Down to it.second else it }

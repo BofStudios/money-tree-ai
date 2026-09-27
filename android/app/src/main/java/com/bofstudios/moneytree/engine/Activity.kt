@@ -32,6 +32,8 @@ interface Monitor {
 interface StepHandle {
     fun done(detail: String? = null, lines: List<String> = emptyList())
     fun fail(detail: String)
+    /** Update what a still-running step is doing, e.g. which symbol is in flight. */
+    fun progress(detail: String) {}
 }
 
 /** Runs `block` inside a step: DONE on success, FAILED (and rethrown) on error. */
@@ -48,7 +50,8 @@ suspend fun <T> Monitor.step(
         handle.done(summary(result), lines(result))
         result
     } catch (e: Exception) {
-        handle.fail(e.message ?: e.javaClass.simpleName)
+        // Stopping the bot mid-step is not an error worth a message.
+        handle.fail(if (e is kotlinx.coroutines.CancellationException) "—" else e.message ?: e.javaClass.simpleName)
         throw e
     }
 }
@@ -73,6 +76,9 @@ class MemoryMonitor(
 
             override fun fail(detail: String) =
                 update(id) { it.copy(state = StepState.FAILED, endedAt = now(), detail = detail) }
+
+            override fun progress(detail: String) =
+                update(id) { if (it.state == StepState.RUNNING) it.copy(detail = detail) else it }
         }
     }
 

@@ -34,6 +34,8 @@ data class EngineState(
     val baselineEquity: Double? = null,
     /** Recent candles per symbol, for the phone's chart. */
     val bars: Map<String, List<Bar>> = emptyMap(),
+    /** The symbol whose data is being fetched this moment, for the Live tab. */
+    val focus: String? = null,
 )
 
 data class ApprovalResult(val ok: Boolean, val message: String)
@@ -74,15 +76,20 @@ class Engine(
     private val exitReasons = HashMap<String, String>()
     private var lastCycleClosed = false
 
-    /** One look at the market. Returns how long to wait before the next. */
-    suspend fun cycle(): Long = mutex.withLock {
+    /**
+     * One look at the market. Returns how long to wait before the next.
+     *
+     * [forceLook] is the owner asking to see it work ("Look now", or the first
+     * look after starting): nothing is skipped as quiet, even while closed.
+     */
+    suspend fun cycle(forceLook: Boolean = false): Long = mutex.withLock {
         val s = settings()
         val w = Words(s.turkish)
         try {
             expireProposals(w)
             // A closed market is looked at quietly after the first time, so a
             // weekend does not bury the feed under identical steps.
-            val quiet = lastCycleClosed
+            val quiet = lastCycleClosed && !forceLook
             val clock = maybeStep(quiet, StepKind.CLOCK, w.checkingClock(), { broker.clock() }) {
                 if (it.isOpen) w.marketOpen(it.nextClose) else w.marketClosed(it.nextOpen)
             }
@@ -103,7 +110,14 @@ class Engine(
             val held = reconcile(positions, orders, w)
 
             if (!clock.isOpen) {
-                if (!lastCycleClosed) monitor.info(StepKind.WAIT, w.waitingForOpen(clock.nextOpen))
+                if (!lastCycleClosed || forceLook) {
+                    // Charts and analysis still run, so the screen shows real,
+                    // current work on a weekend. Nothing below this line buys,
+                    // sells or moves a stop: the function returns first.
+                    monitor.info(StepKind.INFO, w.closedReviewOnly())
+                    look(s, w, held, trading = false)
+                    monitor.info(StepKind.WAIT, w.waitingForOpen(clock.nextOpen))
+                }
                 lastCycleClosed = true
                 _state.update { it.copy(lastError = null) }
                 return@withLock (clock.nextOpen - now()).coerceIn(MIN_SLEEP, CLOSED_MAX_SLEEP)
@@ -124,36 +138,9 @@ class Engine(
             }
             _state.update { it.copy(haltReason = halt) }
 
-            // ------------------------------------------------------------ bars
-            val symbols = (s.watchlist + held.filter { it.managed }.map { it.position.symbol }).distinct()
-            val tf = s.horizon.timeframe
-            val bars = monitor.step(StepKind.BARS, w.fetchingBars(symbols.size, tf), {
-                symbols.associateWith { sym -> attempt { broker.bars(sym, tf, BAR_LIMIT) } ?: emptyList() }
-            }, { w.barsSummary(it.count { e -> e.value.size >= strategy.warmupBars }, symbols.size) })
-
-            // -------------------------------------------------------- analysis
+            // ------------------------------------------------- bars + analysis
             val heldBySymbol = held.associateBy { it.position.symbol }
-            val signals = LinkedHashMap<String, Signal>()
-            val snapshots = ArrayList<Snapshot>()
-            val analysis = monitor.begin(StepKind.ANALYSE, w.analysing(symbols.size))
-            val lines = ArrayList<String>()
-            for (sym in symbols) {
-                val b = bars[sym].orEmpty()
-                val holding = heldBySymbol[sym]?.managed == true
-                val signal = strategy.onBars(b, holding)
-                val snap = strategy.snapshot(sym, b)
-                signals[sym] = signal
-                snapshots += snap
-                lines += w.analysisLine(snap, signal)
-            }
-            analysis.done(
-                w.analysisSummary(
-                    signals.values.count { it.action == Action.BUY },
-                    signals.values.count { it.action == Action.CLOSE },
-                ),
-                lines,
-            )
-            _state.update { it.copy(snapshots = snapshots, bars = bars.mapValues { e -> e.value.takeLast(CHART_BARS) }) }
+            val (signals, snapshots) = look(s, w, held, trading = true)
             val price = snapshots.filter { it.ready }.associate { it.symbol to it.price }
 
             // ------------------------------------------------ manage what's held
@@ -297,6 +284,57 @@ class Engine(
     }
 
     // ------------------------------------------------------------- internals
+
+    /**
+     * Fetch candles and run the strategy over every symbol. Reads only — the
+     * caller decides whether anything is traded on the result.
+     *
+     * Candles are fetched one symbol at a time, and the step says which one is
+     * in flight, so the Live tab shows the bot actually working through its
+     * list rather than a single opaque spinner.
+     */
+    private suspend fun look(
+        s: TradingSettings, w: Words, held: List<HeldPosition>, trading: Boolean,
+    ): Pair<Map<String, Signal>, List<Snapshot>> {
+        val symbols = (s.watchlist + held.filter { it.managed }.map { it.position.symbol }).distinct()
+        val tf = s.horizon.timeframe
+        val bars = LinkedHashMap<String, List<Bar>>()
+        val fetch = monitor.begin(StepKind.BARS, w.fetchingBars(symbols.size, tf))
+        try {
+            for ((i, sym) in symbols.withIndex()) {
+                _state.update { it.copy(focus = sym) }
+                fetch.progress("$sym · ${i + 1}/${symbols.size}")
+                bars[sym] = attempt { broker.bars(sym, tf, BAR_LIMIT) } ?: emptyList()
+            }
+            fetch.done(w.barsSummary(bars.values.count { it.size >= strategy.warmupBars }, symbols.size))
+        } catch (e: Exception) {
+            fetch.fail(if (e is CancellationException) "—" else e.message ?: e.javaClass.simpleName)
+            throw e
+        } finally {
+            _state.update { it.copy(focus = null) }
+        }
+
+        val heldBySymbol = held.associateBy { it.position.symbol }
+        val signals = LinkedHashMap<String, Signal>()
+        val snapshots = ArrayList<Snapshot>()
+        val analysis = monitor.begin(StepKind.ANALYSE, w.analysing(symbols.size))
+        val lines = ArrayList<String>()
+        for (sym in symbols) {
+            val b = bars[sym].orEmpty()
+            val signal = strategy.onBars(b, heldBySymbol[sym]?.managed == true)
+            val snap = strategy.snapshot(sym, b)
+            signals[sym] = signal
+            snapshots += snap
+            lines += w.analysisLine(snap, signal)
+        }
+        val summary = w.analysisSummary(
+            signals.values.count { it.action == Action.BUY },
+            signals.values.count { it.action == Action.CLOSE },
+        )
+        analysis.done(if (trading) summary else "$summary · ${w.notTradingNow()}", lines)
+        _state.update { it.copy(snapshots = snapshots, bars = bars.mapValues { e -> e.value.takeLast(CHART_BARS) }) }
+        return signals to snapshots
+    }
 
     private suspend fun place(entry: Entry, w: Words, headlines: List<String>): Boolean {
         val order = attempt {

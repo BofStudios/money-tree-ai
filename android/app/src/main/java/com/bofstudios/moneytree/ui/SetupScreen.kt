@@ -50,6 +50,7 @@ import com.bofstudios.moneytree.broker.AlpacaBroker
 import com.bofstudios.moneytree.data.SecureStore
 import com.bofstudios.moneytree.engine.Autonomy
 import com.bofstudios.moneytree.engine.Horizon
+import com.bofstudios.moneytree.engine.Market
 import com.bofstudios.moneytree.engine.TradingSettings
 import com.bofstudios.moneytree.engine.Words
 import kotlinx.coroutines.launch
@@ -65,6 +66,7 @@ fun SetupScreen(initial: TradingSettings, onDone: (TradingSettings) -> Unit, onL
     val scope = rememberCoroutineScope()
     var step by remember { mutableIntStateOf(0) }
     var horizon by remember { mutableStateOf<Horizon?>(null) }
+    var market by remember { mutableStateOf<Market?>(null) }
     var autonomy by remember { mutableStateOf<Autonomy?>(null) }
     var keyId by remember { mutableStateOf("") }
     var secret by remember { mutableStateOf("") }
@@ -74,7 +76,7 @@ fun SetupScreen(initial: TradingSettings, onDone: (TradingSettings) -> Unit, onL
     var keysOk by remember { mutableStateOf(secure.has(SecureStore.PAPER_KEY) && secure.has(SecureStore.PAPER_SECRET)) }
     val turkish = LocalTurkish.current
     val w = Words(turkish)
-    val total = 6
+    val total = 7
 
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp)) {
         LinearProgressIndicator(
@@ -150,6 +152,18 @@ fun SetupScreen(initial: TradingSettings, onDone: (TradingSettings) -> Unit, onL
                             visualTransformation = PasswordVisualTransformation(), colors = fieldColors(), shape = RoundedCornerShape(12.dp))
                     }
                     3 -> {
+                        Heading(tx("Which market?", "Hangi piyasa?"))
+                        Option(tx("US stocks", "ABD hisseleri"), tx("Apple, Microsoft, Nvidia, Amazon, Google, Meta, Tesla and the S&P 500.",
+                            "Apple, Microsoft, Nvidia, Amazon, Google, Meta, Tesla ve S&P 500."),
+                            market == Market.US) { market = Market.US; step++ }
+                        Option(tx("Europe", "Avrupa"), tx("ASML, SAP, Novo Nordisk, AstraZeneca, Shell, TotalEnergies, Unilever and a Europe ETF.",
+                            "ASML, SAP, Novo Nordisk, AstraZeneca, Shell, TotalEnergies, Unilever ve bir Avrupa ETF'i."),
+                            market == Market.EUROPE) { market = Market.EUROPE; step++ }
+                        Option(tx("Both", "İkisi de"), tx("The biggest names from each.", "İkisinden de en büyük isimler."),
+                            market == Market.BOTH) { market = Market.BOTH; step++ }
+                        Text(marketNote(), color = MT.Text3, fontSize = 12.5.sp, lineHeight = 18.sp, modifier = Modifier.padding(top = 4.dp))
+                    }
+                    4 -> {
                         Heading(tx("How long should a trade usually last?", "Bir işlem genelde ne kadar sürsün?"))
                         Option(tx("Short", "Kısa"), tx("Minutes to hours. 15-minute charts, trades the most.", "Dakikalar–saatler. 15 dakikalık grafik, en sık işlem."),
                             horizon == Horizon.SHORT) { horizon = Horizon.SHORT; step++ }
@@ -160,7 +174,7 @@ fun SetupScreen(initial: TradingSettings, onDone: (TradingSettings) -> Unit, onL
                         Option(tx("Not sure", "Emin değilim"), tx("Start short — that is where this strategy has been tested most.",
                             "Kısa ile başla — bu strateji en çok orada test edildi."), false) { horizon = Horizon.SHORT; step++ }
                     }
-                    4 -> {
+                    5 -> {
                         Heading(tx("How much should it do on its own?", "Kendi başına ne kadar iş yapsın?"))
                         Option(w.autonomyName(Autonomy.FULL), tx("Buys and sells by itself.", "Kendi alır, kendi satar."),
                             autonomy == Autonomy.FULL) { autonomy = Autonomy.FULL; step++ }
@@ -175,7 +189,9 @@ fun SetupScreen(initial: TradingSettings, onDone: (TradingSettings) -> Unit, onL
                     else -> {
                         val h = horizon ?: Horizon.SHORT
                         val a = autonomy ?: Autonomy.FULL
+                        val m = market ?: Market.US
                         Heading(tx("Got it.", "Anladım."))
+                        Summary(tx("I'll watch ${m.watchlist.joinToString(", ")}.", "${m.watchlist.joinToString(", ")} hisselerini izleyeceğim."))
                         Summary(tx("I'll read ${w.tfName(h.timeframe)} charts.", "${w.tfName(h.timeframe)} grafiğe bakacağım."))
                         Summary(when (a) {
                             Autonomy.FULL -> tx("I'll buy and sell on my own.", "Kendim alıp satacağım.")
@@ -200,9 +216,11 @@ fun SetupScreen(initial: TradingSettings, onDone: (TradingSettings) -> Unit, onL
                     if (groq.isNotEmpty()) secure.put(SecureStore.GROQ_KEY, groq)
                     step = 3
                 })
-                3, 4 -> Unit // an option tap moves on
+                3, 4, 5 -> Unit // an option tap moves on
                 else -> PrimaryButton(tx("Start Money Tree", "Money Tree'yi başlat"), {
-                    onDone(initial.copy(horizon = horizon ?: Horizon.SHORT, autonomy = autonomy ?: Autonomy.FULL, live = false))
+                    val m = market ?: Market.US
+                    onDone(initial.copy(horizon = horizon ?: Horizon.SHORT, autonomy = autonomy ?: Autonomy.FULL,
+                        live = false, market = m, watchlist = m.watchlist))
                 })
             }
         }

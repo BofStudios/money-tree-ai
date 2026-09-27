@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -36,12 +37,15 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +54,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -133,6 +139,16 @@ class MainActivity : FragmentActivity() {
     @Composable
     private fun Main() {
         var tab by rememberSaveable { mutableIntStateOf(0) }
+        // The money page opens over the tabs: null = closed, else which section leads.
+        var money by rememberSaveable { mutableStateOf<String?>(null) }
+        BackHandler(enabled = money != null) { money = null }
+
+        val m = money
+        if (m != null) {
+            MoneyScreen(settings, withdrawFirst = m == "withdraw", onBack = { money = null })
+            return
+        }
+
         Box(Modifier.fillMaxSize()) {
             Column(Modifier.fillMaxSize()) {
                 Header()
@@ -152,12 +168,23 @@ class MainActivity : FragmentActivity() {
                 }
                 AnimatedContent(tab, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "tab") { t ->
                     when (t) {
-                        0 -> MonitorScreen(settings, ::toast)
-                        1 -> PortfolioScreen(prefs)
-                        else -> SettingsScreen(settings, ::update, ::armWithAuth, ::toast)
+                        0 -> HomeScreen(
+                            settings, ::toast,
+                            onOpenLive = { tab = 1 },
+                            onOpenMoney = { withdraw -> money = if (withdraw) "withdraw" else "deposit" },
+                            onPickMarket = { picked -> update(settings.copy(market = picked, watchlist = picked.watchlist)) },
+                        )
+                        1 -> LiveScreen(settings)
+                        2 -> PortfolioScreen(prefs)
+                        else -> SettingsScreen(settings, ::update, ::armWithAuth, ::toast, onOpenMoney = { money = "deposit" })
                     }
                 }
             }
+            // Content scrolls under a fade into the bar, never visibly behind it.
+            Box(
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(140.dp)
+                    .background(Brush.verticalGradient(listOf(Color.Transparent, MT.Bg.copy(alpha = 0.92f), MT.Bg)))
+            )
             NavBar(tab, { tab = it }, Modifier.align(Alignment.BottomCenter))
         }
     }
@@ -177,36 +204,54 @@ class MainActivity : FragmentActivity() {
 
     @Composable
     private fun Header() {
+        val running by Hub.running.collectAsState()
+        val armed by Hub.armed.collectAsState()
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Image(painterResource(R.mipmap.ic_launcher), null, Modifier.size(30.dp).clip(RoundedCornerShape(8.dp)))
+            Image(painterResource(R.mipmap.ic_launcher), null, Modifier.size(32.dp).clip(RoundedCornerShape(9.dp)))
             Spacer(Modifier.size(10.dp))
-            Text("Money Tree", fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
+            Column(Modifier.weight(1f)) {
+                Text("Money Tree", fontWeight = FontWeight.SemiBold, fontSize = 18.sp, color = MT.Text)
+                Text(
+                    if (running) tx("Running", "Çalışıyor") else tx("Stopped", "Durdu"),
+                    color = if (running) MT.Accent else MT.Text3, fontSize = 11.sp, fontFamily = MT.Mono,
+                )
+            }
+            Tag(
+                if (settings.live) (if (armed) tx("REAL · ARMED", "GERÇEK · DEVREDE") else tx("REAL", "GERÇEK")) else "PAPER",
+                if (settings.live) MT.Down else MT.Accent,
+            )
         }
     }
 
     @Composable
     private fun NavBar(tab: Int, onTab: (Int) -> Unit, modifier: Modifier) {
+        val running by Hub.running.collectAsState()
         Row(
             modifier.navigationBarsPadding().padding(bottom = 14.dp)
-                .clip(RoundedCornerShape(22.dp)).background(MT.Surface.copy(alpha = 0.97f))
+                .clip(RoundedCornerShape(22.dp)).background(MT.Surface)
                 .border(1.dp, MT.Line, RoundedCornerShape(22.dp)).padding(6.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            NavItem(Icons.Filled.Star, tx("Monitor", "Monitör"), tab == 0) { onTab(0) }
-            NavItem(Icons.AutoMirrored.Filled.List, tx("Portfolio", "Portföy"), tab == 1) { onTab(1) }
-            NavItem(Icons.Filled.Settings, tx("Settings", "Ayarlar"), tab == 2) { onTab(2) }
+            NavItem(Icons.Filled.Home, tx("Home", "Ana sayfa"), tab == 0) { onTab(0) }
+            NavItem(Icons.Filled.PlayArrow, tx("Live", "Canlı"), tab == 1, dot = running) { onTab(1) }
+            NavItem(Icons.AutoMirrored.Filled.List, tx("Portfolio", "Portföy"), tab == 2) { onTab(2) }
+            NavItem(Icons.Filled.Settings, tx("Settings", "Ayarlar"), tab == 3) { onTab(3) }
         }
     }
 
     @Composable
-    private fun NavItem(icon: ImageVector, label: String, selected: Boolean, onClick: () -> Unit) {
+    private fun NavItem(icon: ImageVector, label: String, selected: Boolean, dot: Boolean = false, onClick: () -> Unit) {
         Column(
             Modifier.clip(RoundedCornerShape(16.dp))
                 .background(if (selected) MT.AccentSoft else MT.Surface.copy(alpha = 0f))
-                .clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 8.dp),
+                .clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Icon(icon, null, tint = if (selected) MT.Accent else MT.Text3, modifier = Modifier.size(20.dp))
+            Box {
+                Icon(icon, null, tint = if (selected) MT.Accent else MT.Text3, modifier = Modifier.size(20.dp))
+                // The Live tab shows a yellow dot while the bot is running.
+                if (dot) Box(Modifier.align(Alignment.TopEnd).size(7.dp).clip(RoundedCornerShape(4.dp)).background(MT.Accent))
+            }
             Text(label, color = if (selected) MT.Accent else MT.Text3, fontSize = 10.sp, fontWeight = FontWeight.Medium)
         }
     }

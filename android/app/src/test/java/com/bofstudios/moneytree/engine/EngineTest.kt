@@ -31,7 +31,11 @@ class FakeBroker : Broker {
     override suspend fun account() = account
     override suspend fun positions() = positions.toList()
     override suspend fun openOrders() = orders.toList()
-    override suspend fun bars(symbol: String, timeframe: Timeframe, limit: Int) = bars[symbol].orEmpty()
+    var barCalls = 0
+    override suspend fun bars(symbol: String, timeframe: Timeframe, limit: Int): List<Bar> {
+        barCalls += 1
+        return bars[symbol].orEmpty()
+    }
     override suspend fun latestPrice(symbol: String) = latest[symbol] ?: bars[symbol]?.lastOrNull()?.close
     override suspend fun news(symbol: String, limit: Int) = listOf(Headline("$symbol does a thing", "wire", ""))
     override suspend fun recentOrders(symbol: String, limit: Int) = closed[symbol].orEmpty()
@@ -361,6 +365,50 @@ class EngineTest {
 
         assertTrue(sleep >= 60_000)
         assertEquals(afterFirst, monitor.snapshot().size)
+    }
+
+    @Test fun aClosedMarketStillReviewsTheChartsButTradesNothing() = runTest {
+        broker.open = false
+        broker.bars["AAA"] = Candles.crossUpOnLastBar()   // a real buy signal
+        val engine = engine()
+        engine.cycle()
+
+        assertTrue("charts were fetched", broker.barCalls > 0)
+        assertTrue("analysis published", engine.state.value.snapshots.any { it.symbol == "AAA" && it.ready })
+        assertTrue("nothing bought while closed", broker.placed.isEmpty() && broker.fractionalBuys.isEmpty())
+        assertTrue(engine.state.value.approvals.isEmpty())
+        val analysis = steps(StepKind.ANALYSE).single()
+        assertTrue(analysis.detail!!.contains("not trading"))
+    }
+
+    @Test fun lookNowReviewsAgainWhileClosedButAQuietCycleDoesNot() = runTest {
+        broker.open = false
+        broker.bars["AAA"] = Candles.of(List(120) { 100.0 })
+        val engine = engine()
+        engine.cycle()
+        val afterFirst = broker.barCalls
+
+        engine.cycle()
+        assertEquals("quiet cycle fetches nothing", afterFirst, broker.barCalls)
+
+        engine.cycle(forceLook = true)
+        assertTrue("Look now fetches again", broker.barCalls > afterFirst)
+    }
+
+    @Test fun aRunningStepShowsWhatItIsWorkingOn() {
+        val handle = monitor.begin(StepKind.BARS, "Fetching")
+        handle.progress("NVDA · 3/8")
+        assertEquals("NVDA · 3/8", monitor.snapshot().single().detail)
+        handle.done("8 of 8 ready")
+        handle.progress("late update")
+        assertEquals("a finished step is not rewritten", "8 of 8 ready", monitor.snapshot().single().detail)
+    }
+
+    @Test fun focusIsClearedAfterTheLook() = runTest {
+        broker.bars["AAA"] = Candles.of(List(120) { 100.0 })
+        val engine = engine()
+        engine.cycle()
+        assertEquals(null, engine.state.value.focus)
     }
 
     @Test fun everyNetworkStepIsClosedNotLeftSpinning() = runTest {

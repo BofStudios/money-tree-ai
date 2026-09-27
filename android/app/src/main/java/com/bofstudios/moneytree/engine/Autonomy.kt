@@ -7,6 +7,17 @@ package com.bofstudios.moneytree.engine
  */
 enum class Autonomy { FULL, SEMI, MANUAL }
 
+/**
+ * Which companies to watch. Alpaca trades on US exchanges only, so "Europe"
+ * means European companies that are also listed in New York (ASML, SAP, Novo
+ * Nordisk...) plus a Europe ETF — traded in dollars, during US market hours.
+ */
+enum class Market(val watchlist: List<String>) {
+    US(listOf("AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "SPY")),
+    EUROPE(listOf("ASML", "SAP", "NVO", "AZN", "SHEL", "TTE", "UL", "VGK")),
+    BOTH(listOf("AAPL", "MSFT", "NVDA", "AMZN", "ASML", "SAP", "NVO", "SPY")),
+}
+
 /** How long a trade usually lasts, expressed as the candle size read. */
 enum class Horizon(val timeframe: Timeframe) { SHORT(Timeframe.M15), MEDIUM(Timeframe.H1), LONG(Timeframe.D1) }
 
@@ -24,6 +35,8 @@ data class TradingSettings(
      * watched by this phone instead of held at the broker. Off by default.
      */
     val fractional: Boolean = false,
+    /** Null until the owner has been asked; the watchlist is what actually trades. */
+    val market: Market? = null,
 ) {
     companion object {
         val DEFAULT_WATCHLIST = listOf("AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "SPY")

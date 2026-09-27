@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.sp
 import com.bofstudios.moneytree.data.SecureStore
 import com.bofstudios.moneytree.engine.Autonomy
 import com.bofstudios.moneytree.engine.Horizon
+import com.bofstudios.moneytree.engine.Market
 import com.bofstudios.moneytree.engine.TradingSettings
 import com.bofstudios.moneytree.engine.Words
 import com.bofstudios.moneytree.service.EngineService
@@ -56,6 +57,7 @@ fun SettingsScreen(
     onChange: (TradingSettings) -> Unit,
     requestArm: () -> Unit,
     toast: (String) -> Unit,
+    onOpenMoney: () -> Unit,
 ) {
     val context = LocalContext.current
     val secure = remember { SecureStore(context) }
@@ -137,6 +139,20 @@ fun SettingsScreen(
                     if (running) EngineService.restart(context)
                 })
             }
+            GhostButton(tx("Deposit & withdraw", "Para yatır ve çek"), onOpenMoney, color = MT.Accent)
+        }
+
+        SectionTitle(tx("Market", "Piyasa"))
+        Card {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Market.entries.forEach { m ->
+                    Chip(marketName(m), settings.market == m, {
+                        onChange(settings.copy(market = m, watchlist = m.watchlist))
+                        toast(pick(turkish, "Watching ${m.watchlist.joinToString(", ")}", "İzleniyor: ${m.watchlist.joinToString(", ")}"))
+                    })
+                }
+            }
+            Text(marketNote(), color = MT.Text3, fontSize = 12.sp, lineHeight = 17.sp, modifier = Modifier.padding(top = 10.dp))
         }
 
         SectionTitle(tx("Small account", "Küçük hesap"))
@@ -226,11 +242,19 @@ fun SettingsScreen(
                     Hub.armed.value = false
                     onChange(settings.copy(live = true))
                     if (running) EngineService.restart(context)
+                    onOpenMoney()
                 }) { Text(tx("Switch", "Geç"), color = MT.Down) }
             },
             dismissButton = { TextButton({ confirmLive = false }) { Text(tx("Cancel", "Vazgeç")) } },
         )
     }
+}
+
+@Composable
+fun marketName(m: Market) = when (m) {
+    Market.US -> tx("US", "ABD")
+    Market.EUROPE -> tx("Europe", "Avrupa")
+    Market.BOTH -> tx("Both", "İkisi")
 }
 
 @Composable

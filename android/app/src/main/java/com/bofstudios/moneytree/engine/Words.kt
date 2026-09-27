@@ -115,6 +115,11 @@ class Words(val tr: Boolean) {
         if (tr) "Günlük zarar sınırı doldu (${signed(loss)}, sınır ${usd(limit)}). Bugün yeni alım yok."
         else "Daily loss limit reached (${signed(loss)}, limit ${usd(limit)}). No new buys today."
 
+    fun closedReviewOnly() =
+        if (tr) "Piyasa kapalı — grafikleri inceliyorum, açılışa kadar alım satım yok"
+        else "Market closed — reviewing the charts; nothing is bought or sold until the open"
+    fun notTradingNow() = if (tr) "piyasa kapalı, işlem yok" else "market closed, not trading"
+
     fun scanDone(held: Int, next: Int) =
         if (tr) "Tarama bitti · $held pozisyon · $next sn sonra tekrar"
         else "Scan complete · holding $held · next look in ${next}s"
