@@ -73,4 +73,21 @@ class AlpacaJsonTest {
         val t = AlpacaBroker.parseTime("2026-09-28T09:30:00-04:00")
         assertEquals(AlpacaBroker.parseTime("2026-09-28T13:30:00Z"), t)
     }
+
+    @Test fun aFractionalStopIsADaySellStop() {
+        val j = AlpacaBroker.sellStopJson("nvda", 0.0412, 175.104, "mt-stop-1")
+        assertEquals("NVDA", j.getString("symbol"))
+        assertEquals("0.0412", j.getString("qty"))
+        assertEquals("sell", j.getString("side"))
+        assertEquals("stop", j.getString("type"))
+        // Alpaca only takes day orders on fractions.
+        assertEquals("day", j.getString("time_in_force"))
+        assertEquals("175.10", j.getString("stop_price"))
+    }
+
+    @Test fun aSellNeverAsksForMoreSharesThanAreHeld() {
+        assertEquals("0.0412", AlpacaBroker.sellQty(0.0412))
+        assertEquals("0.123456789", AlpacaBroker.sellQty(0.1234567899))
+        assertEquals("3", AlpacaBroker.sellQty(3.0))
+    }
 }

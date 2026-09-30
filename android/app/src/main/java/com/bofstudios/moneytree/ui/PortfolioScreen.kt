@@ -122,7 +122,7 @@ private fun HeldRow(h: HeldPosition, w: Words) {
             Ticker(p.symbol)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text("${p.symbol} · ${"%.0f".format(p.qty)} ${tx("shares", "adet")}", fontWeight = FontWeight.SemiBold)
+                Text("${p.symbol} · ${com.bofstudios.moneytree.engine.formatQty(p.qty)} ${tx("shares", "adet")}", fontWeight = FontWeight.SemiBold)
                 Text("${tx("in", "giriş")} ${w.usd(p.avgEntry)} · ${tx("now", "şimdi")} ${w.usd(p.currentPrice)}",
                     color = MT.Text3, fontFamily = MT.Mono, fontSize = 11.sp)
             }
@@ -131,8 +131,9 @@ private fun HeldRow(h: HeldPosition, w: Words) {
         Spacer(Modifier.height(8.dp))
         if (h.managed) {
             Text(
-                "Stop ${h.stop?.let { w.usd(it) } ?: "—"} · ${tx("target", "hedef")} ${h.target?.let { w.usd(it) } ?: "—"} · ${tx("held at Alpaca", "Alpaca'da duruyor")}",
-                color = MT.Accent, fontFamily = MT.Mono, fontSize = 11.sp,
+                "Stop ${h.stop?.let { w.usd(it) } ?: "—"} · ${tx("target", "hedef")} ${h.target?.let { w.usd(it) } ?: "—"} · " +
+                    if (h.stopAtBroker) tx("stop at Alpaca", "stop Alpaca'da") else tx("stop on this phone", "stop bu telefonda"),
+                color = if (h.stopAtBroker) MT.Up else MT.Accent, fontFamily = MT.Mono, fontSize = 11.sp,
             )
         } else {
             Text(tx("Yours — Money Tree does not touch this position.", "Senin — Money Tree bu pozisyona dokunmaz."),

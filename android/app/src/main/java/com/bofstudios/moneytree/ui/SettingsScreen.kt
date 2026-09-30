@@ -45,6 +45,8 @@ import com.bofstudios.moneytree.data.SecureStore
 import com.bofstudios.moneytree.engine.Autonomy
 import com.bofstudios.moneytree.engine.Horizon
 import com.bofstudios.moneytree.engine.Market
+import com.bofstudios.moneytree.engine.NotifyLevel
+import com.bofstudios.moneytree.engine.RiskLevel
 import com.bofstudios.moneytree.engine.TradingSettings
 import com.bofstudios.moneytree.engine.Words
 import com.bofstudios.moneytree.service.EngineService
@@ -58,11 +60,13 @@ fun SettingsScreen(
     requestArm: () -> Unit,
     toast: (String) -> Unit,
     onOpenMoney: () -> Unit,
+    onRedoSetup: () -> Unit,
 ) {
     val context = LocalContext.current
     val secure = remember { SecureStore(context) }
     val running by Hub.running.collectAsState()
     val armed by Hub.armed.collectAsState()
+    val state by Hub.state.collectAsState()
     val turkish = LocalTurkish.current
     val w = Words(turkish)
     var confirmLive by remember { mutableStateOf(false) }
@@ -100,6 +104,82 @@ fun SettingsScreen(
             }
             Text(tx("Reads ${w.tfName(settings.horizon.timeframe)} charts.", "${w.tfName(settings.horizon.timeframe)} grafiğe bakar."),
                 color = MT.Text3, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+        }
+
+        SectionTitle(tx("Risk", "Risk"))
+        Card {
+            val example = state.account?.equity?.takeIf { it > 0 } ?: 30.0
+            Text(tx("How bold each trade is", "Her işlem ne kadar cesur"), color = MT.Text2, fontSize = 12.5.sp)
+            Spacer(Modifier.height(8.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                RiskLevel.entries.forEach { r -> Chip(riskName(r), settings.riskLevel == r, { onChange(settings.copy(riskLevel = r)) }) }
+            }
+            Text(riskHint(settings.riskLevel, example, w), color = MT.Text3, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+
+            Spacer(Modifier.height(16.dp))
+            Text(tx("Most positions at once", "Aynı anda en fazla pozisyon"), color = MT.Text2, fontSize = 12.5.sp)
+            Spacer(Modifier.height(8.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(1, 2, 3, 5).forEach { n -> Chip("$n", settings.maxPositions == n, { onChange(settings.copy(maxPositions = n)) }) }
+            }
+
+            Spacer(Modifier.height(16.dp))
+            Text(tx("Stop buying for the day after a drop of", "Gün içinde şu kadar düşüşte alımı bırak"), color = MT.Text2, fontSize = 12.5.sp)
+            Spacer(Modifier.height(8.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(3.0, 5.0, 10.0).forEach { p ->
+                    Chip(if (turkish) "%${p.toInt()}" else "${p.toInt()}%", settings.dailyLossPct == p, { onChange(settings.copy(dailyLossPct = p)) })
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+            Text(tx("Share of the account it may use", "Kullanabileceği hesap payı"), color = MT.Text2, fontSize = 12.5.sp)
+            Spacer(Modifier.height(8.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(25, 50, 75, 100).forEach { p ->
+                    Chip(if (turkish) "%$p" else "$p%", settings.usePct == p, { onChange(settings.copy(usePct = p)) })
+                }
+            }
+            state.budget?.let {
+                Text(tx("Right now that is ${w.usd(it)}. The rest is never touched.", "Şu an bu ${w.usd(it)} ediyor. Kalanına asla dokunmaz."),
+                    color = MT.Text3, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+            }
+        }
+
+        SectionTitle(tx("Notifications", "Bildirimler"))
+        Card {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Chip(tx("Everything", "Her şey"), settings.notify == NotifyLevel.EVERYTHING, { onChange(settings.copy(notify = NotifyLevel.EVERYTHING)) })
+                Chip(tx("Buys & sells", "Alım & satış"), settings.notify == NotifyLevel.TRADES, { onChange(settings.copy(notify = NotifyLevel.TRADES)) })
+                Chip(tx("Quiet", "Sessiz"), settings.notify == NotifyLevel.QUIET, { onChange(settings.copy(notify = NotifyLevel.QUIET)) })
+            }
+            Text(
+                when (settings.notify) {
+                    NotifyLevel.EVERYTHING -> tx("Just bought, just sold with the profit or loss, the day's summary — plus silent notes on research and raised stops.",
+                        "Az önce aldım, az önce sattım (kâr/zarar), günün özeti — artı araştırma ve yükseltilen stop'lar için sessiz notlar.")
+                    NotifyLevel.TRADES -> tx("Just bought, just sold, and the day's summary.", "Az önce aldım, az önce sattım ve günün özeti.")
+                    NotifyLevel.QUIET -> tx("Only approvals and warnings.", "Sadece onaylar ve uyarılar.")
+                },
+                color = MT.Text3, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+
+        SectionTitle(tx("AI research", "AI araştırması"))
+        Card(highlight = settings.aiCheck) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(tx("Let the AI veto risky buys", "AI riskli alımları veto etsin"), fontWeight = FontWeight.SemiBold)
+                    Text(tx("Reads the latest headlines before each buy and passes on a clear red flag. It can stop a buy, never start one.",
+                        "Her alımdan önce son başlıkları okur, net bir kırmızı bayrakta geçer. Alımı durdurabilir, asla başlatamaz."),
+                        color = MT.Text3, fontSize = 12.sp)
+                }
+                Switch(settings.aiCheck, { onChange(settings.copy(aiCheck = it)) },
+                    colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = MT.Accent))
+            }
+            if (!secure.has(SecureStore.GROQ_KEY)) {
+                Text(tx("Needs a free Groq key — add it under Keys below.", "Ücretsiz bir Groq anahtarı gerekir — aşağıda Anahtarlar'a ekle."),
+                    color = MT.Accent, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+            }
         }
 
         SectionTitle(tx("Money", "Para"))
@@ -169,11 +249,11 @@ fun SettingsScreen(
                 )
             }
             Text(
-                if (settings.fractional) tx("On. Alpaca takes no stop-loss order on fractions, so THIS PHONE watches the stop and target. If the phone is off or asleep, those positions are not protected.",
-                    "Açık. Alpaca küsurata stop-loss emri almıyor, stop ve hedefi BU TELEFON izliyor. Telefon kapalı ya da uykudaysa bu pozisyonlar korumasız.")
+                if (settings.fractional) tx("On. Where one whole share fits it still buys whole shares, with the stop and target at Alpaca. A fraction gets a stop order at Alpaca every trading day (Alpaca only takes day orders on fractions); its target is watched by this phone.",
+                    "Açık. Tam hisse sığıyorsa yine tam hisse alır, stop ve hedef Alpaca'da. Küsurat için her işlem günü Alpaca'ya stop emri konur (Alpaca küsurata sadece günlük emir alıyor); hedefini bu telefon izler.")
                 else tx("Off. Whole shares only, and every stop sits at Alpaca — protected even with the phone off.",
                     "Kapalı. Sadece tam hisse, her stop Alpaca'da durur — telefon kapalıyken bile korumalı."),
-                color = if (settings.fractional) MT.Down else MT.Text3, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp),
+                color = MT.Text3, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp),
             )
         }
 
@@ -213,6 +293,14 @@ fun SettingsScreen(
                 "Android pil için uygulamaları durdurabilir. Ekran kapalıyken de kontrol etmeye devam etsin diye Money Tree'yi muaf tut. Stop'lar her durumda Alpaca'da durur."),
                 color = MT.Text2, fontSize = 12.5.sp)
             BatteryButton()
+        }
+
+        SectionTitle(tx("Setup", "Kurulum"))
+        Card {
+            Text(tx("Go through the setup questions again. Your keys stay saved and the bot keeps running.",
+                "Kurulum sorularından tekrar geç. Anahtarların kayıtlı kalır, bot çalışmaya devam eder."),
+                color = MT.Text2, fontSize = 12.5.sp)
+            GhostButton(tx("Ask me the questions again", "Soruları tekrar sor"), onRedoSetup, color = MT.Accent)
         }
 
         SectionTitle(tx("Language", "Dil"))

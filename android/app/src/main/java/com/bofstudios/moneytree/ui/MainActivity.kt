@@ -66,6 +66,7 @@ import androidx.fragment.app.FragmentActivity
 import com.bofstudios.moneytree.MoneyTreeApp
 import com.bofstudios.moneytree.R
 import com.bofstudios.moneytree.data.Prefs
+import com.bofstudios.moneytree.data.SETUP_VERSION
 import com.bofstudios.moneytree.engine.TradingSettings
 import com.bofstudios.moneytree.service.EngineService
 import com.bofstudios.moneytree.service.Hub
@@ -91,7 +92,7 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge()
         prefs = Prefs(this)
         settings = prefs.settings(Hub.armed.value)
-        onboarded = prefs.onboarded
+        onboarded = prefs.onboarded && prefs.setupVersion >= SETUP_VERSION
         crash = MoneyTreeApp.lastCrash(this)
         // Semi-auto approvals arrive as notifications; without this permission
         // they would silently never show. Ask whenever it is missing.
@@ -108,6 +109,7 @@ class MainActivity : FragmentActivity() {
                                 onDone = { chosen ->
                                     update(chosen)
                                     prefs.onboarded = true
+                                    prefs.setupVersion = SETUP_VERSION
                                     onboarded = true
                                     askForNotifications()
                                     EngineService.start(this@MainActivity)
@@ -173,10 +175,13 @@ class MainActivity : FragmentActivity() {
                             onOpenLive = { tab = 1 },
                             onOpenMoney = { withdraw -> money = if (withdraw) "withdraw" else "deposit" },
                             onPickMarket = { picked -> update(settings.copy(market = picked, watchlist = picked.watchlist)) },
+                            requestArm = ::armWithAuth,
+                            trades = prefs::trades,
                         )
                         1 -> LiveScreen(settings)
                         2 -> PortfolioScreen(prefs)
-                        else -> SettingsScreen(settings, ::update, ::armWithAuth, ::toast, onOpenMoney = { money = "deposit" })
+                        else -> SettingsScreen(settings, ::update, ::armWithAuth, ::toast, onOpenMoney = { money = "deposit" },
+                            onRedoSetup = { onboarded = false })
                     }
                 }
             }

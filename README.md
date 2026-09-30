@@ -139,6 +139,46 @@ Headless, for a server or a spare machine:
 .venv\Scripts\python -m app.main --headless
 ```
 
+## The Android app
+
+`android/` holds a separate app that runs the same strategy on the phone itself,
+so the bot keeps trading with the PC off. Get the APK from the
+[releases](https://github.com/BofStudios/money-tree-ai/releases) (the
+`android-v…` ones) and open it on the phone; a new version installs over the old
+one and keeps your keys and settings.
+
+- **Around the clock.** A foreground service with an ongoing notification. While
+  the US market is open it holds the processor awake so it looks every minute —
+  Android's Doze would otherwise stretch that into many minutes with the screen
+  off. While closed it sleeps, and an alarm wakes it a few minutes before the
+  open. A heartbeat alarm restarts it if Android kills it, and it comes back after
+  a reboot or an update. Allow it to run in the background when setup asks.
+- **A notification for every trade.** *Just bought 0.0412 NVDA* — then the AI's
+  two-sentence explanation added to the same notification. *Just sold NVDA ·
+  +$0.42 profit (+2.3%)*, including when a stop or target fills at Alpaca while
+  the phone is off. A summary when the market closes. On the *Everything* level,
+  silent notes on what it is researching, stops it raised and buys the AI called
+  off. Refused orders say why.
+- **Research before every buy.** It reads the latest headlines, and with a free
+  Groq key an AI screens them for clear red flags — earnings due, a halt, fraud,
+  dilution — and can call the buy off. It can stop a buy, never start one; an
+  unreadable answer counts as no answer.
+- **Small accounts.** With under $500 it buys fractions of a share, but a whole
+  share still wins wherever one fits, so its stop and target go to Alpaca as a
+  bracket. A fraction's stop is placed at Alpaca as a stop order every trading
+  day (Alpaca only takes day orders on fractions); its target is watched by the
+  phone. Alpaca retired the pattern-day-trader limit on 4 June 2026, so a small
+  account is no longer capped at three day trades a week.
+- **Setup asks what matters.** Market, trade length, autonomy, roughly how much
+  money, how bold each trade is (0.5%, 1% or 2% of the account per stop-out),
+  how many positions at once, where to stop for the day, how much of the account
+  it may use, which notifications, and whether the AI may veto. All of it can be
+  changed later in Settings.
+- **Real money starts paused.** Every start is disarmed, and the armed state is
+  never saved. A restart the owner did not start themselves — a reboot, an
+  update, Android killing it — says so with a notification, and the home screen
+  offers a one-tap *Arm* behind the phone's lock. Stops keep working meanwhile.
+
 ## What you get
 
 **Dashboard** — tabs along the bottom, live New York and İstanbul clocks in the

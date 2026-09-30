@@ -167,6 +167,11 @@ class AlpacaBroker(
         return parseOrder(send("POST", url(tradingBase, "/v2/orders"), body) as JSONObject)
     }
 
+    override suspend fun sellStop(symbol: String, qty: Double, stopPrice: Double, clientId: String): BrokerOrder {
+        val body = sellStopJson(symbol, qty, stopPrice, clientId)
+        return parseOrder(send("POST", url(tradingBase, "/v2/orders"), body) as JSONObject)
+    }
+
     override suspend fun cancelOrder(orderId: String) {
         send("DELETE", url(tradingBase, "/v2/orders/$orderId"), null)
     }
@@ -248,6 +253,31 @@ class AlpacaBroker(
             .put("type", "market")
             .put("time_in_force", "day")
             .put("client_order_id", clientId)
+
+        /**
+         * The daily stop for a fractional position. Alpaca accepts market,
+         * limit, stop and stop-limit on fractions, all with DAY time in force
+         * (docs.alpaca.markets/docs/fractional-trading), so it expires at the
+         * close and the engine places a fresh one the next trading day.
+         */
+        fun sellStopJson(symbol: String, qty: Double, stopPrice: Double, clientId: String): JSONObject = JSONObject()
+            .put("symbol", symbol.uppercase())
+            .put("qty", sellQty(qty))
+            .put("side", "sell")
+            .put("type", "stop")
+            .put("time_in_force", "day")
+            .put("stop_price", price(stopPrice))
+            .put("client_order_id", clientId)
+
+        /**
+         * A quantity to sell out of a position, never more than is held:
+         * rounded DOWN to Alpaca's nine decimals (rounding up is refused as
+         * more shares than the account has).
+         */
+        fun sellQty(qty: Double): String =
+            // valueOf, not the constructor: 0.0412 must stay 0.0412, not 0.041199999.
+            java.math.BigDecimal.valueOf(qty).setScale(9, java.math.RoundingMode.DOWN)
+                .stripTrailingZeros().toPlainString()
 
         /** Always a dot, never a locale comma — this goes to an API. Stocks at or
          *  above $1 take two decimals; below $1, four. */

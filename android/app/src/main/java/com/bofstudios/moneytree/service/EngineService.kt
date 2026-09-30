@@ -4,10 +4,11 @@ import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.ConnectivityManager
+import android.net.Network
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
@@ -22,11 +23,9 @@ import com.bofstudios.moneytree.data.Prefs
 import com.bofstudios.moneytree.data.SecureStore
 import com.bofstudios.moneytree.engine.Engine
 import com.bofstudios.moneytree.engine.EngineState
-import com.bofstudios.moneytree.engine.Entry
-import com.bofstudios.moneytree.engine.Notifier
-import com.bofstudios.moneytree.engine.Proposal
 import com.bofstudios.moneytree.engine.StepKind
-import com.bofstudios.moneytree.engine.TradeRecord
+import com.bofstudios.moneytree.engine.StepState
+import com.bofstudios.moneytree.engine.Step
 import com.bofstudios.moneytree.engine.Words
 import com.bofstudios.moneytree.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
@@ -34,6 +33,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -45,25 +46,38 @@ import java.util.Locale
  * The trading loop as a foreground service: it keeps running with the app
  * closed and shows an ongoing notification, the way a music player does.
  *
- * What happens when the phone sleeps or dies: Android may slow the loop, and a
- * dead battery stops it. The positions it opened are still protected, because
- * each one's stop-loss and target were placed at Alpaca as a bracket order.
+ * Staying up around the clock on a phone takes three things beyond that:
+ *  - while the market is open the CPU is held awake, because Android's Doze
+ *    otherwise stretches a one-minute wait into many minutes with the screen
+ *    off; while it is closed the CPU may sleep and an alarm wakes the loop
+ *    just before the open;
+ *  - a heartbeat alarm restarts the service if Android killed it, and a boot
+ *    or app-update receiver brings it back after those;
+ *  - when the network comes back after a failed look, it looks again at once.
+ *
+ * A restart that the owner did not start themselves always comes back with
+ * real money disarmed, and says so on the lock screen.
  */
 class EngineService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var loop: Job? = null
     private lateinit var prefs: Prefs
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private var sessionLock: PowerManager.WakeLock? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
         super.onCreate()
         prefs = Prefs(this)
-        goForeground(ongoing(Hub.state.value))
+        goForeground(ongoing(Hub.state.value, Hub.steps.value))
+        watchNetwork()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        goForeground(ongoing(Hub.state.value))
+        goForeground(ongoing(Hub.state.value, Hub.steps.value))
+        // No intent means Android restarted the service after killing it.
+        val auto = intent == null || intent.getStringExtra(EXTRA_SOURCE) == SOURCE_AUTO
         when (intent?.action) {
             ACTION_STOP -> { stopBot(); return START_NOT_STICKY }
             ACTION_APPROVE -> intent.getStringExtra(EXTRA_ID)?.let { approve(it) }
@@ -75,11 +89,14 @@ class EngineService : Service() {
             // Paper <-> real swaps the broker and its keys: rebuild the engine.
             ACTION_RESTART -> { loop?.cancel(); loop = null; Hub.engine = null }
         }
-        startLoop()
+        startLoop(auto)
+        Alarms.scheduleHeartbeat(this)
         return START_STICKY
     }
 
     override fun onDestroy() {
+        networkCallback?.let { cb -> runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(cb) } }
+        releaseSession()
         scope.cancel()
         Hub.engine = null
         Hub.running.value = false
@@ -88,7 +105,7 @@ class EngineService : Service() {
 
     // ------------------------------------------------------------------ loop
 
-    private fun startLoop() {
+    private fun startLoop(auto: Boolean) {
         if (loop?.isActive == true) return
         val settings = prefs.settings(armed = false)
         val words = Words(settings.turkish)
@@ -104,24 +121,34 @@ class EngineService : Service() {
             return
         }
 
+        val ai = secure.get(SecureStore.GROQ_KEY)?.let { GroqExplainer(it) }
         val engine = Engine(
             broker = AlpacaBroker(key, secret, live = settings.live),
             store = prefs,
             monitor = Hub.monitor,
             settings = { prefs.settings(Hub.armed.value) },
-            notifier = AndroidNotifier(this) { prefs.settings(false).turkish },
-            explainer = secure.get(SecureStore.GROQ_KEY)?.let { GroqExplainer(it) },
+            notifier = AndroidNotifier(this) { prefs.settings(false) },
+            explainer = ai,
+            researcher = ai,
         )
         Hub.engine = engine
         Hub.running.value = true
         prefs.runWanted = true
 
+        if (auto && settings.live) {
+            // It came back on its own: say that real money is paused until the owner arms it.
+            notifications().notify(REARM_ID, alert(words.restartedDisarmedTitle(), words.restartedDisarmedText()))
+        }
+
         loop = scope.launch {
             launch {
-                engine.state.collect {
-                    Hub.state.value = it
-                    notifications().notify(ONGOING_ID, ongoing(it))
-                }
+                engine.state.collect { Hub.state.value = it }
+            }
+            launch {
+                // The ongoing notification says what the bot is doing right now.
+                combine(Hub.state, Hub.steps) { state, steps -> ongoingText(state, steps) }
+                    .distinctUntilChanged()
+                    .collect { notifications().notify(ONGOING_ID, ongoing(Hub.state.value, Hub.steps.value)) }
             }
             Hub.monitor.info(StepKind.INFO, words.started(settings))
             val power = getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -134,6 +161,15 @@ class EngineService : Service() {
                 val lock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "moneytree:cycle")
                 lock.acquire(3 * 60_000L)
                 val sleep = try { engine.cycle(forceLook = asked) } finally { if (lock.isHeld) lock.release() }
+                val state = engine.state.value
+                val openSoon = state.nextOpen?.let { it - System.currentTimeMillis() < OPEN_EARLY_MS } == true
+                if (state.marketOpen == true || openSoon) {
+                    holdSession(power)
+                } else {
+                    releaseSession()
+                    // Sleep freely, but be woken a few minutes before the open.
+                    state.nextOpen?.let { open -> Alarms.scheduleOpen(this@EngineService, open - OPEN_EARLY_MS + 60_000L) }
+                }
                 // The real time of the next look, for the Live tab's countdown.
                 Hub.nextLookAt.value = System.currentTimeMillis() + sleep
                 asked = withTimeoutOrNull(sleep) { Hub.wake.receive() } != null
@@ -141,8 +177,35 @@ class EngineService : Service() {
         }
     }
 
+    /** Keeps the CPU awake through the trading session, so one-minute looks stay one minute. */
+    private fun holdSession(power: PowerManager) {
+        if (sessionLock?.isHeld == true) return
+        sessionLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "moneytree:session").apply {
+            // A US session is 6.5 hours; the timeout is only a safety net.
+            acquire(SESSION_MAX_MS)
+        }
+    }
+
+    private fun releaseSession() {
+        sessionLock?.let { if (it.isHeld) it.release() }
+        sessionLock = null
+    }
+
+    private fun watchNetwork() {
+        val cm = getSystemService(ConnectivityManager::class.java) ?: return
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                // Back online after a failed look: look again now, not in a minute.
+                if (Hub.running.value && Hub.state.value.lastError != null) Hub.wake.trySend(Unit)
+            }
+        }
+        runCatching { cm.registerDefaultNetworkCallback(callback) }.onSuccess { networkCallback = callback }
+    }
+
     private fun stopBot() {
         prefs.runWanted = false
+        Alarms.cancelAll(this)
+        releaseSession()
         Hub.nextLookAt.value = null
         loop?.cancel()
         Hub.engine = null
@@ -174,29 +237,47 @@ class EngineService : Service() {
         ServiceCompat.startForeground(this, ONGOING_ID, n, type)
     }
 
-    private fun ongoing(state: EngineState): Notification {
+    /** One line for the ongoing notification: the step in flight, else the state. */
+    private fun ongoingText(state: EngineState, steps: List<Step>): String {
         val s = prefs.settings(Hub.armed.value)
         val w = Words(s.turkish)
+        val running = steps.lastOrNull { it.state == StepState.RUNNING }
+        if (running != null) {
+            return (if (s.turkish) "Şu an: " else "Now: ") + running.title + (running.detail?.let { " · $it" } ?: "")
+        }
         val time = SimpleDateFormat("HH:mm", Locale.getDefault())
+        return when {
+            state.lastError != null -> (if (s.turkish) "Sorun: " else "Problem: ") + state.lastError
+            state.marketOpen == false && state.nextOpen != null -> w.marketClosed(state.nextOpen)
+            state.lastScanAt != null -> (if (s.turkish) "${s.watchlist.size} hisse izleniyor · son bakış " else
+                "Watching ${s.watchlist.size} · last look ") + time.format(Date(state.lastScanAt))
+            else -> if (s.turkish) "Başlıyor…" else "Starting…"
+        }
+    }
+
+    private fun ongoing(state: EngineState, steps: List<Step>): Notification {
+        val s = prefs.settings(Hub.armed.value)
+        val w = Words(s.turkish)
         val title = buildString {
             append("Money Tree · ")
-            append(if (s.live) (if (s.turkish) "GERÇEK" else "REAL") else "paper")
+            append(if (s.live) (if (Hub.armed.value) (if (s.turkish) "GERÇEK · devrede" else "REAL · armed")
+                else (if (s.turkish) "GERÇEK · beklemede" else "REAL · paused")) else "paper")
             append(" · ").append(w.autonomyName(s.autonomy))
         }
-        val text = when {
-            state.lastError != null -> (if (s.turkish) "Sorun: " else "Problem: ") + state.lastError
-            state.marketOpen == false && state.nextOpen != null -> w.marketClosed(state.nextOpen!!)
-            state.lastScanAt != null -> (if (s.turkish) "${s.watchlist.size} hisse izleniyor · son bakış " else
-                "Watching ${s.watchlist.size} · last look ") + time.format(Date(state.lastScanAt!!))
-            else -> if (s.turkish) "Başlıyor…" else "Starting…"
+        val account = state.account
+        val sub = account?.let {
+            w.usd(it.equity) + " · " + w.signed(it.equity - it.lastEquity) + (if (s.turkish) " bugün" else " today")
         }
         return NotificationCompat.Builder(this, MoneyTreeApp.CHANNEL_ENGINE)
             .setSmallIcon(R.drawable.ic_stat_tree)
             .setContentTitle(title)
-            .setContentText(text)
+            .setContentText(ongoingText(state, steps))
+            .apply { sub?.let { setSubText(it) } }
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setSilent(true)
             .setContentIntent(openApp(this))
+            .addAction(0, if (s.turkish) "Şimdi bak" else "Look now", serviceIntent(this, ACTION_SCAN, null, 3))
             .addAction(0, if (s.turkish) "Durdur" else "Stop", serviceIntent(this, ACTION_STOP, null, 1))
             .build()
     }
@@ -221,11 +302,45 @@ class EngineService : Service() {
         const val ACTION_SCAN = "scan"
         const val ACTION_RESTART = "restart"
         const val EXTRA_ID = "id"
+        const val EXTRA_SOURCE = "source"
+        const val SOURCE_AUTO = "auto"
         private const val ONGOING_ID = 1
         private const val RESULT_ID = 2
+        private const val REARM_ID = 3
+        const val STOPPED_ID = 4
+        /** How long before the open the CPU is held awake, so the first look is on time. */
+        private const val OPEN_EARLY_MS = 10 * 60_000L
+        private const val SESSION_MAX_MS = 8 * 60 * 60_000L
 
+        /** Started by the owner, from the app. */
         fun start(context: Context) =
             ContextCompat.startForegroundService(context, Intent(context, EngineService::class.java))
+
+        /**
+         * Started by the system — boot, an app update, the heartbeat. Android may
+         * refuse to start a foreground service from the background; then the
+         * owner gets a notification to start it with one tap.
+         */
+        fun startAuto(context: Context) {
+            try {
+                ContextCompat.startForegroundService(
+                    context, Intent(context, EngineService::class.java).putExtra(EXTRA_SOURCE, SOURCE_AUTO),
+                )
+            } catch (e: Exception) {
+                val w = Words(Prefs(context).settings(false).turkish)
+                context.getSystemService(NotificationManager::class.java).notify(
+                    STOPPED_ID,
+                    NotificationCompat.Builder(context, MoneyTreeApp.CHANNEL_ALERTS)
+                        .setSmallIcon(R.drawable.ic_stat_tree)
+                        .setContentTitle(w.stoppedTitle())
+                        .setContentText(w.stoppedText())
+                        .setStyle(NotificationCompat.BigTextStyle().bigText(w.stoppedText()))
+                        .setAutoCancel(true)
+                        .setContentIntent(openApp(context))
+                        .build(),
+                )
+            }
+        }
 
         fun stop(context: Context) =
             ContextCompat.startForegroundService(context, Intent(context, EngineService::class.java).setAction(ACTION_STOP))
@@ -252,64 +367,5 @@ class EngineService : Service() {
                 Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
-    }
-}
-
-/** Puts approvals, fills and halts on the lock screen. */
-class AndroidNotifier(private val context: Context, private val turkish: () -> Boolean) : Notifier {
-    private val nm = context.getSystemService(NotificationManager::class.java)
-    private var seq = 5000
-
-    override fun approvalNeeded(p: Proposal) {
-        val w = Words(turkish())
-        val e = p.entry
-        val text = w.waitingApproval(e) + "\nStop ${w.usd(e.stop)} · " +
-            (if (w.tr) "Hedef " else "Target ") + w.usd(e.target) + "\n" + e.reason
-        val code = EngineService.approvalNotificationId(p.id)
-        nm.notify(code, NotificationCompat.Builder(context, MoneyTreeApp.CHANNEL_ALERTS)
-            .setSmallIcon(R.drawable.ic_stat_tree)
-            .setContentTitle(if (w.tr) "${e.symbol} alınsın mı?" else "Buy ${e.symbol}?")
-            .setContentText(w.waitingApproval(e))
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
-            .setTimeoutAfter(p.expiresAt - System.currentTimeMillis())
-            .setContentIntent(EngineService.openApp(context))
-            .addAction(0, if (w.tr) "Onayla" else "Approve",
-                EngineService.serviceIntent(context, EngineService.ACTION_APPROVE, p.id, code))
-            .addAction(0, if (w.tr) "Geç" else "Skip",
-                EngineService.serviceIntent(context, EngineService.ACTION_SKIP, p.id, code + 1))
-            .build())
-    }
-
-    override fun orderPlaced(e: Entry) {
-        val w = Words(turkish())
-        post(if (w.tr) "${e.qtyText} ${e.symbol} alındı" else "Bought ${e.qtyText} ${e.symbol}",
-            "~${w.usd(e.price)} · stop ${w.usd(e.stop)} · " + (if (w.tr) "hedef " else "target ") + w.usd(e.target))
-    }
-
-    override fun positionClosed(t: TradeRecord) {
-        val w = Words(turkish())
-        post(w.closedAtBroker(t), w.closedDetail(t))
-    }
-
-    override fun halted(message: String) = post("Money Tree", message)
-
-    private fun post(title: String, text: String) {
-        nm.notify(seq++, NotificationCompat.Builder(context, MoneyTreeApp.CHANNEL_ALERTS)
-            .setSmallIcon(R.drawable.ic_stat_tree)
-            .setContentTitle(title)
-            .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
-            .setAutoCancel(true)
-            .setContentIntent(EngineService.openApp(context))
-            .build())
-    }
-}
-
-/** Brings the bot back after a reboot, if it was running before. */
-class BootReceiver : BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED && Prefs(context).runWanted) {
-            EngineService.start(context)
-        }
     }
 }

@@ -21,6 +21,20 @@ enum class Market(val watchlist: List<String>) {
 /** How long a trade usually lasts, expressed as the candle size read. */
 enum class Horizon(val timeframe: Timeframe) { SHORT(Timeframe.M15), MEDIUM(Timeframe.H1), LONG(Timeframe.D1) }
 
+/**
+ * How hard each trade leans. The stop is set the same way at every level; what
+ * changes is how much of the account one stop-out may cost, and the ceiling on
+ * one position.
+ */
+enum class RiskLevel(val riskPerTradePct: Double, val maxPositionPct: Double) {
+    CAREFUL(0.5, 20.0),
+    NORMAL(1.0, 33.0),
+    BOLD(2.0, 50.0),
+}
+
+/** Which moments reach the lock screen. Approvals and halts always do. */
+enum class NotifyLevel { EVERYTHING, TRADES, QUIET }
+
 data class TradingSettings(
     val autonomy: Autonomy = Autonomy.FULL,
     val horizon: Horizon = Horizon.SHORT,
@@ -37,7 +51,28 @@ data class TradingSettings(
     val fractional: Boolean = false,
     /** Null until the owner has been asked; the watchlist is what actually trades. */
     val market: Market? = null,
+    val riskLevel: RiskLevel = RiskLevel.CAREFUL,
+    /** At most this many positions open at once. */
+    val maxPositions: Int = 3,
+    /** No new buys for the rest of the day once the account is down this much. */
+    val dailyLossPct: Double = 5.0,
+    /** The share of the account the bot may put to work; the rest it never touches. */
+    val usePct: Int = 100,
+    val notify: NotifyLevel = NotifyLevel.EVERYTHING,
+    /**
+     * Before a buy, a language model reads the latest headlines and may call it
+     * off on a clear red flag (earnings due, a halt, fraud...). It can only ever
+     * stop a buy, never start one. Needs a Groq key; without one it is skipped.
+     */
+    val aiCheck: Boolean = true,
 ) {
+    fun riskConfig(): RiskConfig = RiskConfig(
+        maxPositionPct = riskLevel.maxPositionPct,
+        riskPerTradePct = riskLevel.riskPerTradePct,
+        maxDailyLossPct = dailyLossPct,
+        maxOpenPositions = maxPositions.coerceIn(1, 5),
+    )
+
     companion object {
         val DEFAULT_WATCHLIST = listOf("AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "SPY")
     }

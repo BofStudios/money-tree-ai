@@ -88,8 +88,45 @@ class Words(val tr: Boolean) {
         if (tr) "${t.symbol} kapandı (${reasonName(t.reason)}) · ${signed(t.pnl)}"
         else "${t.symbol} closed (${reasonName(t.reason)}) · ${signed(t.pnl)}"
     fun closedDetail(t: TradeRecord) =
-        if (tr) "${n(t.qty, 0)} adet · giriş ${usd(t.entry)} · çıkış ${usd(t.exit)}"
-        else "${n(t.qty, 0)} shares · in ${usd(t.entry)} · out ${usd(t.exit)}"
+        if (tr) "${formatQty(t.qty)} adet · giriş ${usd(t.entry)} · çıkış ${usd(t.exit)}"
+        else "${formatQty(t.qty)} shares · in ${usd(t.entry)} · out ${usd(t.exit)}"
+
+    // --------------------------------------------------------- notifications
+    fun justBoughtTitle(e: Entry) =
+        if (tr) "Az önce aldım: ${e.qtyText} ${e.symbol}" else "Just bought ${e.qtyText} ${e.symbol}"
+    fun justBoughtText(e: Entry) =
+        if (tr) "Tanesi ${usd(e.price)} · toplam ${usd(e.notional)} · stop ${usd(e.stop)} · hedef ${usd(e.target)}\n${e.reason}"
+        else "${usd(e.price)} each · ${usd(e.notional)} total · stop ${usd(e.stop)} · target ${usd(e.target)}\n${e.reason}"
+
+    fun justSoldTitle(t: TradeRecord): String {
+        val pct = n(kotlin.math.abs(t.pnlPct), 1)
+        return when {
+            t.pnl > 0.005 -> if (tr) "Az önce sattım: ${t.symbol} · ${signed(t.pnl)} kâr (%$pct)" else "Just sold ${t.symbol} · ${signed(t.pnl)} profit (+$pct%)"
+            t.pnl < -0.005 -> if (tr) "Az önce sattım: ${t.symbol} · ${signed(t.pnl)} zarar (−%$pct)" else "Just sold ${t.symbol} · ${signed(t.pnl)} loss (−$pct%)"
+            else -> if (tr) "Az önce sattım: ${t.symbol} · başabaş" else "Just sold ${t.symbol} · break-even"
+        }
+    }
+    fun justSoldText(t: TradeRecord) =
+        if (tr) "${formatQty(t.qty)} adet · giriş ${usd(t.entry)} → çıkış ${usd(t.exit)} · ${reasonName(t.reason)}"
+        else "${formatQty(t.qty)} shares · in ${usd(t.entry)} → out ${usd(t.exit)} · ${reasonName(t.reason)}"
+
+    fun researchingTitle(symbol: String) = if (tr) "$symbol araştırılıyor" else "Researching $symbol"
+    fun stopRaisedTitle(symbol: String, to: Double) =
+        if (tr) "$symbol stop'u yükseltildi: ${usd(to)}" else "Raised $symbol stop to ${usd(to)}"
+    fun stopRaisedText(from: Double?, lockedIn: Double?) = buildString {
+        from?.let { append(if (tr) "Önceki ${usd(it)}. " else "Was ${usd(it)}. ") }
+        lockedIn?.let { append(if (tr) "Dönerse en az ${signed(it)} kârla çıkar." else "Locks in ${signed(it)} if it turns.") }
+    }.trim()
+
+    fun restartedDisarmedTitle() =
+        if (tr) "Money Tree yeniden başladı — gerçek para beklemede" else "Money Tree restarted — real money is paused"
+    fun restartedDisarmedText() =
+        if (tr) "Telefon ya da Android uygulamayı yeniden başlattı. Tekrar alım yapabilmesi için uygulamayı aç ve Devreye al'a bas. Stop'lar yerinde duruyor."
+        else "The phone or Android restarted it. Open the app and tap Arm so it can buy again. Stops stay in place."
+    fun stoppedTitle() = if (tr) "Money Tree durdu" else "Money Tree stopped"
+    fun stoppedText() =
+        if (tr) "Android arka planda yeniden başlatmasına izin vermedi. Başlatmak için dokun."
+        else "Android would not let it restart in the background. Tap to start it again."
 
     fun askingAi() = if (tr) "AI'a kararı açıklatıyor" else "Asking the AI to explain the decision"
 
@@ -101,9 +138,41 @@ class Words(val tr: Boolean) {
         else "Idea (manual mode, not placed): ${e.qtyText} ${e.symbol} at about ${usd(e.price)}"
     fun approvalExpired(symbol: String) = if (tr) "$symbol onay isteğinin süresi doldu" else "$symbol approval request lapsed"
 
-    fun tooSmall(symbol: String) =
-        if (tr) "$symbol: pozisyon 1 hisseden küçük olurdu, atlanıyor"
-        else "$symbol: the position would be under one share — skipping"
+    fun tooSmall(symbol: String, fractional: Boolean = false) = when {
+        fractional && tr -> "$symbol: tutar Alpaca'nın 1$ alt sınırının altında kalırdı, atlanıyor"
+        fractional -> "$symbol: the order would be under Alpaca's \$1 minimum — skipping"
+        tr -> "$symbol: pozisyon 1 hisseden küçük olurdu, atlanıyor"
+        else -> "$symbol: the position would be under one share — skipping"
+    }
+
+    // --------------------------------------------------------------- research
+    fun researchLine(s: Snapshot, e: Entry) =
+        if (tr) "Alım sinyali · ${usd(s.price)} · RSI ${n(s.rsi, 0)} · ~${usd(e.notional)} · haberleri okuyorum"
+        else "Buy signal · ${usd(s.price)} · RSI ${n(s.rsi, 0)} · ~${usd(e.notional)} · reading the news"
+    fun aiCheckingNews(symbol: String) =
+        if (tr) "AI $symbol haberlerinde kırmızı bayrak arıyor" else "AI checking $symbol news for red flags"
+    fun aiVerdict(v: Vet) = (if (v.ok) (if (tr) "Sorun yok" else "No red flags") else (if (tr) "Vazgeç" else "Pass")) +
+        (if (v.note.isNotBlank()) " — ${v.note}" else "")
+    fun aiResting(symbol: String) =
+        if (tr) "$symbol: AI az önce geçti, bir saat dokunulmayacak" else "$symbol: the AI passed on it earlier — leaving it for an hour"
+    fun orderFailedTitle(symbol: String) = if (tr) "$symbol alınamadı" else "Could not buy $symbol"
+    fun aiSkipped(symbol: String) = if (tr) "$symbol alınmadı — AI haberlerde sorun gördü" else "Skipped $symbol — the AI flagged the news"
+
+    // ------------------------------------------------------- fractional stops
+    fun placingDayStop(symbol: String, stop: Double) =
+        if (tr) "$symbol için bugünün stop emrini Alpaca'ya koyuyor: ${usd(stop)}"
+        else "Placing today's $symbol stop at Alpaca: ${usd(stop)}"
+    fun dayStopPlaced() =
+        if (tr) "Kapanışa kadar Alpaca'da duruyor" else "Held at Alpaca until the close"
+
+    // ---------------------------------------------------------- daily summary
+    fun dailySummaryTitle(trades: Int, change: Double) =
+        if (tr) "Bugün: $trades işlem · ${signed(change)}" else "Today: $trades trade(s) · ${signed(change)}"
+    fun dailySummaryDetail(trades: List<TradeRecord>, equity: Double): String {
+        val won = trades.count { it.pnl > 0 }
+        val lost = trades.count { it.pnl < 0 }
+        return if (tr) "Hesap ${usd(equity)} · $won kazanç, $lost kayıp" else "Account ${usd(equity)} · $won won, $lost lost"
+    }
     fun notArmed(symbol: String) =
         if (tr) "$symbol: gerçek para devrede değil (Arm), alım yok"
         else "$symbol: live trading is not armed — not buying"

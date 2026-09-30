@@ -18,6 +18,7 @@ class FakeBroker : Broker {
     val latest = HashMap<String, Double>()
     val closed = HashMap<String, List<BrokerOrder>>()
     var clockError: Exception? = null
+    var buyError: Exception? = null
 
     val placed = ArrayList<Entry>()
     val cancelled = ArrayList<String>()
@@ -40,6 +41,7 @@ class FakeBroker : Broker {
     override suspend fun news(symbol: String, limit: Int) = listOf(Headline("$symbol does a thing", "wire", ""))
     override suspend fun recentOrders(symbol: String, limit: Int) = closed[symbol].orEmpty()
     override suspend fun buyBracket(entry: Entry, clientId: String): BrokerOrder {
+        buyError?.let { throw it }
         placed += entry
         return BrokerOrder("o${placed.size}", clientId, entry.symbol, "buy", "market", "accepted",
             entry.qty, null, null)
@@ -49,6 +51,13 @@ class FakeBroker : Broker {
         fractionalBuys += entry
         return BrokerOrder("f${fractionalBuys.size}", clientId, entry.symbol, "buy", "market", "accepted",
             entry.qty, null, null)
+    }
+    val stops = ArrayList<Triple<String, Double, Double>>()
+    override suspend fun sellStop(symbol: String, qty: Double, stopPrice: Double, clientId: String): BrokerOrder {
+        stops += Triple(symbol, qty, stopPrice)
+        val order = BrokerOrder("st${stops.size}", clientId, symbol, "sell", "stop", "new", qty, stopPrice, null)
+        orders += order
+        return order
     }
     override suspend fun cancelOrder(orderId: String) {
         cancelled += orderId
@@ -62,10 +71,30 @@ class RecordingNotifier : Notifier {
     val approvals = ArrayList<Proposal>()
     val closedTrades = ArrayList<TradeRecord>()
     var halts = 0
+    val bought = ArrayList<Entry>()
+    val researched = ArrayList<String>()
+    val skipped = ArrayList<String>()
+    val raised = ArrayList<Pair<String, Double>>()
+    val summaries = ArrayList<Int>()
+    val failures = ArrayList<Pair<String, String>>()
     override fun approvalNeeded(p: Proposal) { approvals += p }
-    override fun orderPlaced(e: Entry) {}
+    override fun orderPlaced(e: Entry) { bought += e }
     override fun positionClosed(t: TradeRecord) { closedTrades += t }
     override fun halted(message: String) { halts += 1 }
+    override fun researching(symbol: String, line: String) { researched += symbol }
+    override fun aiSkipped(symbol: String, why: String) { skipped += symbol }
+    override fun stopRaised(symbol: String, from: Double?, to: Double, lockedIn: Double?) { raised += symbol to to }
+    override fun dailySummary(trades: List<TradeRecord>, today: Double, equity: Double) { summaries += trades.size }
+    override fun orderFailed(symbol: String, why: String) { failures += symbol to why }
+}
+
+/** An AI whose verdict the test sets, counting how often it is asked. */
+class FixedResearcher(var vet: Vet?) : Researcher {
+    var calls = 0
+    override suspend fun vet(symbol: String, facts: String, headlines: List<String>, turkish: Boolean): Vet? {
+        calls += 1
+        return vet
+    }
 }
 
 class EngineTest {
@@ -76,8 +105,8 @@ class EngineTest {
     private var settings = TradingSettings(watchlist = listOf("AAA"))
     private var clock = 1_000_000_000L
 
-    private fun engine() = Engine(
-        broker, store, monitor, { settings }, notifier = notifier,
+    private fun engine(researcher: Researcher? = null) = Engine(
+        broker, store, monitor, { settings }, notifier = notifier, researcher = researcher,
         now = { clock }, pause = {},
     )
 
@@ -431,5 +460,193 @@ class EngineTest {
         assertEquals(Engine.ERROR_SLEEP, sleep)
         assertEquals("network down", engine.state.value.lastError)
         assertEquals(StepState.FAILED, steps(StepKind.CLOCK).single().state)
+    }
+
+    // ------------------------------------------------------------- research
+
+    @Test fun aBuyIsResearchedThenAnnounced() = runTest {
+        broker.bars["AAA"] = Candles.crossUpOnLastBar()
+        engine().cycle()
+
+        assertEquals(listOf("AAA"), notifier.researched)
+        assertEquals(1, notifier.bought.size)
+        assertEquals(StepState.DONE, steps(StepKind.NEWS).single().state)
+    }
+
+    @Test fun theAiCanCallABuyOffOnARedFlag() = runTest {
+        broker.bars["AAA"] = Candles.crossUpOnLastBar()
+        val ai = FixedResearcher(Vet(false, "earnings tomorrow"))
+        engine(ai).cycle()
+
+        assertTrue(broker.placed.isEmpty())
+        assertEquals(listOf("AAA"), notifier.skipped)
+        assertEquals(1, ai.calls)
+    }
+
+    @Test fun aStockTheAiPassedOnIsLeftAloneForAnHour() = runTest {
+        broker.bars["AAA"] = Candles.crossUpOnLastBar()
+        val ai = FixedResearcher(Vet(false, "trading halt"))
+        val engine = engine(ai)
+        engine.cycle()
+        engine.cycle()
+        assertEquals("not asked again while cooling down", 1, ai.calls)
+
+        ai.vet = Vet(true, "")
+        clock += Engine.AI_SKIP_COOLDOWN + 1
+        engine.cycle()
+        assertEquals(1, broker.placed.size)
+    }
+
+    @Test fun anOkFromTheAiLetsTheRulesBuy() = runTest {
+        broker.bars["AAA"] = Candles.crossUpOnLastBar()
+        engine(FixedResearcher(Vet(true, "nothing unusual"))).cycle()
+        assertEquals(1, broker.placed.size)
+    }
+
+    @Test fun anAiThatDoesNotAnswerNeverBlocksABuy() = runTest {
+        broker.bars["AAA"] = Candles.crossUpOnLastBar()
+        engine(FixedResearcher(null)).cycle()
+        assertEquals(1, broker.placed.size)
+    }
+
+    @Test fun withTheCheckOffTheAiIsNotAsked() = runTest {
+        settings = settings.copy(aiCheck = false)
+        broker.bars["AAA"] = Candles.crossUpOnLastBar()
+        val ai = FixedResearcher(Vet(false, "would have skipped"))
+        engine(ai).cycle()
+        assertEquals(0, ai.calls)
+        assertEquals(1, broker.placed.size)
+    }
+
+    // ------------------------------------------------------------ risk levels
+
+    @Test fun aBolderLevelRisksMoreOnTheSameSignal() {
+        fun qty(level: RiskLevel) = Risk(TradingSettings(riskLevel = level).riskConfig())
+            .plan("AAA", "x", 100.0, 2.0, 10_000.0, 10_000.0)!!.qty
+        assertTrue(qty(RiskLevel.CAREFUL) < qty(RiskLevel.NORMAL))
+        assertTrue(qty(RiskLevel.NORMAL) < qty(RiskLevel.BOLD))
+    }
+
+    @Test fun theOwnersPositionCapIsTheOneUsed() = runTest {
+        settings = settings.copy(watchlist = listOf("AAA", "BBB"), maxPositions = 1)
+        broker.bars["AAA"] = Candles.crossUpOnLastBar()
+        broker.bars["BBB"] = Candles.crossUpOnLastBar()
+        engine().cycle()
+        assertEquals(1, broker.placed.size)
+    }
+
+    @Test fun theBotOnlyUsesItsShareOfTheAccount() = runTest {
+        settings = settings.copy(usePct = 25, riskLevel = RiskLevel.BOLD)
+        broker.account = Account(1_000.0, 1_000.0, 1_000.0, 1_000.0, "USD", false)
+        broker.bars["AAA"] = Candles.crossUpOnLastBar()
+        val engine = engine()
+        engine.cycle()
+
+        val e = broker.placed.single()
+        // A quarter of $1,000 is $250; Bold caps one position at half of that.
+        assertTrue("${e.notional}", e.notional <= 125.0 + 1e-9)
+        assertEquals(250.0, engine.state.value.budget!!, 1e-9)
+    }
+
+    @Test fun inSmallAccountModeAWholeShareStillWinsWhenItFits() = runTest {
+        settings = settings.copy(fractional = true)
+        broker.bars["AAA"] = Candles.crossUpOnLastBar()
+        engine().cycle()
+
+        assertEquals("bracket, stop at Alpaca", 1, broker.placed.size)
+        assertTrue(broker.fractionalBuys.isEmpty())
+        assertEquals(null, store.guard("AAA"))
+    }
+
+    // ------------------------------------------------ fractional stops at Alpaca
+
+    @Test fun aFractionalPositionGetsTodaysStopAtAlpaca() = runTest {
+        settings = settings.copy(watchlist = listOf("EEE"))
+        store.addOwned("EEE")
+        store.setGuard("EEE", 95.0, 110.0)
+        broker.positions += position("EEE", 100.0, 100.0, qty = 0.05)
+        broker.bars["EEE"] = Candles.of(List(120) { 100.0 })
+        engine().cycle()
+
+        assertEquals(Triple("EEE", 0.05, 95.0), broker.stops.single())
+        assertTrue(broker.sold.isEmpty())
+    }
+
+    @Test fun withTheStopAtAlpacaThePhoneDoesNotRaceIt() = runTest {
+        settings = settings.copy(watchlist = listOf("EEE"))
+        store.addOwned("EEE")
+        store.setGuard("EEE", 99.0, 110.0)
+        broker.positions += position("EEE", 100.0, 98.0, qty = 0.05)
+        broker.orders += BrokerOrder("st", "mt-stop-1", "EEE", "sell", "stop", "new", 0.05, 99.0, null)
+        broker.bars["EEE"] = Candles.of(List(120) { 98.0 })
+        engine().cycle()
+
+        assertTrue("Alpaca sells at the stop, not the phone", broker.sold.isEmpty())
+        assertTrue("no second stop", broker.stops.isEmpty())
+    }
+
+    @Test fun aFractionalTrailMovesTheAlpacaStopAndRemembersIt() = runTest {
+        settings = settings.copy(watchlist = listOf("EEE"))
+        store.addOwned("EEE")
+        store.setGuard("EEE", 97.0, 110.0)
+        broker.positions += position("EEE", 100.0, 103.0, qty = 0.05)
+        broker.orders += BrokerOrder("st1", "mt-stop-1", "EEE", "sell", "stop", "new", 0.05, 97.0, null)
+        broker.bars["EEE"] = Candles.of(List(120) { 103.0 })
+        engine().cycle()
+
+        assertEquals("st1" to 101.97, broker.moved.single().let { it.first to Math.round(it.second * 100) / 100.0 })
+        assertEquals(101.97, store.guard("EEE")!!.first, 1e-9)
+        assertEquals("EEE", notifier.raised.single().first)
+    }
+
+    @Test fun aStopBelowThePriceIsNeverPlacedAbove() = runTest {
+        settings = settings.copy(watchlist = listOf("EEE"))
+        store.addOwned("EEE")
+        store.setGuard("EEE", 99.0, 110.0)
+        broker.positions += position("EEE", 100.0, 98.0, qty = 0.05)
+        broker.bars["EEE"] = Candles.of(List(120) { 98.0 })
+        engine().cycle()
+
+        // Already through the stop with nothing at Alpaca: the phone sells now
+        // rather than sending a stop order Alpaca would refuse.
+        assertEquals(listOf("EEE"), broker.sold)
+        assertTrue(broker.stops.isEmpty())
+    }
+
+    // --------------------------------------------------------- daily summary
+
+    @Test fun theDayEndsWithOneSummary() = runTest {
+        broker.bars["AAA"] = Candles.of(List(120) { 100.0 })
+        val engine = engine()
+        engine.cycle()
+        broker.open = false
+        engine.cycle()
+        engine.cycle()
+        assertEquals(1, notifier.summaries.size)
+    }
+
+    @Test fun noSummaryWithoutASessionWatched() = runTest {
+        broker.open = false
+        engine().cycle()
+        assertTrue(notifier.summaries.isEmpty())
+    }
+
+    @Test fun aRefusedOrderIsReportedToTheOwner() = runTest {
+        broker.buyError = BrokerError("insufficient buying power", 403)
+        broker.bars["AAA"] = Candles.crossUpOnLastBar()
+        engine().cycle()
+
+        assertEquals("AAA" to "insufficient buying power", notifier.failures.single())
+        assertEquals(StepState.FAILED, steps(StepKind.ORDER).single().state)
+        assertFalse("AAA" in store.ownedSymbols())
+    }
+
+    @Test fun aStockTheAiPassedOnSaysSoNotThatItClosed() = runTest {
+        broker.bars["AAA"] = Candles.crossUpOnLastBar()
+        val engine = engine(FixedResearcher(Vet(false, "halt")))
+        engine.cycle()
+        engine.cycle()
+        assertTrue(monitor.snapshot().any { it.title.contains("AI passed") })
+        assertTrue(monitor.snapshot().none { it.title.contains("cooling") })
     }
 }

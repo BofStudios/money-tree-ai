@@ -5,6 +5,8 @@ import com.bofstudios.moneytree.engine.Autonomy
 import com.bofstudios.moneytree.engine.EngineStore
 import com.bofstudios.moneytree.engine.Horizon
 import com.bofstudios.moneytree.engine.Market
+import com.bofstudios.moneytree.engine.NotifyLevel
+import com.bofstudios.moneytree.engine.RiskLevel
 import com.bofstudios.moneytree.engine.TradeRecord
 import com.bofstudios.moneytree.engine.TradingSettings
 import org.json.JSONArray
@@ -23,6 +25,14 @@ class Prefs(context: Context) : EngineStore {
         get() = p.getBoolean("onboarded", false)
         set(v) = p.edit().putBoolean("onboarded", v).apply()
 
+    /**
+     * Which set of setup questions the owner has answered. A version that asks
+     * new ones bumps [SETUP_VERSION], and everyone is asked once more.
+     */
+    var setupVersion: Int
+        get() = p.getInt("setup_version", if (onboarded) 1 else 0)
+        set(v) = p.edit().putInt("setup_version", v).apply()
+
     /** Whether the owner left the bot running — used to resume after a reboot. */
     var runWanted: Boolean
         get() = p.getBoolean("run_wanted", false)
@@ -39,6 +49,12 @@ class Prefs(context: Context) : EngineStore {
             ?: (Locale.getDefault().language == "tr"),
         fractional = p.getBoolean("fractional", false),
         market = p.getString("market", null)?.let { runCatching { Market.valueOf(it) }.getOrNull() },
+        riskLevel = runCatching { RiskLevel.valueOf(p.getString("risk_level", "CAREFUL")!!) }.getOrDefault(RiskLevel.CAREFUL),
+        maxPositions = p.getInt("max_positions", 3).coerceIn(1, 5),
+        dailyLossPct = p.getFloat("daily_loss_pct", 5f).toDouble().coerceIn(1.0, 20.0),
+        usePct = p.getInt("use_pct", 100).coerceIn(10, 100),
+        notify = runCatching { NotifyLevel.valueOf(p.getString("notify", "EVERYTHING")!!) }.getOrDefault(NotifyLevel.EVERYTHING),
+        aiCheck = p.getBoolean("ai_check", true),
     )
 
     fun save(s: TradingSettings) {
@@ -50,6 +66,12 @@ class Prefs(context: Context) : EngineStore {
             .putString("language", if (s.turkish) "tr" else "en")
             .putBoolean("fractional", s.fractional)
             .putString("market", s.market?.name)
+            .putString("risk_level", s.riskLevel.name)
+            .putInt("max_positions", s.maxPositions)
+            .putFloat("daily_loss_pct", s.dailyLossPct.toFloat())
+            .putInt("use_pct", s.usePct)
+            .putString("notify", s.notify.name)
+            .putBoolean("ai_check", s.aiCheck)
             .apply()
     }
 
@@ -111,3 +133,6 @@ class Prefs(context: Context) : EngineStore {
     private fun ownedKey() = if (p.getBoolean("live", false)) "owned_live" else "owned_paper"
     private fun tradesKey() = if (p.getBoolean("live", false)) "trades_live" else "trades_paper"
 }
+
+/** 2: risk level, positions, daily limit, budget, notifications, AI check, background. */
+const val SETUP_VERSION = 2

@@ -16,8 +16,16 @@ class MoneyTreeApp : Application() {
                     .apply { description = "The always-on notification while the bot is watching the market." }
             )
             nm.createNotificationChannel(
-                NotificationChannel(CHANNEL_ALERTS, "Trades and approvals", NotificationManager.IMPORTANCE_HIGH)
-                    .apply { description = "Buys waiting for your OK, orders placed, positions closed." }
+                NotificationChannel(CHANNEL_ALERTS, "Approvals and warnings", NotificationManager.IMPORTANCE_HIGH)
+                    .apply { description = "Buys waiting for your OK, the daily loss limit, restarts that need you." }
+            )
+            nm.createNotificationChannel(
+                NotificationChannel(CHANNEL_TRADES, "Buys and sells", NotificationManager.IMPORTANCE_HIGH)
+                    .apply { description = "Just bought, just sold — with the profit or loss — and the day's summary." }
+            )
+            nm.createNotificationChannel(
+                NotificationChannel(CHANNEL_ACTIVITY, "What it is researching", NotificationManager.IMPORTANCE_LOW)
+                    .apply { description = "Stocks it is looking into, stops it raised, buys the AI called off. Silent." }
             )
         }
     }
@@ -51,5 +59,7 @@ class MoneyTreeApp : Application() {
 
         const val CHANNEL_ENGINE = "engine"
         const val CHANNEL_ALERTS = "alerts"
+        const val CHANNEL_TRADES = "trades"
+        const val CHANNEL_ACTIVITY = "activity"
     }
 }

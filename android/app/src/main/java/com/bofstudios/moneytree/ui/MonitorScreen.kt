@@ -71,7 +71,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bofstudios.moneytree.engine.AiNote
 import com.bofstudios.moneytree.engine.EngineState
+import com.bofstudios.moneytree.engine.HeldPosition
+import com.bofstudios.moneytree.engine.TradeRecord
+import com.bofstudios.moneytree.engine.formatQty
+import com.bofstudios.moneytree.engine.startOfNyDay
 import com.bofstudios.moneytree.engine.Market
 import com.bofstudios.moneytree.engine.Proposal
 import com.bofstudios.moneytree.engine.Step
@@ -98,11 +103,15 @@ fun HomeScreen(
     onOpenLive: () -> Unit,
     onOpenMoney: (withdraw: Boolean) -> Unit,
     onPickMarket: (Market) -> Unit,
+    requestArm: () -> Unit,
+    trades: () -> List<TradeRecord>,
 ) {
     val steps by Hub.steps.collectAsState()
     val state by Hub.state.collectAsState()
     val running by Hub.running.collectAsState()
     val armed by Hub.armed.collectAsState()
+    // Re-read the journal whenever the feed moves; closes are announced there.
+    val journal = remember(steps.size) { trades() }
 
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -110,6 +119,8 @@ fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item { MoneyCard(settings, onOpenMoney) }
+        if (settings.live && !armed && running) item { ArmBanner(requestArm) }
+        if (running) item { BackgroundWarning() }
         if (settings.market == null) item { MarketQuestion(onPickMarket) }
         item { StatusCard(state, settings, running, armed) }
 
@@ -119,7 +130,123 @@ fun HomeScreen(
             items(state.suggestions, key = { it.id }) { ProposalCard(it, asking = false, settings, toast) }
         }
 
+        val mine = state.held.filter { it.managed }
+        if (mine.isNotEmpty()) item { PositionsCard(mine) }
+        item { TodayCard(journal) }
+        if (state.notes.isNotEmpty()) item { NotesCard(state.notes) }
         item { NowPanel(steps, running, onOpenLive) }
+    }
+}
+
+/** Shown only while Android may still pause the bot with the screen off. */
+@Composable
+private fun BackgroundWarning() {
+    val context = LocalContext.current
+    val power = context.getSystemService(android.os.PowerManager::class.java)
+    if (power.isIgnoringBatteryOptimizations(context.packageName)) return
+    Card(borderColor = MT.Accent.copy(alpha = 0.5f)) {
+        Text(tx("Android may pause the bot", "Android botu durdurabilir"), fontWeight = FontWeight.SemiBold, color = MT.Accent)
+        Text(tx("Battery saving is on for Money Tree, so it can stop looking while the screen is off. Allow background running to keep it up around the clock.",
+            "Money Tree için pil tasarrufu açık; ekran kapalıyken bakmayı bırakabilir. Gece gündüz çalışsın diye arka planda çalışmaya izin ver."),
+            color = MT.Text2, fontSize = 13.sp, lineHeight = 18.sp, modifier = Modifier.padding(vertical = 6.dp))
+        BatteryPermission()
+    }
+}
+
+/** Real money, bot running, not armed: say it plainly and make arming one tap. */
+@Composable
+private fun ArmBanner(requestArm: () -> Unit) {
+    Card(borderColor = MT.Down.copy(alpha = 0.6f)) {
+        Text(tx("Real money is paused", "Gerçek para beklemede"), fontWeight = FontWeight.SemiBold, color = MT.Down)
+        Text(tx("The bot is watching and managing what it holds, but will not buy until you arm it. Every restart pauses it again.",
+            "Bot izliyor ve elindekileri yönetiyor ama sen devreye alana kadar almayacak. Her yeniden başlatma tekrar bekletir."),
+            color = MT.Text2, fontSize = 13.sp, lineHeight = 18.sp, modifier = Modifier.padding(vertical = 6.dp))
+        PrimaryButton(tx("Arm real money", "Gerçek parayı devreye al"), requestArm, Modifier.fillMaxWidth())
+    }
+}
+
+/** Each position the bot opened: what it is doing, and where its stop lives. */
+@Composable
+private fun PositionsCard(held: List<HeldPosition>) {
+    val w = Words(LocalTurkish.current)
+    Card {
+        Text(tx("HOLDING", "ELİMDE"), color = MT.Text3, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
+        held.forEach { h ->
+            val p = h.position
+            val pct = if (p.avgEntry > 0) (p.currentPrice / p.avgEntry - 1) * 100 else 0.0
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Ticker(p.symbol)
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("${p.symbol} · ${formatQty(p.qty)}", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    Text("${w.usd(p.avgEntry)} → ${w.usd(p.currentPrice)}", color = MT.Text3, fontFamily = MT.Mono, fontSize = 11.sp)
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(w.signed(p.unrealizedPl), color = p.unrealizedPl.tone(), fontFamily = MT.Mono, fontWeight = FontWeight.SemiBold)
+                    Text(String.format(Locale.US, "%+.2f%%", pct), color = pct.tone(), fontFamily = MT.Mono, fontSize = 11.sp)
+                }
+            }
+            Text(
+                "Stop ${h.stop?.let { w.usd(it) } ?: "—"} · ${tx("target", "hedef")} ${h.target?.let { w.usd(it) } ?: "—"} · " +
+                    if (h.stopAtBroker) tx("stop at Alpaca", "stop Alpaca'da") else tx("stop on this phone", "stop bu telefonda"),
+                color = if (h.stopAtBroker) MT.Up else MT.Accent, fontFamily = MT.Mono, fontSize = 10.5.sp,
+                modifier = Modifier.padding(start = 48.dp, top = 2.dp),
+            )
+        }
+    }
+}
+
+/** Today's closed trades, since midnight in New York. */
+@Composable
+private fun TodayCard(journal: List<TradeRecord>) {
+    val w = Words(LocalTurkish.current)
+    val today = remember(journal) {
+        val start = startOfNyDay(System.currentTimeMillis())
+        journal.filter { it.closedAt >= start }.sortedByDescending { it.closedAt }
+    }
+    val realised = today.sumOf { it.pnl }
+    Card {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(tx("TODAY", "BUGÜN"), Modifier.weight(1f), color = MT.Text3, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
+            if (today.isNotEmpty()) Text(w.signed(realised), color = realised.tone(), fontFamily = MT.Mono, fontWeight = FontWeight.SemiBold)
+        }
+        if (today.isEmpty()) {
+            Text(tx("No trades closed yet today. Each one shows here with what it made or lost.",
+                "Bugün henüz kapanan işlem yok. Her biri ne kazandırıp kaybettirdiğiyle burada görünür."),
+                color = MT.Text3, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+        } else {
+            Text(tx("${today.size} trade(s) · ${today.count { it.pnl > 0 }} won · ${today.count { it.pnl < 0 }} lost",
+                "${today.size} işlem · ${today.count { it.pnl > 0 }} kazanç · ${today.count { it.pnl < 0 }} kayıp"),
+                color = MT.Text2, fontSize = 12.5.sp, modifier = Modifier.padding(top = 4.dp, bottom = 4.dp))
+            today.take(6).forEach { t ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(t.symbol, Modifier.width(58.dp), fontFamily = MT.Mono, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                    Text(w.reasonName(t.reason) + " · " + SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(t.closedAt)),
+                        Modifier.weight(1f), color = MT.Text3, fontSize = 12.sp)
+                    Text(w.signed(t.pnl), color = t.pnl.tone(), fontFamily = MT.Mono, fontSize = 13.sp)
+                }
+            }
+        }
+    }
+}
+
+/** What the AI said: why it bought, or why it passed. */
+@Composable
+private fun NotesCard(notes: List<AiNote>) {
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) { while (true) { delay(30_000); now = System.currentTimeMillis() } }
+    Card {
+        Text(tx("WHAT THE AI SAID", "AI NE DEDİ"), color = MT.Text3, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
+        notes.take(4).forEach { n ->
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(n.symbol, fontFamily = MT.Mono, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp, color = MT.Accent)
+                Spacer(Modifier.width(8.dp))
+                Text(agoText(now - n.at), color = MT.Text3, fontFamily = MT.Mono, fontSize = 11.sp)
+            }
+            Text(n.text, color = MT.Text2, fontSize = 13.sp, lineHeight = 18.sp, modifier = Modifier.padding(top = 2.dp))
+        }
     }
 }
 

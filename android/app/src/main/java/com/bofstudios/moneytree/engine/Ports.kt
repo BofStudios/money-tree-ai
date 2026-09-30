@@ -11,6 +11,7 @@ data class TradeRecord(
     val closedAt: Long,
 ) {
     val pnl: Double get() = (exit - entry) * qty
+    val pnlPct: Double get() = if (entry > 0) (exit / entry - 1) * 100 else 0.0
 }
 
 /**
@@ -35,18 +36,48 @@ interface EngineStore {
     fun clearGuard(symbol: String)
 }
 
-/** Things worth putting on the lock screen. */
+/**
+ * Things worth putting on the lock screen. The phone decides which of them
+ * actually buzz, from the owner's notification level.
+ */
 interface Notifier {
     fun approvalNeeded(p: Proposal)
+    /** "Just bought ..." */
     fun orderPlaced(e: Entry)
+    /** "Just sold ..., this much profit / loss" — also when a stop fills at Alpaca. */
     fun positionClosed(t: TradeRecord)
     fun halted(message: String)
+    /** A buy signal is being looked into: news, and the AI's check. */
+    fun researching(symbol: String, line: String) {}
+    /** The AI's plain-words note on a buy it just made. */
+    fun explained(symbol: String, text: String) {}
+    fun stopRaised(symbol: String, from: Double?, to: Double, lockedIn: Double?) {}
+    fun aiSkipped(symbol: String, why: String) {}
+    /** Alpaca refused a buy, with its reason (not enough buying power, market closed...). */
+    fun orderFailed(symbol: String, why: String) {}
+    /** Once, when the market closes after a session the bot watched. */
+    fun dailySummary(trades: List<TradeRecord>, today: Double, equity: Double) {}
 }
 
 /** Optional plain-language explanation of a decision, from a language model. */
 fun interface Explainer {
     suspend fun explain(facts: String, turkish: Boolean): String?
 }
+
+/** The AI's answer on whether the news gives a reason not to buy right now. */
+data class Vet(val ok: Boolean, val note: String)
+
+/**
+ * Reads the latest headlines before a buy. It can only call a buy off — never
+ * start one — so a wrong answer costs a missed trade, not money. Headlines are
+ * outside text; implementations must treat them as data, not instructions.
+ */
+fun interface Researcher {
+    suspend fun vet(symbol: String, facts: String, headlines: List<String>, turkish: Boolean): Vet?
+}
+
+/** Something the AI said, kept for the home screen. */
+data class AiNote(val symbol: String, val text: String, val at: Long)
 
 class MemoryStore : EngineStore {
     private val owned = LinkedHashSet<String>()

@@ -46,12 +46,19 @@
                 android:value="Personal trading bot: watches the owner's watchlist and manages their own brokerage orders on a schedule." />
         </service>
 
+        <!-- Back up after a reboot, and after installing a new version over this one. -->
         <receiver
             android:name=".service.BootReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+
+        <!-- The heartbeat (restarts a killed service) and the pre-open wake-up. -->
+        <receiver
+            android:name=".service.AlarmReceiver"
+            android:exported="false" />
     </application>
 </manifest>

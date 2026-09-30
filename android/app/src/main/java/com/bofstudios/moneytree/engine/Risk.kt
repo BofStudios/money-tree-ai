@@ -93,7 +93,14 @@ class Risk(val config: RiskConfig = RiskConfig()) {
     ): Entry? {
         val stopPct = stopDistancePct(price, atr)
         val qty = if (fractional) {
-            fractionalShares(equity, available, price, stopPct).takeIf { it * price >= MIN_FRACTIONAL_NOTIONAL }
+            val f = fractionalShares(equity, available, price, stopPct)
+            when {
+                // Whole shares win whenever one fits: rounding down never adds
+                // risk, and it lets the stop and target sit at Alpaca as a bracket.
+                floor(f) >= 1 -> floor(f)
+                f * price >= MIN_FRACTIONAL_NOTIONAL -> f
+                else -> null
+            }
         } else {
             shares(equity, available, price, stopPct).takeIf { it >= 1 }?.toDouble()
         } ?: return null
@@ -105,7 +112,7 @@ class Risk(val config: RiskConfig = RiskConfig()) {
             stop = price * (1 - stopFraction),
             target = price * (1 + stopFraction * config.rewardRisk),
             reason = reason,
-            fractional = fractional,
+            fractional = qty != floor(qty),
         )
     }
 
