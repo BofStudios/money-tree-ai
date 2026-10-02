@@ -15,6 +15,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -72,6 +73,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bofstudios.moneytree.engine.AiNote
+import com.bofstudios.moneytree.engine.BrainSnapshot
+import com.bofstudios.moneytree.engine.Decision
+import com.bofstudios.moneytree.engine.QualityMode
+import com.bofstudios.moneytree.engine.QualityReport
+import com.bofstudios.moneytree.engine.moodText
 import com.bofstudios.moneytree.engine.EngineState
 import com.bofstudios.moneytree.engine.HeldPosition
 import com.bofstudios.moneytree.engine.TradeRecord
@@ -105,6 +111,9 @@ fun HomeScreen(
     onPickMarket: (Market) -> Unit,
     requestArm: () -> Unit,
     trades: () -> List<TradeRecord>,
+    onOpenBrain: () -> Unit,
+    brainIntro: Boolean,
+    onBrainIntro: (QualityMode) -> Unit,
 ) {
     val steps by Hub.steps.collectAsState()
     val state by Hub.state.collectAsState()
@@ -122,7 +131,9 @@ fun HomeScreen(
         if (settings.live && !armed && running) item { ArmBanner(requestArm) }
         if (running) item { BackgroundWarning() }
         if (settings.market == null) item { MarketQuestion(onPickMarket) }
-        item { StatusCard(state, settings, running, armed) }
+        item { StatusCard(state, settings, running, armed, toast) }
+        if (brainIntro) item { BrainIntro(onBrainIntro) }
+        item { BrainCard(state.brain, onOpenBrain) }
 
         if (state.approvals.isNotEmpty() || state.suggestions.isNotEmpty()) {
             item { SectionTitle(if (state.approvals.isNotEmpty()) tx("Waiting for your OK", "Onayını bekliyor") else tx("Ideas (manual)", "Fikirler (manuel)")) }
@@ -135,6 +146,77 @@ fun HomeScreen(
         item { TodayCard(journal) }
         if (state.notes.isNotEmpty()) item { NotesCard(state.notes) }
         item { NowPanel(steps, running, onOpenLive) }
+    }
+}
+
+/** Once, for anyone who set up before 3.0: what is new, and how picky to be. */
+@Composable
+private fun BrainIntro(onPick: (QualityMode) -> Unit) {
+    val w = Words(LocalTurkish.current)
+    Card(highlight = true, glow = true) {
+        Text(tx("NEW IN 3.0", "3.0'DA YENİ"), color = MT.Accent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
+        Text(tx("It thinks before it buys", "Almadan önce düşünüyor"), fontWeight = FontWeight.SemiBold, fontSize = 18.sp, modifier = Modifier.padding(top = 4.dp))
+        Text(tx("Five checks from each company's annual reports (business, moat, management, value, risk), a live news radar, two AI models voting on every buy, and it learns from every signal it follows.",
+            "Her şirketin yıllık raporlarından 5 kontrol (işletme, kale, yönetim, değer, risk), canlı haber radarı, her alımda oy veren iki AI modeli — ve takip ettiği her sinyalden öğreniyor."),
+            color = MT.Text2, fontSize = 13.sp, lineHeight = 18.sp, modifier = Modifier.padding(top = 6.dp))
+        Text(tx("How picky should it be?", "Ne kadar seçici olsun?"), fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 12.dp, bottom = 8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Chip(w.qualityModeName(QualityMode.STRICT), false, { onPick(QualityMode.STRICT) })
+            Chip(w.qualityModeName(QualityMode.BALANCED) + " ★", true, { onPick(QualityMode.BALANCED) })
+        }
+        Spacer(Modifier.height(8.dp))
+        Chip(w.qualityModeName(QualityMode.OFF), false, { onPick(QualityMode.OFF) })
+        Text(tx("★ recommended. You can change it any time in Settings.", "★ önerilen. İstediğin zaman Ayarlar'dan değiştirebilirsin."),
+            color = MT.Text3, fontSize = 11.5.sp, modifier = Modifier.padding(top = 8.dp))
+    }
+}
+
+/** The research desk in one card: the market's mood, the best pick, what it has learned. */
+@Composable
+private fun BrainCard(b: BrainSnapshot, onOpen: () -> Unit) {
+    val w = Words(LocalTurkish.current)
+    val order = listOf(Decision.BUY_ZONE, Decision.WAIT, Decision.UNKNOWN, Decision.AVOID)
+    val best = b.reports.values.sortedWith(compareBy<QualityReport> { order.indexOf(it.decision) }.thenByDescending { it.score }).firstOrNull()
+    Card(Modifier.clickable(onClick = onOpen), glow = best?.decision == Decision.BUY_ZONE) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(tx("BRAIN", "BEYİN"), Modifier.weight(1f), color = MT.Text3, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
+            Text(tx("Open →", "Aç →"), color = MT.Accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        }
+        if (best == null && b.radar.market == null) {
+            Text(tx("Reads the annual reports and the news once the bot runs.", "Bot çalışınca yıllık raporları ve haberleri okur."),
+                color = MT.Text3, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+            return@Card
+        }
+        best?.let { r ->
+            Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Ticker(r.symbol)
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(tx("Best right now", "Şu an en iyisi"), color = MT.Text3, fontSize = 11.sp)
+                    Text("${r.symbol} · ${w.decisionName(r.decision)}", fontWeight = FontWeight.SemiBold, color = decisionColor(r.decision))
+                }
+                Text(String.format(Locale.US, "%.1f/5", r.score), fontFamily = MT.Mono, fontWeight = FontWeight.SemiBold)
+            }
+        }
+        val counts = b.reports.values.groupingBy { it.decision }.eachCount()
+        if (counts.isNotEmpty()) {
+            Text(
+                listOf(Decision.BUY_ZONE, Decision.WAIT, Decision.AVOID).filter { (counts[it] ?: 0) > 0 }
+                    .joinToString(" · ") { "${counts[it]} ${w.decisionName(it).lowercase()}" },
+                color = MT.Text2, fontSize = 12.5.sp, modifier = Modifier.padding(top = 8.dp),
+            )
+        }
+        Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(7.dp).clip(CircleShape).background(moodColor(b.radar.market)))
+            Spacer(Modifier.width(6.dp))
+            Text(tx("Market mood ", "Piyasa havası ") + (b.radar.market?.let { w.moodName(it) + " " + it.moodText() } ?: "—"),
+                color = MT.Text3, fontSize = 12.sp)
+        }
+        Text(
+            tx("${b.shadowClosed + b.shadowOpen.size} signals followed · ${b.rules.size} rule(s) learned", "${b.shadowClosed + b.shadowOpen.size} sinyal takip edildi · ${b.rules.size} kural öğrenildi") +
+                (if (b.radar.flags.isNotEmpty()) tx(" · ⚑ ${b.radar.flags.size} red flag(s)", " · ⚑ ${b.radar.flags.size} kırmızı bayrak") else ""),
+            color = MT.Text3, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp),
+        )
     }
 }
 
@@ -237,7 +319,7 @@ private fun NotesCard(notes: List<AiNote>) {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(30_000); now = System.currentTimeMillis() } }
     Card {
-        Text(tx("WHAT THE AI SAID", "AI NE DEDİ"), color = MT.Text3, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
+        Text(tx("WHAT THE BRAIN SAID", "BEYİN NE DEDİ"), color = MT.Text3, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
         notes.take(4).forEach { n ->
             Spacer(Modifier.height(10.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -272,7 +354,7 @@ fun marketNote() = tx(
 )
 
 @Composable
-private fun StatusCard(state: EngineState, settings: TradingSettings, running: Boolean, armed: Boolean) {
+private fun StatusCard(state: EngineState, settings: TradingSettings, running: Boolean, armed: Boolean, toast: (String) -> Unit) {
     val context = LocalContext.current
     val w = Words(LocalTurkish.current)
     val account = state.account
@@ -351,7 +433,17 @@ private fun StatusCard(state: EngineState, settings: TradingSettings, running: B
         }
         Spacer(Modifier.height(4.dp))
         if (running) {
-            GhostButton(tx("Stop the bot", "Botu durdur"), { EngineService.stop(context) }, Modifier.fillMaxWidth())
+            val stopped = tx("Stopped. It will not buy anything until you press Start; stops on what it holds stay at Alpaca.",
+                "Durdu. Sen Başlat'a basana kadar hiçbir şey almaz; elindekilerin stop'ları Alpaca'da kalır.")
+            // A fraction's stop is a DAY order the running bot renews each morning; stopped, it is not.
+            val fractions = state.held.filter { it.managed && it.position.qty != kotlin.math.floor(it.position.qty) }
+                .joinToString(", ") { it.position.symbol }
+            val fractionNote = if (fractions.isEmpty()) "" else tx(
+                " $fractions: its stop is a day order that ends at today's close and is not renewed while stopped.",
+                " $fractions: stop'u gün sonunda biten bir emir; bot dururken yenilenmez.",
+            )
+            GhostButton(tx("Stop the bot", "Botu durdur"), { EngineService.stop(context); toast(stopped + fractionNote) },
+                Modifier.fillMaxWidth().border(1.dp, MT.Down.copy(alpha = 0.5f), RoundedCornerShape(12.dp)), color = MT.Down)
         } else {
             PrimaryButton(tx("Start Money Tree", "Money Tree'yi başlat"), { EngineService.start(context) }, Modifier.fillMaxWidth())
         }
@@ -497,7 +589,8 @@ private fun agoText(ms: Long): String {
 @Composable
 fun Ticker(symbol: String) {
     Box(
-        Modifier.size(38.dp).clip(RoundedCornerShape(11.dp)).background(MT.Surface2),
+        Modifier.size(38.dp).clip(RoundedCornerShape(11.dp)).background(MT.Surface2)
+            .border(1.dp, MT.Line, RoundedCornerShape(11.dp)),
         contentAlignment = Alignment.Center,
     ) { Text(symbol.take(2), fontFamily = MT.Mono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = MT.Text) }
 }

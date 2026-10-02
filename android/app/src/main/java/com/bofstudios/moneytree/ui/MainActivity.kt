@@ -39,6 +39,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
@@ -83,6 +84,7 @@ class MainActivity : FragmentActivity() {
     private var noScreenLock by mutableStateOf(false)
     private var pausedAt = 0L
     private var crash by mutableStateOf<String?>(null)
+    private var brainIntroSeen by mutableStateOf(true)
 
     private val notificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -94,6 +96,7 @@ class MainActivity : FragmentActivity() {
         settings = prefs.settings(Hub.armed.value)
         onboarded = prefs.onboarded && prefs.setupVersion >= SETUP_VERSION
         crash = MoneyTreeApp.lastCrash(this)
+        brainIntroSeen = prefs.brainIntroSeen
         // Semi-auto approvals arrive as notifications; without this permission
         // they would silently never show. Ask whenever it is missing.
         if (onboarded) askForNotifications()
@@ -110,6 +113,9 @@ class MainActivity : FragmentActivity() {
                                     update(chosen)
                                     prefs.onboarded = true
                                     prefs.setupVersion = SETUP_VERSION
+                                    // The setup asked the five-checks question itself.
+                                    prefs.brainIntroSeen = true
+                                    brainIntroSeen = true
                                     onboarded = true
                                     askForNotifications()
                                     EngineService.start(this@MainActivity)
@@ -177,9 +183,17 @@ class MainActivity : FragmentActivity() {
                             onPickMarket = { picked -> update(settings.copy(market = picked, watchlist = picked.watchlist)) },
                             requestArm = ::armWithAuth,
                             trades = prefs::trades,
+                            onOpenBrain = { tab = 2 },
+                            brainIntro = !brainIntroSeen,
+                            onBrainIntro = { mode ->
+                                update(settings.copy(qualityMode = mode))
+                                prefs.brainIntroSeen = true
+                                brainIntroSeen = true
+                            },
                         )
                         1 -> LiveScreen(settings)
-                        2 -> PortfolioScreen(prefs)
+                        2 -> BrainScreen(settings, ::toast)
+                        3 -> PortfolioScreen(prefs)
                         else -> SettingsScreen(settings, ::update, ::armWithAuth, ::toast, onOpenMoney = { money = "deposit" },
                             onRedoSetup = { onboarded = false })
                     }
@@ -239,8 +253,9 @@ class MainActivity : FragmentActivity() {
         ) {
             NavItem(Icons.Filled.Home, tx("Home", "Ana sayfa"), tab == 0) { onTab(0) }
             NavItem(Icons.Filled.PlayArrow, tx("Live", "Canlı"), tab == 1, dot = running) { onTab(1) }
-            NavItem(Icons.AutoMirrored.Filled.List, tx("Portfolio", "Portföy"), tab == 2) { onTab(2) }
-            NavItem(Icons.Filled.Settings, tx("Settings", "Ayarlar"), tab == 3) { onTab(3) }
+            NavItem(Icons.Filled.Search, tx("Brain", "Beyin"), tab == 2) { onTab(2) }
+            NavItem(Icons.AutoMirrored.Filled.List, tx("Portfolio", "Portföy"), tab == 3) { onTab(3) }
+            NavItem(Icons.Filled.Settings, tx("Settings", "Ayarlar"), tab == 4) { onTab(4) }
         }
     }
 
@@ -249,7 +264,7 @@ class MainActivity : FragmentActivity() {
         Column(
             Modifier.clip(RoundedCornerShape(16.dp))
                 .background(if (selected) MT.AccentSoft else MT.Surface.copy(alpha = 0f))
-                .clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 8.dp),
+                .clickable(onClick = onClick).padding(horizontal = 11.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Box {
@@ -278,7 +293,8 @@ class MainActivity : FragmentActivity() {
         val before = settings
         prefs.save(next)
         settings = next
-        if (before.autonomy != next.autonomy || before.horizon != next.horizon || before.watchlist != next.watchlist) {
+        if (before.autonomy != next.autonomy || before.horizon != next.horizon || before.watchlist != next.watchlist ||
+            before.qualityMode != next.qualityMode) {
             Hub.engine?.settingsChanged()
             EngineService.scanNow(this)
         }

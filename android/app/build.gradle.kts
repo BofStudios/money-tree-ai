@@ -12,8 +12,8 @@ android {
         applicationId = "com.bofstudios.moneytree"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "2.0.0"
+        versionCode = 5
+        versionName = "3.0.0"
     }
 
     buildTypes {
@@ -54,6 +54,8 @@ dependencies {
     implementation("androidx.biometric:biometric:1.1.0")
     implementation("androidx.fragment:fragment-ktx:1.8.5")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // Streams the SEC's multi-megabyte company files without holding them in memory.
+    implementation("com.google.code.gson:gson:2.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     testImplementation("junit:junit:4.13.2")

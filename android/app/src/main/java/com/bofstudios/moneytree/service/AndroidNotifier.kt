@@ -92,6 +92,16 @@ class AndroidNotifier(private val context: Context, private val settings: () -> 
         post(MoneyTreeApp.CHANNEL_ACTIVITY, researchId(symbol), words().aiSkipped(symbol), why, silent = true)
     }
 
+    override fun heldBack(symbol: String, why: String) {
+        if (level() != NotifyLevel.EVERYTHING) return
+        post(MoneyTreeApp.CHANNEL_ACTIVITY, researchId(symbol), words().heldBack(symbol), why, silent = true)
+    }
+
+    override fun learned(title: String, text: String) {
+        if (level() == NotifyLevel.QUIET) return
+        post(MoneyTreeApp.CHANNEL_ACTIVITY, LEARNED_ID + (seq++ % 50), "🧠 $title", text, silent = true)
+    }
+
     override fun orderFailed(symbol: String, why: String) {
         if (level() == NotifyLevel.QUIET) return
         post(MoneyTreeApp.CHANNEL_TRADES, seq++, words().orderFailedTitle(symbol), why)
@@ -122,5 +132,6 @@ class AndroidNotifier(private val context: Context, private val settings: () -> 
     companion object {
         // Approvals use 1000–5095 (EngineService.approvalNotificationId).
         private const val SUMMARY_ID = 9_000
+        private const val LEARNED_ID = 13_000
     }
 }

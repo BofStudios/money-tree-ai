@@ -9,7 +9,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** A broker whose market, account and history the test controls completely. */
-class FakeBroker : Broker {
+open class FakeBroker : Broker {
     var open = true
     var account = Account(100_000.0, 100_000.0, 100_000.0, 200_000.0, "USD", false)
     val positions = ArrayList<BrokerPosition>()
@@ -86,6 +86,8 @@ class RecordingNotifier : Notifier {
     override fun stopRaised(symbol: String, from: Double?, to: Double, lockedIn: Double?) { raised += symbol to to }
     override fun dailySummary(trades: List<TradeRecord>, today: Double, equity: Double) { summaries += trades.size }
     override fun orderFailed(symbol: String, why: String) { failures += symbol to why }
+    val heldBack = ArrayList<Pair<String, String>>()
+    override fun heldBack(symbol: String, why: String) { heldBack += symbol to why }
 }
 
 /** An AI whose verdict the test sets, counting how often it is asked. */

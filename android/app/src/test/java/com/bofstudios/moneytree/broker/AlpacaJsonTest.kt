@@ -90,4 +90,16 @@ class AlpacaJsonTest {
         assertEquals("0.123456789", AlpacaBroker.sellQty(0.1234567899))
         assertEquals("3", AlpacaBroker.sellQty(3.0))
     }
+
+    @Test fun newsComesWithIdsSymbolsAndPlainSummaries() {
+        val j = JSONObject("""{"news":[{"id":24843171,"headline":"Apple beats estimates","summary":"<p>Strong <b>iPhone</b> sales</p>",
+            "source":"benzinga","symbols":["AAPL","msft"],"created_at":"2026-10-01T13:31:00Z","url":"https://x"},
+            {"headline":"no id"}],"next_page_token":null}""")
+        val n = AlpacaBroker.parseNews(j).single()
+        assertEquals(24843171L, n.id)
+        assertEquals(listOf("AAPL", "MSFT"), n.symbols)
+        assertEquals("Strong iPhone sales", n.summary)
+        assertEquals(1_790_861_460_000L, n.createdAt)
+        assertTrue(n.score > 0)
+    }
 }

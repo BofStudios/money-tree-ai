@@ -159,10 +159,29 @@ one and keeps your keys and settings.
   the phone is off. A summary when the market closes. On the *Everything* level,
   silent notes on what it is researching, stops it raised and buys the AI called
   off. Refused orders say why.
-- **Research before every buy.** It reads the latest headlines, and with a free
-  Groq key an AI screens them for clear red flags — earnings due, a halt, fraud,
-  dilution — and can call the buy off. It can stop a buy, never start one; an
-  unreadable answer counts as no answer.
+- **A research desk between the signal and the order (3.0).** Four gates, each of
+  which can hold a buy back or make it smaller, none of which can start one:
+  - *Five checks* from each company's own annual reports at the SEC (free XBRL
+    API, no key): does the business make money, can rivals copy it (margins and
+    returns), does management create value (buybacks vs. dilution, debt), is the
+    price below a conservative value estimate (owner earnings discounted at 10%,
+    converted for euro and krone reporters and ADR ratios), and what could go
+    wrong. The answer is BUY ZONE, WAIT or AVOID; ETFs are judged on their trend.
+  - *The daily trend*: no buying against a daily chart below its 50-day average.
+  - *The news radar*: the Alpaca wire read on every look, scored by a finance word
+    list (and by an AI when connected), sorted into topics, with red flags —
+    offerings, halts, guidance cuts, earnings due — that hold buys back.
+  - *What it learned*: every buy signal is followed to its stop, target or sell
+    signal whether it was bought or not, and each kind of signal (RSI band, news
+    mood, time of day, daily trend, the five checks, the stock) is scored in R.
+    Averages are shrunk toward zero, and a kind only becomes a rule after ten
+    results — so a few unlucky trades never do.
+  Then two different AI models (with a free Groq key) read the headlines and the
+  research side by side; either can stop the buy. All of it is on the Brain tab.
+- **Stop means stop.** Stopping withdraws any buy order still waiting at Alpaca,
+  a look already under way cannot send one, and no notification button brings a
+  stopped bot back — only *Start* does. Every order the bot sends is listed with
+  its time on the Portfolio tab.
 - **Small accounts.** With under $500 it buys fractions of a share, but a whole
   share still wins wherever one fits, so its stop and target go to Alpaca as a
   bracket. A fraction's stop is placed at Alpaca as a stop order every trading
@@ -172,8 +191,8 @@ one and keeps your keys and settings.
 - **Setup asks what matters.** Market, trade length, autonomy, roughly how much
   money, how bold each trade is (0.5%, 1% or 2% of the account per stop-out),
   how many positions at once, where to stop for the day, how much of the account
-  it may use, which notifications, and whether the AI may veto. All of it can be
-  changed later in Settings.
+  it may use, which notifications, whether the AI may veto, and how picky the
+  five checks are. All of it can be changed later in Settings.
 - **Real money starts paused.** Every start is disarmed, and the armed state is
   never saved. A restart the owner did not start themselves — a reboot, an
   update, Android killing it — says so with a notification, and the home screen

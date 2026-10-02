@@ -6,6 +6,8 @@ import com.bofstudios.moneytree.engine.EngineStore
 import com.bofstudios.moneytree.engine.Horizon
 import com.bofstudios.moneytree.engine.Market
 import com.bofstudios.moneytree.engine.NotifyLevel
+import com.bofstudios.moneytree.engine.OrderLog
+import com.bofstudios.moneytree.engine.QualityMode
 import com.bofstudios.moneytree.engine.RiskLevel
 import com.bofstudios.moneytree.engine.TradeRecord
 import com.bofstudios.moneytree.engine.TradingSettings
@@ -33,6 +35,11 @@ class Prefs(context: Context) : EngineStore {
         get() = p.getInt("setup_version", if (onboarded) 1 else 0)
         set(v) = p.edit().putInt("setup_version", v).apply()
 
+    /** Whether the 3.0 card introducing the five checks was answered on Home. */
+    var brainIntroSeen: Boolean
+        get() = p.getBoolean("brain_intro_seen", false)
+        set(v) = p.edit().putBoolean("brain_intro_seen", v).apply()
+
     /** Whether the owner left the bot running — used to resume after a reboot. */
     var runWanted: Boolean
         get() = p.getBoolean("run_wanted", false)
@@ -55,6 +62,9 @@ class Prefs(context: Context) : EngineStore {
         usePct = p.getInt("use_pct", 100).coerceIn(10, 100),
         notify = runCatching { NotifyLevel.valueOf(p.getString("notify", "EVERYTHING")!!) }.getOrDefault(NotifyLevel.EVERYTHING),
         aiCheck = p.getBoolean("ai_check", true),
+        qualityMode = runCatching { QualityMode.valueOf(p.getString("quality_mode", "BALANCED")!!) }.getOrDefault(QualityMode.BALANCED),
+        newsCheck = p.getBoolean("news_check", true),
+        learning = p.getBoolean("learning", true),
     )
 
     fun save(s: TradingSettings) {
@@ -72,6 +82,9 @@ class Prefs(context: Context) : EngineStore {
             .putInt("use_pct", s.usePct)
             .putString("notify", s.notify.name)
             .putBoolean("ai_check", s.aiCheck)
+            .putString("quality_mode", s.qualityMode.name)
+            .putBoolean("news_check", s.newsCheck)
+            .putBoolean("learning", s.learning)
             .apply()
     }
 
@@ -126,6 +139,28 @@ class Prefs(context: Context) : EngineStore {
     override fun clearGuard(symbol: String) {
         p.edit().remove(guardKey(symbol)).apply()
     }
+
+    override fun logOrder(o: OrderLog) = synchronized(this) {
+        val kept = (orderLog() + o).takeLast(100)
+        val arr = JSONArray()
+        kept.forEach {
+            arr.put(JSONObject().put("s", it.symbol).put("d", it.side).put("q", it.qty).put("p", it.price)
+                .put("t", it.at).put("w", it.why))
+        }
+        p.edit().putString(ordersKey(), arr.toString()).apply()
+    }
+
+    override fun orderLog(): List<OrderLog> {
+        val arr = runCatching { JSONArray(p.getString(ordersKey(), "[]")) }.getOrElse { JSONArray() }
+        return (0 until arr.length()).mapNotNull { i ->
+            runCatching {
+                val o = arr.getJSONObject(i)
+                OrderLog(o.getString("s"), o.getString("d"), o.optDouble("q"), o.optDouble("p"), o.getLong("t"), o.optString("w"))
+            }.getOrNull()
+        }
+    }
+
+    private fun ordersKey() = if (p.getBoolean("live", false)) "orders_live" else "orders_paper"
 
     private fun guardKey(symbol: String) = "guard_${if (p.getBoolean("live", false)) "live" else "paper"}_$symbol"
 

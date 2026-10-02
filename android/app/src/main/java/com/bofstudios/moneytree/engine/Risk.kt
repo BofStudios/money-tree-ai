@@ -90,7 +90,14 @@ class Risk(val config: RiskConfig = RiskConfig()) {
     fun plan(
         symbol: String, reason: String, price: Double, atr: Double,
         equity: Double, available: Double, fractional: Boolean = false,
+        /** Conviction from the research, 0.5 to 1. It can shrink a trade, never grow it. */
+        scale: Double = 1.0,
     ): Entry? {
+        val k = scale.coerceIn(0.1, 1.0)
+        if (k < 1.0) {
+            return Risk(config.copy(riskPerTradePct = config.riskPerTradePct * k, maxPositionPct = config.maxPositionPct * k))
+                .plan(symbol, reason, price, atr, equity, available, fractional)
+        }
         val stopPct = stopDistancePct(price, atr)
         val qty = if (fractional) {
             val f = fractionalShares(equity, available, price, stopPct)

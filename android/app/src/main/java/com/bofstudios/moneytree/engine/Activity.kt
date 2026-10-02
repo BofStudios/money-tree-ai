@@ -8,7 +8,7 @@ package com.bofstudios.moneytree.engine
  * is no animated progress that is not backed by an actual operation. A step
  * that failed says so and keeps its error.
  */
-enum class StepKind { CLOCK, ACCOUNT, POSITIONS, BARS, ANALYSE, NEWS, ORDER, TRAIL, SELL, AI, APPROVAL, WAIT, WARN, INFO }
+enum class StepKind { CLOCK, ACCOUNT, POSITIONS, BARS, ANALYSE, NEWS, RESEARCH, LEARN, ORDER, TRAIL, SELL, AI, APPROVAL, WAIT, WARN, INFO }
 
 enum class StepState { RUNNING, DONE, FAILED, INFO }
 

@@ -34,7 +34,13 @@ interface EngineStore {
     fun guard(symbol: String): Pair<Double, Double>?
     fun setGuard(symbol: String, stop: Double, target: Double)
     fun clearGuard(symbol: String)
+    /** Every order the bot sent, so the owner can always see what it did and when. */
+    fun logOrder(o: OrderLog) {}
+    fun orderLog(): List<OrderLog> = emptyList()
 }
+
+/** One order Money Tree sent: "buy" with its size and price, or "sell" (a whole position). */
+data class OrderLog(val symbol: String, val side: String, val qty: Double, val price: Double, val at: Long, val why: String)
 
 /**
  * Things worth putting on the lock screen. The phone decides which of them
@@ -57,6 +63,10 @@ interface Notifier {
     fun orderFailed(symbol: String, why: String) {}
     /** Once, when the market closes after a session the bot watched. */
     fun dailySummary(trades: List<TradeRecord>, today: Double, equity: Double) {}
+    /** The research held a buy back: the five checks, the news, the trend or what it learned. */
+    fun heldBack(symbol: String, why: String) {}
+    /** A new rule learned from results, or the AI's lesson from a closed trade. */
+    fun learned(title: String, text: String) {}
 }
 
 /** Optional plain-language explanation of a decision, from a language model. */
@@ -84,6 +94,9 @@ class MemoryStore : EngineStore {
     private val baseline = HashMap<Boolean, Double>()
     private val trades = ArrayList<TradeRecord>()
     private val guards = HashMap<String, Pair<Double, Double>>()
+    private val orders = ArrayList<OrderLog>()
+    override fun logOrder(o: OrderLog) { synchronized(this) { orders.add(o) } }
+    override fun orderLog() = synchronized(this) { orders.toList() }
     override fun ownedSymbols() = synchronized(this) { owned.toSet() }
     override fun addOwned(symbol: String) { synchronized(this) { owned.add(symbol) } }
     override fun removeOwned(symbol: String) { synchronized(this) { owned.remove(symbol) } }

@@ -1,5 +1,6 @@
 package com.bofstudios.moneytree.service
 
+import com.bofstudios.moneytree.engine.Brain
 import com.bofstudios.moneytree.engine.Engine
 import com.bofstudios.moneytree.engine.EngineState
 import com.bofstudios.moneytree.engine.MemoryMonitor
@@ -32,4 +33,7 @@ object Hub {
     val nextLookAt = MutableStateFlow<Long?>(null)
 
     @Volatile var engine: Engine? = null
+
+    /** The research desk of the running engine, for the screen's "forget" button. */
+    @Volatile var brain: Brain? = null
 }

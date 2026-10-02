@@ -43,7 +43,12 @@ data class EngineState(
     val notes: List<AiNote> = emptyList(),
     /** The part of the account the bot may use, from the owner's setting. */
     val budget: Double? = null,
+    /** The research desk: the five checks, the news radar, what it has learned. */
+    val brain: BrainSnapshot = BrainSnapshot(),
 )
+
+/** One pass over the watchlist: what the strategy said, the numbers, the candles. */
+private data class Look(val signals: Map<String, Signal>, val snapshots: List<Snapshot>, val bars: Map<String, List<Bar>>)
 
 data class ApprovalResult(val ok: Boolean, val message: String)
 
@@ -65,6 +70,11 @@ data class ApprovalResult(val ok: Boolean, val message: String)
  *  - before any buy it reads the news, and an AI may call the buy off on a
  *    clear red flag — it can stop a buy, never start one;
  *  - the bot only manages positions it opened itself.
+ *
+ * And, since 3.0, a research desk ([Brain]) between the signal and the
+ * order: the five checks from the company's annual reports, the daily trend,
+ * the news radar and what past signals of the same kind returned. Each can
+ * hold a buy back or make it smaller; none can start one.
  */
 class Engine(
     private val broker: Broker,
@@ -77,6 +87,9 @@ class Engine(
     private val notifier: Notifier = SilentNotifier,
     private val explainer: Explainer? = null,
     private val researcher: Researcher? = null,
+    private val brain: Brain? = null,
+    /** False once the owner pressed Stop: checked right before any order goes out. */
+    private val allowed: () -> Boolean = { true },
     private val now: () -> Long = System::currentTimeMillis,
     private val pause: suspend (Long) -> Unit = { delay(it) },
     val proposals: ProposalBook = ProposalBook(now = now),
@@ -93,6 +106,11 @@ class Engine(
     private var risk: Risk = fixedRisk ?: Risk()
     /** Set while the market is open; the first closed look after it sends the day's summary. */
     private var sessionStartedAt: Long? = null
+    /** The candle each symbol's last held-back signal fired on, so it is judged once, not every minute. */
+    private val heldBackBar = HashMap<String, Long>()
+    /** What the research saw for a symbol's latest buy signal, kept for the plan once it is bought. */
+    private val researched = HashMap<String, Research>()
+    private var warmed = false
 
     /**
      * One look at the market. Returns how long to wait before the next.
@@ -104,6 +122,11 @@ class Engine(
         val s = settings()
         val w = Words(s.turkish)
         risk = fixedRisk ?: Risk(s.riskConfig())
+        brain?.takeIf { !warmed }?.let { b ->
+            warmed = true
+            b.warmUp(s.watchlist)
+            _state.update { it.copy(brain = b.snapshot(s.watchlist)) }
+        }
         try {
             expireProposals(w)
             // A closed market is looked at quietly after the first time, so a
@@ -127,6 +150,13 @@ class Engine(
                 { broker.positions() to broker.openOrders() },
             ) { w.positionsSummary(it.first.size, it.second.size) }
             val held = reconcile(positions, orders, w)
+
+            brain?.let { b ->
+                val symbols = watched(s, held)
+                if (!quiet) b.refresh(symbols, broker, monitor, w)
+                b.readNews(symbols, broker, monitor, w, verbose = forceLook)
+                publishBrain(s, held)
+            }
 
             if (!clock.isOpen) {
                 if (sessionStartedAt != null) {
@@ -169,7 +199,7 @@ class Engine(
 
             // ------------------------------------------------- bars + analysis
             val heldBySymbol = held.associateBy { it.position.symbol }
-            val (signals, snapshots) = look(s, w, held, trading = true)
+            val (signals, snapshots, barsBySymbol) = look(s, w, held, trading = true)
             val price = snapshots.filter { it.ready }.associate { it.symbol to it.price }
 
             // ------------------------------------------------ manage what's held
@@ -247,22 +277,48 @@ class Engine(
                             monitor.info(StepKind.INFO, w.capReached(sym, risk.config.maxOpenPositions)); continue
                         }
                         val snap = snapshots.first { it.symbol == sym }
+                        val symBars = barsBySymbol[sym].orEmpty()
+
+                        // ------------------------------------------ the research desk
+                        val research = brain?.research(sym, snap, symBars, s)
+                        if (research != null) {
+                            val candle = symBars.lastOrNull()?.time
+                            // This candle's signal was already judged and held back.
+                            if (candle != null && heldBackBar[sym] == candle) continue
+                            monitor.info(StepKind.RESEARCH, w.researchTitle(research), w.researchDetail(research), w.researchLines(research))
+                            if (!research.ok) {
+                                if (candle != null) heldBackBar[sym] = candle
+                                val why = w.heldBackWhy(research)
+                                notifier.heldBack(sym, why)
+                                addNote(sym, w.heldBack(sym) + " — " + why)
+                                continue
+                            }
+                            researched[sym] = research
+                        }
+
                         val available = minOf(account.cash, account.buyingPower, room)
-                        val entry = risk.plan(sym, signal.reason, snap.price, snap.atr, budget, available, s.fractional)
+                        val entry = risk.plan(sym, signal.reason, snap.price, snap.atr, budget, available, s.fractional,
+                            scale = research?.size ?: 1.0)
                         if (entry == null) { monitor.info(StepKind.INFO, w.tooSmall(sym, s.fractional)); continue }
                         if (s.live && !s.armed) { monitor.info(StepKind.WARN, w.notArmed(sym)); continue }
 
                         // ------------------------------------- research before buying
                         notifier.researching(sym, w.researchLine(snap, entry))
-                        val headlines = attempt {
-                            monitor.step(StepKind.NEWS, w.readingNews(sym), { broker.news(sym, 5) },
-                                { w.newsSummary(it.size) }, { list -> list.map { "${it.source}: ${it.headline}" } })
-                        } ?: emptyList()
-                        val lines = headlines.map { "${it.source}: ${it.headline}" }
+                        val fromRadar = brain?.radar?.all()?.filter { sym in it.symbols }?.take(8).orEmpty()
+                        val lines = if (fromRadar.isNotEmpty()) {
+                            fromRadar.map { "${it.source}: ${it.headline}" }
+                        } else {
+                            val headlines = attempt {
+                                monitor.step(StepKind.NEWS, w.readingNews(sym), { broker.news(sym, 5) },
+                                    { w.newsSummary(it.size) }, { list -> list.map { "${it.source}: ${it.headline}" } })
+                            } ?: emptyList()
+                            headlines.map { "${it.source}: ${it.headline}" }
+                        }
                         val vet = researcher?.takeIf { s.aiCheck && lines.isNotEmpty() }?.let { ai ->
+                            val brief = entryFacts(entry) + (research?.let { r -> " " + (brain?.dossier(r) ?: "") } ?: "")
                             attempt {
                                 monitor.step(StepKind.AI, w.aiCheckingNews(sym),
-                                    { ai.vet(sym, entryFacts(entry), lines, w.tr) }, { v -> v?.let { w.aiVerdict(it) } })
+                                    { ai.vet(sym, brief, lines, w.tr) }, { v -> v?.let { w.aiVerdict(it) } })
                             }
                         }
                         if (vet != null && !vet.ok) {
@@ -322,6 +378,7 @@ class Engine(
         }
 
         try {
+            if (!allowed()) return@withLock fail(w.approveStopped())
             if (!broker.clock().isOpen) return@withLock fail(w.approveMarketClosed())
             if (s.live && !s.armed) return@withLock fail(w.approveNotArmed())
             val positions = broker.positions()
@@ -348,6 +405,22 @@ class Engine(
         }
     }
 
+    /**
+     * What Stop does at Alpaca: withdraws every buy order this bot sent that
+     * has not filled yet. Sell orders — the stops protecting what it holds —
+     * are left alone.
+     */
+    suspend fun cancelPendingBuys(): Int {
+        val w = Words(settings().turkish)
+        val open = attempt { broker.openOrders() } ?: return 0
+        var cancelled = 0
+        for (o in open.filter { it.side == "buy" && it.clientId.startsWith("mt-") }) {
+            if (attempt { broker.cancelOrder(o.id) } != null) cancelled++
+        }
+        if (cancelled > 0) monitor.info(StepKind.WARN, w.cancelledOnStop(cancelled))
+        return cancelled
+    }
+
     fun skip(id: String): Boolean {
         val done = proposals.skip(id) != null
         publishProposals()
@@ -372,8 +445,8 @@ class Engine(
      */
     private suspend fun look(
         s: TradingSettings, w: Words, held: List<HeldPosition>, trading: Boolean,
-    ): Pair<Map<String, Signal>, List<Snapshot>> {
-        val symbols = (s.watchlist + held.filter { it.managed }.map { it.position.symbol }).distinct()
+    ): Look {
+        val symbols = watched(s, held)
         val tf = s.horizon.timeframe
         val bars = LinkedHashMap<String, List<Bar>>()
         val fetch = monitor.begin(StepKind.BARS, w.fetchingBars(symbols.size, tf))
@@ -410,10 +483,41 @@ class Engine(
         )
         analysis.done(if (trading) summary else "$summary · ${w.notTradingNow()}", lines)
         _state.update { it.copy(snapshots = snapshots, bars = bars.mapValues { e -> e.value.takeLast(CHART_BARS) }) }
-        return signals to snapshots
+
+        brain?.let { b ->
+            b.evaluate(symbols, snapshots.filter { it.ready }.associate { it.symbol to it.price })
+            // Every buy signal is followed in the head, bought or not, and
+            // finished ones are counted: this is what the bot learns from.
+            val tracked = b.track(signals, snapshots, bars, risk, s)
+            if (tracked.opened.isNotEmpty() || tracked.closed.isNotEmpty()) {
+                monitor.info(StepKind.LEARN, w.shadowTitle(tracked.opened.size, tracked.closed.size), null,
+                    tracked.opened.map { w.shadowOpened(it) } + tracked.closed.map { w.shadowClosed(it) })
+            }
+            for (rule in tracked.newRules) learnedRule(rule, w)
+            publishBrain(s, held)
+        }
+        return Look(signals, snapshots, bars)
+    }
+
+    private fun watched(s: TradingSettings, held: List<HeldPosition>): List<String> =
+        (s.watchlist + held.filter { it.managed }.map { it.position.symbol }).distinct()
+
+    private fun publishBrain(s: TradingSettings, held: List<HeldPosition>) {
+        val b = brain ?: return
+        _state.update { it.copy(brain = b.snapshot(watched(s, held))) }
+    }
+
+    private fun learnedRule(rule: BucketStats, w: Words) {
+        val text = w.ruleText(rule)
+        monitor.info(StepKind.LEARN, w.learnedTitle(), text)
+        notifier.learned(w.learnedTitle(), text)
     }
 
     private suspend fun place(entry: Entry, w: Words, headlines: List<String>): Boolean {
+        if (!allowed()) {
+            monitor.info(StepKind.WARN, w.stoppedNoBuy(entry.symbol))
+            return false
+        }
         val order = try {
             val clientId = "mt-" + UUID.randomUUID().toString().take(24)
             if (entry.fractional) {
@@ -431,7 +535,9 @@ class Engine(
             return false
         }
         store.addOwned(entry.symbol)
+        store.logOrder(OrderLog(entry.symbol, "buy", entry.qty, entry.price, now(), entry.reason))
         if (entry.fractional) store.setGuard(entry.symbol, entry.stop, entry.target)
+        researched.remove(entry.symbol)?.let { brain?.bought(entry, it.features) }
         notifier.orderPlaced(entry)
 
         val ai = explainer ?: return order.id.isNotEmpty()
@@ -478,6 +584,7 @@ class Engine(
                 }
                 exitReasons[symbol] = why
                 broker.closePosition(symbol)
+                store.logOrder(OrderLog(symbol, "sell", 0.0, 0.0, now(), reason))
             }, { w.sold() })
         }
     }
@@ -500,6 +607,11 @@ class Engine(
                 store.addTrade(trade)
                 notifier.positionClosed(trade)
                 monitor.info(StepKind.SELL, w.closedAtBroker(trade), w.closedDetail(trade))
+                brain?.let { b ->
+                    val (rules, lesson) = b.closed(trade, monitor, w)
+                    lesson?.let { addNote(it.symbol, it.text); notifier.learned(w.lessonTitle(trade.symbol), it.text) }
+                    rules.forEach { learnedRule(it, w) }
+                }
             }
             exitReasons.remove(sym)
         }

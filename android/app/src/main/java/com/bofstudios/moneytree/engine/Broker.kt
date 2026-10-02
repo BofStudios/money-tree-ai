@@ -17,6 +17,11 @@ interface Broker {
     suspend fun bars(symbol: String, timeframe: Timeframe, limit: Int): List<Bar>
     suspend fun latestPrice(symbol: String): Double?
     suspend fun news(symbol: String, limit: Int): List<Headline>
+    /**
+     * The wire for several symbols at once, newest first, with ids so the
+     * same story is never counted twice. [since] is epoch millis.
+     */
+    suspend fun newsFeed(symbols: List<String>, since: Long?, limit: Int): List<NewsItem> = emptyList()
     /** Recently closed orders for one symbol, newest first, legs nested. */
     suspend fun recentOrders(symbol: String, limit: Int): List<BrokerOrder>
 

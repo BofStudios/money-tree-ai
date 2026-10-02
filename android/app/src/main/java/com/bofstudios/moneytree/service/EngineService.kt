@@ -17,11 +17,16 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.bofstudios.moneytree.MoneyTreeApp
 import com.bofstudios.moneytree.R
+import com.bofstudios.moneytree.ai.AiCommittee
 import com.bofstudios.moneytree.ai.GroqExplainer
 import com.bofstudios.moneytree.broker.AlpacaBroker
+import com.bofstudios.moneytree.data.BrainFiles
 import com.bofstudios.moneytree.data.Prefs
 import com.bofstudios.moneytree.data.SecureStore
+import com.bofstudios.moneytree.engine.Brain
 import com.bofstudios.moneytree.engine.Engine
+import com.bofstudios.moneytree.research.Frankfurter
+import com.bofstudios.moneytree.research.SecEdgar
 import com.bofstudios.moneytree.engine.EngineState
 import com.bofstudios.moneytree.engine.StepKind
 import com.bofstudios.moneytree.engine.StepState
@@ -78,8 +83,21 @@ class EngineService : Service() {
         goForeground(ongoing(Hub.state.value, Hub.steps.value))
         // No intent means Android restarted the service after killing it.
         val auto = intent == null || intent.getStringExtra(EXTRA_SOURCE) == SOURCE_AUTO
-        when (intent?.action) {
-            ACTION_STOP -> { stopBot(); return START_NOT_STICKY }
+        val action = intent?.action
+        if (action == ACTION_STOP) { stopBot(); return START_NOT_STICKY }
+        // Stop means stop. A button on an old notification (Approve, Skip, Look
+        // now) or an automatic restart must never bring back a bot the owner
+        // stopped: only Start in the app does. Before 3.0 these fell through to
+        // starting the loop again.
+        if (!prefs.runWanted && (action != null || auto)) {
+            intent?.getStringExtra(EXTRA_ID)?.let { notifications().cancel(approvalNotificationId(it)) }
+            if (loop?.isActive != true) {
+                ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+                stopSelf()
+            }
+            return START_NOT_STICKY
+        }
+        when (action) {
             ACTION_APPROVE -> intent.getStringExtra(EXTRA_ID)?.let { approve(it) }
             ACTION_SKIP -> intent.getStringExtra(EXTRA_ID)?.let { id ->
                 Hub.engine?.skip(id)
@@ -99,6 +117,7 @@ class EngineService : Service() {
         releaseSession()
         scope.cancel()
         Hub.engine = null
+        Hub.brain = null
         Hub.running.value = false
         super.onDestroy()
     }
@@ -121,7 +140,19 @@ class EngineService : Service() {
             return
         }
 
-        val ai = secure.get(SecureStore.GROQ_KEY)?.let { GroqExplainer(it) }
+        val groq = secure.get(SecureStore.GROQ_KEY)
+        val ai = groq?.let { GroqExplainer(it) }
+        // Two different models vote on every buy; either can stop it.
+        val committee = groq?.let { AiCommittee(listOf("gpt-oss" to GroqExplainer(it, GroqExplainer.BIG), "qwen" to GroqExplainer(it, GroqExplainer.SECOND))) }
+        val brainFiles = BrainFiles(java.io.File(filesDir, "brain"))
+        val brain = Brain(
+            store = brainFiles,
+            filings = SecEdgar(brainFiles),
+            fx = Frankfurter(),
+            scorer = groq?.let { GroqExplainer(it, GroqExplainer.SMALL) },
+            analyst = ai,
+            coach = ai,
+        )
         val engine = Engine(
             broker = AlpacaBroker(key, secret, live = settings.live),
             store = prefs,
@@ -129,9 +160,14 @@ class EngineService : Service() {
             settings = { prefs.settings(Hub.armed.value) },
             notifier = AndroidNotifier(this) { prefs.settings(false) },
             explainer = ai,
-            researcher = ai,
+            researcher = committee,
+            brain = brain,
+            // Checked right before every order is sent: once Stop is pressed,
+            // a look that is already halfway through cannot buy.
+            allowed = { Hub.running.value && prefs.runWanted },
         )
         Hub.engine = engine
+        Hub.brain = brain
         Hub.running.value = true
         prefs.runWanted = true
 
@@ -203,12 +239,23 @@ class EngineService : Service() {
     }
 
     private fun stopBot() {
+        // First, the two switches the engine checks right before any order.
         prefs.runWanted = false
+        Hub.running.value = false
+        Hub.armed.value = false
+        val engine = Hub.engine
         Alarms.cancelAll(this)
         releaseSession()
         Hub.nextLookAt.value = null
         loop?.cancel()
+        // Buys waiting for an OK die with the bot…
+        engine?.state?.value?.approvals?.forEach { notifications().cancel(approvalNotificationId(it.id)) }
+        engine?.settingsChanged()
+        // …and a buy already sent to Alpaca but not filled yet is withdrawn.
+        // Stops protecting what it holds stay where they are.
+        engine?.let { e -> cleanup.launch { withTimeoutOrNull(30_000L) { e.cancelPendingBuys() } } }
         Hub.engine = null
+        Hub.brain = null
         Hub.running.value = false
         Hub.armed.value = false
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
@@ -311,6 +358,9 @@ class EngineService : Service() {
         /** How long before the open the CPU is held awake, so the first look is on time. */
         private const val OPEN_EARLY_MS = 10 * 60_000L
         private const val SESSION_MAX_MS = 8 * 60 * 60_000L
+
+        /** Outlives the service, so Stop can finish withdrawing orders after it is gone. */
+        private val cleanup = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
         /** Started by the owner, from the app. */
         fun start(context: Context) =

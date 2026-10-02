@@ -65,6 +65,12 @@ data class TradingSettings(
      * stop a buy, never start one. Needs a Groq key; without one it is skipped.
      */
     val aiCheck: Boolean = true,
+    /** How picky the five checks are (business, moat, management, value, risk). */
+    val qualityMode: QualityMode = QualityMode.BALANCED,
+    /** Skip buys with fresh red flags in the news, or clearly bad news. */
+    val newsCheck: Boolean = true,
+    /** Let past signals' results hold back (or shrink) the kinds of buy that keep losing. */
+    val learning: Boolean = true,
 ) {
     fun riskConfig(): RiskConfig = RiskConfig(
         maxPositionPct = riskLevel.maxPositionPct,

@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bofstudios.moneytree.data.Prefs
 import com.bofstudios.moneytree.engine.HeldPosition
+import com.bofstudios.moneytree.engine.OrderLog
 import com.bofstudios.moneytree.engine.Snapshot
 import com.bofstudios.moneytree.engine.TradeRecord
 import com.bofstudios.moneytree.engine.Words
@@ -47,6 +48,7 @@ fun PortfolioScreen(prefs: Prefs) {
     val w = Words(LocalTurkish.current)
     // Re-read the journal whenever the feed moves; closes are announced there.
     val trades = remember(steps.size) { prefs.trades().asReversed() }
+    val orders = remember(steps.size) { prefs.orderLog().asReversed() }
     var open by rememberSaveable { mutableStateOf<String?>(null) }
 
     LazyColumn(
@@ -99,6 +101,16 @@ fun PortfolioScreen(prefs: Prefs) {
                 }
             }
         }
+
+        item { SectionTitle(tx("Orders Money Tree sent", "Money Tree'nin gönderdiği emirler")) }
+        if (orders.isEmpty()) {
+            item {
+                Text(tx("None yet. Every buy and sell it sends is listed here with the exact time — anything else in your Alpaca account was not Money Tree.",
+                    "Henüz yok. Gönderdiği her alım ve satış burada tam saatiyle listelenir — Alpaca hesabındaki başka bir işlem Money Tree'nin değildir."),
+                    color = MT.Text3, fontSize = 13.sp, lineHeight = 18.sp)
+            }
+        }
+        items(orders.take(30), key = { "o-${it.symbol}-${it.at}-${it.side}" }) { OrderRow(it, w) }
 
         item { SectionTitle(tx("Closed trades", "Kapanan işlemler")) }
         if (trades.isEmpty()) {
@@ -159,6 +171,25 @@ private fun SnapshotRow(s: Snapshot, w: Words, open: Boolean, onClick: () -> Uni
         Spacer(Modifier.width(8.dp))
         Text(if (open) "▴" else "▾", color = MT.Text3, fontSize = 12.sp)
     }
+}
+
+@Composable
+private fun OrderRow(o: OrderLog, w: Words) {
+    val date = remember(o.at) { SimpleDateFormat("d MMM HH:mm:ss", Locale.getDefault()).format(Date(o.at)) }
+    val buy = o.side == "buy"
+    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(if (buy) tx("BUY", "AL") else tx("SELL", "SAT"), Modifier.width(44.dp), color = if (buy) MT.Up else MT.Down,
+            fontFamily = MT.Mono, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+        Column(Modifier.weight(1f)) {
+            Text(
+                if (buy) "${o.symbol} · ${com.bofstudios.moneytree.engine.formatQty(o.qty)} @ ${w.usd(o.price)}"
+                else "${o.symbol} · ${tx("whole position", "tüm pozisyon")}",
+                fontWeight = FontWeight.Medium, fontSize = 13.sp,
+            )
+            Text("$date · ${o.why}", color = MT.Text3, fontSize = 10.5.sp, maxLines = 1)
+        }
+    }
+    HorizontalDivider(color = MT.Line)
 }
 
 @Composable

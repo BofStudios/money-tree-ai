@@ -55,6 +55,7 @@ import com.bofstudios.moneytree.engine.Autonomy
 import com.bofstudios.moneytree.engine.Horizon
 import com.bofstudios.moneytree.engine.Market
 import com.bofstudios.moneytree.engine.NotifyLevel
+import com.bofstudios.moneytree.engine.QualityMode
 import com.bofstudios.moneytree.engine.RiskLevel
 import com.bofstudios.moneytree.engine.TradingSettings
 import com.bofstudios.moneytree.engine.Words
@@ -83,7 +84,7 @@ fun SetupScreen(initial: TradingSettings, onDone: (TradingSettings) -> Unit, onL
     var keysOk by remember { mutableStateOf(secure.has(SecureStore.PAPER_KEY) && secure.has(SecureStore.PAPER_SECRET)) }
     val turkish = LocalTurkish.current
     val w = Words(turkish)
-    val total = 15
+    val total = 16
     val example = (size ?: Size.SMALL).example
     fun next(change: TradingSettings.() -> TradingSettings = { this }) { s = s.change(); step++ }
 
@@ -267,8 +268,8 @@ fun SetupScreen(initial: TradingSettings, onDone: (TradingSettings) -> Unit, onL
                     }
                     12 -> {
                         Heading(tx("Let the AI veto risky buys?", "AI riskli alımları veto edebilsin mi?"))
-                        Lead(tx("Before each buy, the AI reads up to five fresh headlines. On a clear red flag it passes and the stock is left alone for an hour.",
-                            "Her alımdan önce AI en fazla beş taze başlık okur. Net bir kırmızı bayrakta geçer ve o hisseye bir saat dokunulmaz."))
+                        Lead(tx("Before each buy, two different AI models read the fresh headlines and the research side by side. If either sees a clear red flag, it passes and the stock is left alone for an hour.",
+                            "Her alımdan önce iki farklı AI modeli taze başlıkları ve araştırmayı yan yana okur. Biri bile net bir kırmızı bayrak görürse geçer ve o hisseye bir saat dokunulmaz."))
                         val hasKey = groq.isNotEmpty() || secure.has(SecureStore.GROQ_KEY)
                         if (!hasKey) {
                             Text(tx("No Groq key yet, so this does nothing until you add one in Settings.",
@@ -280,6 +281,20 @@ fun SetupScreen(initial: TradingSettings, onDone: (TradingSettings) -> Unit, onL
                             "Haberleri yine okur ve gösterir ama yüzünden asla geçmez."), !s.aiCheck) { next { copy(aiCheck = false) } }
                     }
                     13 -> {
+                        Heading(tx("How picky should it be?", "Ne kadar seçici olsun?"))
+                        Lead(tx("Before buying, it runs five checks from each company's own annual reports: does the business make money, can rivals copy it, does management create value, is the price below the value, what could go wrong. Plus the daily trend, the news and what similar signals returned.",
+                            "Almadan önce her şirketin kendi yıllık raporlarından beş kontrol yapar: işletme para kazanıyor mu, rakipler kopyalayabilir mi, yönetim değer yaratıyor mu, fiyat değerin altında mı, ne ters gidebilir. Artı günlük trend, haberler ve benzer sinyallerin sonuçları."))
+                        Option(w.qualityModeName(QualityMode.STRICT), tx("Only the buy zone: a good business at a fair price. Very few trades — most big names are rarely cheap.",
+                            "Sadece alım bölgesi: makul fiyatlı iyi bir işletme. Çok az işlem — büyük isimler nadiren ucuzdur."),
+                            s.qualityMode == QualityMode.STRICT) { next { copy(qualityMode = QualityMode.STRICT) } }
+                        Option(w.qualityModeName(QualityMode.BALANCED), tx("Recommended. Never a stock that fails the checks or fights a falling daily chart; good businesses at a high price get a smaller size.",
+                            "Önerilen. Kontrolden kalan ya da düşen günlük grafiğe karşı olan hisse asla alınmaz; pahalı iyi işletmelere daha küçük pozisyon."),
+                            s.qualityMode == QualityMode.BALANCED) { next { copy(qualityMode = QualityMode.BALANCED) } }
+                        Option(w.qualityModeName(QualityMode.OFF), tx("The checks still show, but only the chart rules, the news and learning decide.",
+                            "Kontroller yine görünür ama sadece grafik kuralları, haberler ve öğrenme karar verir."),
+                            s.qualityMode == QualityMode.OFF) { next { copy(qualityMode = QualityMode.OFF) } }
+                    }
+                    14 -> {
                         Heading(tx("Keep it running around the clock", "Gece gündüz çalışsın"))
                         Lead(tx("Android pauses apps to save battery. Allow Money Tree to run in the background, or it may stop while the screen is off. While the US market is open it keeps the phone's processor awake so it looks every minute — plugging in during those hours (16:30–23:00 Turkey time) is a good idea.",
                             "Android pil için uygulamaları duraklatır. Money Tree'nin arka planda çalışmasına izin ver, yoksa ekran kapalıyken durabilir. ABD piyasası açıkken dakikada bir bakabilmek için telefonun işlemcisini uyanık tutar — o saatlerde (Türkiye saatiyle 16:30–23:00) şarja takmak iyi fikir."))
@@ -296,6 +311,8 @@ fun SetupScreen(initial: TradingSettings, onDone: (TradingSettings) -> Unit, onL
                             Autonomy.MANUAL -> tx("I won't open anything — only tell you what I see.", "Hiçbir işlem açmayacağım, sadece ne gördüğümü söyleyeceğim.")
                         })
                         Summary(riskName(s.riskLevel) + " · " + riskHint(s.riskLevel, example, w))
+                        Summary(tx("Five checks: ", "5 kontrol: ") + w.qualityModeName(s.qualityMode) + tx(" · news red flags hold buys back · it learns from every signal it follows.",
+                            " · haberdeki kırmızı bayraklar alımı durdurur · takip ettiği her sinyalden öğrenir."))
                         Summary(tx("At most ${s.maxPositions} at once · no new buys after a ${s.dailyLossPct.toInt()}% day · using ${s.usePct}% of the account.",
                             "Aynı anda en fazla ${s.maxPositions} · %${s.dailyLossPct.toInt()} düşüşte gün biter · hesabın %${s.usePct}'ı kullanılır."))
                         Summary(if (s.fractional) tx("Small-account mode: fractions of a share. Each stop is placed at Alpaca every trading day; the target is watched by this phone.",
@@ -325,8 +342,8 @@ fun SetupScreen(initial: TradingSettings, onDone: (TradingSettings) -> Unit, onL
                     if (groq.isNotEmpty()) secure.put(SecureStore.GROQ_KEY, groq)
                     step = 3
                 })
-                13 -> PrimaryButton(tx("Next", "İleri"), { step = 14 })
-                in 3..12 -> Unit // an option tap moves on
+                14 -> PrimaryButton(tx("Next", "İleri"), { step = 15 })
+                in 3..13 -> Unit // an option tap moves on
                 else -> PrimaryButton(tx("Start Money Tree", "Money Tree'yi başlat"), {
                     // Asked again on an update, a real-money setup stays real money.
                     onDone(s.copy(market = s.market ?: Market.US))

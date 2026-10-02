@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -46,6 +47,7 @@ import com.bofstudios.moneytree.engine.Autonomy
 import com.bofstudios.moneytree.engine.Horizon
 import com.bofstudios.moneytree.engine.Market
 import com.bofstudios.moneytree.engine.NotifyLevel
+import com.bofstudios.moneytree.engine.QualityMode
 import com.bofstudios.moneytree.engine.RiskLevel
 import com.bofstudios.moneytree.engine.TradingSettings
 import com.bofstudios.moneytree.engine.Words
@@ -164,20 +166,38 @@ fun SettingsScreen(
             )
         }
 
-        SectionTitle(tx("AI research", "AI araştırması"))
-        Card(highlight = settings.aiCheck) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(tx("Let the AI veto risky buys", "AI riskli alımları veto etsin"), fontWeight = FontWeight.SemiBold)
-                    Text(tx("Reads the latest headlines before each buy and passes on a clear red flag. It can stop a buy, never start one.",
-                        "Her alımdan önce son başlıkları okur, net bir kırmızı bayrakta geçer. Alımı durdurabilir, asla başlatamaz."),
-                        color = MT.Text3, fontSize = 12.sp)
-                }
-                Switch(settings.aiCheck, { onChange(settings.copy(aiCheck = it)) },
-                    colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = MT.Accent))
+        SectionTitle(tx("Brain", "Beyin"))
+        Card(highlight = settings.qualityMode != QualityMode.OFF) {
+            Text(tx("Five checks before a buy", "Alımdan önce 5 kontrol"), color = MT.Text2, fontSize = 12.5.sp)
+            Spacer(Modifier.height(8.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                QualityMode.entries.forEach { m -> Chip(w.qualityModeName(m), settings.qualityMode == m, { onChange(settings.copy(qualityMode = m)) }) }
             }
+            Text(
+                when (settings.qualityMode) {
+                    QualityMode.STRICT -> tx("Buys only the buy zone: a good business at a fair price, daily chart rising. Expect very few trades.",
+                        "Sadece alım bölgesi: makul fiyatlı iyi işletme, günlük grafik yükselişte. Çok az işlem bekle.")
+                    QualityMode.BALANCED -> tx("Never a stock that fails the checks or fights a falling daily chart. A good business at a high price gets a smaller size.",
+                        "Kontrolden kalan ya da düşen günlük grafiğe karşı hisse asla alınmaz. Pahalı iyi işletmeye daha küçük pozisyon.")
+                    QualityMode.OFF -> tx("The checks still show in the Brain tab, but never hold a buy back.",
+                        "Kontroller Beyin sekmesinde yine görünür ama alımı asla durdurmaz.")
+                },
+                color = MT.Text3, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp),
+            )
+            BrainSwitch(tx("News check", "Haber kontrolü"),
+                tx("Holds a buy back on a fresh red flag (earnings due, an offering, a halt, a guidance cut) or clearly bad news.",
+                    "Taze bir kırmızı bayrakta (bilanço yaklaşıyor, hisse satışı, işlem durdurma, beklenti düşürme) ya da net kötü haberde alımı durdurur."),
+                settings.newsCheck) { onChange(settings.copy(newsCheck = it)) }
+            BrainSwitch(tx("Learn from results", "Sonuçlardan öğren"),
+                tx("Follows every signal to its result and stops buying the kinds that keep losing — only after 10 results of a kind.",
+                    "Her sinyali sonucuna kadar takip eder, sürekli kaybettiren türleri almayı bırakır — aynı türden 10 sonuçtan sonra."),
+                settings.learning) { onChange(settings.copy(learning = it)) }
+            BrainSwitch(tx("AI committee veto", "AI kurulu vetosu"),
+                tx("Two different AI models read the headlines and the research before each buy; either can stop it. Never starts one.",
+                    "Her alımdan önce iki farklı AI modeli başlıkları ve araştırmayı okur; biri bile durdurabilir. Asla alım başlatmaz."),
+                settings.aiCheck) { onChange(settings.copy(aiCheck = it)) }
             if (!secure.has(SecureStore.GROQ_KEY)) {
-                Text(tx("Needs a free Groq key — add it under Keys below.", "Ücretsiz bir Groq anahtarı gerekir — aşağıda Anahtarlar'a ekle."),
+                Text(tx("The AI parts need a free Groq key — add it under Keys below.", "AI kısımları ücretsiz bir Groq anahtarı ister — aşağıda Anahtarlar'a ekle."),
                     color = MT.Accent, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
             }
         }
@@ -310,9 +330,9 @@ fun SettingsScreen(
         }
 
         Spacer(Modifier.height(24.dp))
-        Text(tx("Prices come from Alpaca's free IEX feed. This is a tool, not financial advice.",
-            "Fiyatlar Alpaca'nın ücretsiz IEX akışından gelir. Bu bir araç, yatırım tavsiyesi değil."),
-            color = MT.Text3, fontSize = 11.sp)
+        Text(tx("Prices and news come from Alpaca's free feeds; company reports from the SEC and exchange rates from the ECB — public data, and nothing about you is sent to either. This is a tool, not financial advice.",
+            "Fiyatlar ve haberler Alpaca'nın ücretsiz akışlarından; şirket raporları SEC'ten, döviz kurları Avrupa Merkez Bankası'ndan gelir — açık veriler, ikisine de senin hakkında hiçbir şey gitmez. Bu bir araç, yatırım tavsiyesi değil."),
+            color = MT.Text3, fontSize = 11.sp, lineHeight = 15.sp)
     }
 
     if (confirmLive) {
@@ -350,6 +370,18 @@ private fun horizonName(h: Horizon) = when (h) {
     Horizon.SHORT -> tx("Short", "Kısa")
     Horizon.MEDIUM -> tx("Medium", "Orta")
     Horizon.LONG -> tx("Long", "Uzun")
+}
+
+@Composable
+private fun BrainSwitch(title: String, hint: String, on: Boolean, onToggle: (Boolean) -> Unit) {
+    Row(Modifier.padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, fontWeight = FontWeight.SemiBold)
+            Text(hint, color = MT.Text3, fontSize = 12.sp, lineHeight = 16.sp)
+        }
+        Spacer(Modifier.width(10.dp))
+        Switch(on, onToggle, colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = MT.Accent))
+    }
 }
 
 @Composable

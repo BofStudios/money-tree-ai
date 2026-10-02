@@ -9,6 +9,7 @@ import com.bofstudios.moneytree.engine.BrokerPosition
 import com.bofstudios.moneytree.engine.Entry
 import com.bofstudios.moneytree.engine.Headline
 import com.bofstudios.moneytree.engine.MarketClock
+import com.bofstudios.moneytree.engine.NewsItem
 import com.bofstudios.moneytree.engine.Timeframe
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -142,6 +143,19 @@ class AlpacaBroker(
             val n = arr.getJSONObject(i)
             Headline(n.optString("headline"), n.optString("source"), n.optString("created_at"))
         }
+    }
+
+    override suspend fun newsFeed(symbols: List<String>, since: Long?, limit: Int): List<NewsItem> {
+        val j = getObject(
+            url(dataBase, "/v1beta1/news") {
+                addQueryParameter("symbols", symbols.joinToString(",") { it.uppercase() })
+                addQueryParameter("limit", limit.coerceIn(1, 50).toString())
+                addQueryParameter("sort", "desc")
+                addQueryParameter("include_content", "false")
+                since?.let { addQueryParameter("start", DateTimeFormatter.ISO_INSTANT.format(Instant.ofEpochMilli(it).truncatedTo(ChronoUnit.SECONDS))) }
+            }
+        )
+        return parseNews(j)
     }
 
     override suspend fun recentOrders(symbol: String, limit: Int): List<BrokerOrder> {
@@ -284,6 +298,26 @@ class AlpacaBroker(
         fun price(value: Double): String =
             if (value >= 1.0) String.format(Locale.US, "%.2f", value)
             else String.format(Locale.US, "%.4f", value)
+
+        /** Alpaca's news (Benzinga): ids are numbers, symbols a list, times ISO. */
+        fun parseNews(j: JSONObject): List<NewsItem> {
+            val arr = j.optJSONArray("news") ?: return emptyList()
+            return (0 until arr.length()).mapNotNull { i ->
+                val n = arr.getJSONObject(i)
+                val id = n.optLong("id", -1L).takeIf { it >= 0 } ?: return@mapNotNull null
+                val symbols = n.optJSONArray("symbols")?.let { a -> (0 until a.length()).map { a.getString(it).uppercase() } }.orEmpty()
+                NewsItem(
+                    id = id,
+                    headline = n.optString("headline").trim(),
+                    // Summaries can carry HTML from the source; the screen wants plain text.
+                    summary = n.optString("summary").replace(Regex("<[^>]+>"), " ").replace(Regex("\\s+"), " ").trim(),
+                    source = n.optString("source"),
+                    symbols = symbols,
+                    createdAt = parseTime(n.optString("created_at")),
+                    url = n.optString("url"),
+                )
+            }.filter { it.headline.isNotEmpty() }
+        }
 
         fun parseTime(text: String): Long =
             if (text.isBlank()) 0L
