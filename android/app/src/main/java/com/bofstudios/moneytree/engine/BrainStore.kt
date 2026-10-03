@@ -79,7 +79,7 @@ object BrainCodec {
     private fun features(f: Features): JSONObject = JSONObject()
         .put("sym", f.symbol).put("q", f.quality.name).putN("news", f.news).putN("rsi", f.rsi.takeUnless { it.isNaN() })
         .putN("stretch", f.stretch.takeUnless { it.isNaN() }).put("min", f.minuteOfSession ?: JSONObject.NULL)
-        .put("daily", f.dailyUp ?: JSONObject.NULL)
+        .put("daily", f.dailyUp ?: JSONObject.NULL).putN("att", f.attention)
 
     private fun features(o: JSONObject): Features = Features(
         symbol = o.getString("sym"),
@@ -87,6 +87,7 @@ object BrainCodec {
         news = o.n("news"), rsi = o.n("rsi") ?: Double.NaN, stretch = o.n("stretch") ?: Double.NaN,
         minuteOfSession = if (o.isNull("min") || !o.has("min")) null else o.getInt("min"),
         dailyUp = if (o.isNull("daily") || !o.has("daily")) null else o.getBoolean("daily"),
+        attention = o.n("att"),
     )
 
     fun shadows(list: List<ShadowTrade>): String = JSONArray().apply {
@@ -127,6 +128,18 @@ object BrainCodec {
     }.toString()
 
     fun notes(text: String?): List<AiNote> = list(text) { o -> AiNote(o.getString("sym"), o.getString("t"), o.optLong("at")) }
+
+    fun discoveries(list: List<Discovery>): String = JSONArray().apply {
+        list.forEach { d ->
+            put(JSONObject().put("sym", d.symbol).put("name", d.name).put("m", d.mentions).put("d", d.decision.name)
+                .put("s", d.score).put("at", d.at))
+        }
+    }.toString()
+
+    fun discoveries(text: String?): List<Discovery> = list(text) { o ->
+        Discovery(o.getString("sym"), o.optString("name"), o.optInt("m"),
+            runCatching { Decision.valueOf(o.getString("d")) }.getOrDefault(Decision.UNKNOWN), o.optDouble("s"), o.getLong("at"))
+    }
 
     // -------------------------------------------------------------- helpers
     private fun <T> list(text: String?, read: (JSONObject) -> T): List<T> {

@@ -71,6 +71,10 @@ import com.bofstudios.moneytree.data.SETUP_VERSION
 import com.bofstudios.moneytree.engine.TradingSettings
 import com.bofstudios.moneytree.service.EngineService
 import com.bofstudios.moneytree.service.Hub
+import com.bofstudios.moneytree.service.UpdateCheck
+import com.bofstudios.moneytree.BuildConfig
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 /**
  * The app opens behind the phone's own lock — fingerprint, face or PIN — and
@@ -132,6 +136,11 @@ class MainActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // A newer release on GitHub shows as a card on Home; checked a few times a day.
+        if (Hub.update.value == null && System.currentTimeMillis() - prefs.updateCheckedAt > 3 * 3_600_000L) {
+            prefs.updateCheckedAt = System.currentTimeMillis()
+            lifecycleScope.launch { UpdateCheck.newer(BuildConfig.VERSION_NAME)?.let { Hub.update.value = it } }
+        }
         if (unlocked && pausedAt > 0 && SystemClock.elapsedRealtime() - pausedAt > RELOCK_MS) unlocked = false
         if (!unlocked) authenticate()
         settings = prefs.settings(Hub.armed.value)

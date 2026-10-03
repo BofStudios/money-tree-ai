@@ -27,6 +27,12 @@ import com.bofstudios.moneytree.engine.Brain
 import com.bofstudios.moneytree.engine.Engine
 import com.bofstudios.moneytree.research.Frankfurter
 import com.bofstudios.moneytree.research.SecEdgar
+import com.bofstudios.moneytree.research.Wikipedia
+import com.bofstudios.moneytree.engine.TrainMode
+import android.content.IntentFilter
+import android.os.BatteryManager
+import android.os.SystemClock
+import kotlinx.coroutines.delay
 import com.bofstudios.moneytree.engine.EngineState
 import com.bofstudios.moneytree.engine.StepKind
 import com.bofstudios.moneytree.engine.StepState
@@ -69,6 +75,7 @@ class EngineService : Service() {
     private lateinit var prefs: Prefs
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var sessionLock: PowerManager.WakeLock? = null
+    private var trainLock: PowerManager.WakeLock? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -145,13 +152,16 @@ class EngineService : Service() {
         // Two different models vote on every buy; either can stop it.
         val committee = groq?.let { AiCommittee(listOf("gpt-oss" to GroqExplainer(it, GroqExplainer.BIG), "qwen" to GroqExplainer(it, GroqExplainer.SECOND))) }
         val brainFiles = BrainFiles(java.io.File(filesDir, "brain"))
+        val sec = SecEdgar(brainFiles)
         val brain = Brain(
             store = brainFiles,
-            filings = SecEdgar(brainFiles),
+            filings = sec,
             fx = Frankfurter(),
             scorer = groq?.let { GroqExplainer(it, GroqExplainer.SMALL) },
             analyst = ai,
             coach = ai,
+            events = sec,
+            attention = Wikipedia(brainFiles),
         )
         val engine = Engine(
             broker = AlpacaBroker(key, secret, live = settings.live),
@@ -180,6 +190,7 @@ class EngineService : Service() {
             launch {
                 engine.state.collect { Hub.state.value = it }
             }
+            launch(Dispatchers.Default) { train(brain, engine) }
             launch {
                 // The ongoing notification says what the bot is doing right now.
                 combine(Hub.state, Hub.steps) { state, steps -> ongoingText(state, steps) }
@@ -211,6 +222,61 @@ class EngineService : Service() {
                 asked = withTimeoutOrNull(sleep) { Hub.wake.receive() } != null
             }
         }
+    }
+
+    /**
+     * Self-improvement, around the clock: one generation after another of
+     * strategy settings bred and replayed on months of candles. On the charger
+     * (or when the owner allows it on battery) it runs at about 80% of one
+     * core and keeps the CPU awake to do it; on battery it takes about a
+     * tenth of that and lets the phone sleep.
+     */
+    private suspend fun train(brain: Brain, engine: Engine) {
+        val power = getSystemService(Context.POWER_SERVICE) as PowerManager
+        var lastPublish = 0L
+        var charging = false
+        var checkedAt = 0L
+        try {
+            while (true) {
+                val s = prefs.settings(false)
+                val evo = brain.evolution
+                if (!s.selfImprove || !evo.ready) {
+                    evo.mode = if (!s.selfImprove) TrainMode.OFF else TrainMode.WAITING
+                    releaseTrain()
+                    Hub.evolution.value = evo.snapshot()
+                    delay(15_000)
+                    continue
+                }
+                if (SystemClock.elapsedRealtime() - checkedAt > 10_000) { charging = isCharging(); checkedAt = SystemClock.elapsedRealtime() }
+                val full = charging || s.trainOnBattery
+                evo.mode = if (full) TrainMode.FULL else TrainMode.LIGHT
+                if (full) holdTrain(power) else releaseTrain()
+                val started = SystemClock.elapsedRealtime()
+                brain.train()?.let { engine.announce(it) }
+                val took = SystemClock.elapsedRealtime() - started
+                if (SystemClock.elapsedRealtime() - lastPublish > 1000) {
+                    Hub.evolution.value = evo.snapshot()
+                    lastPublish = SystemClock.elapsedRealtime()
+                }
+                delay(if (full) took / 4 + 1 else took * 9 + 50)
+            }
+        } finally {
+            releaseTrain()
+        }
+    }
+
+    private fun isCharging(): Boolean =
+        (registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0) != 0
+
+    private fun holdTrain(power: PowerManager) {
+        val lock = trainLock
+        if (lock != null && lock.isHeld) return
+        trainLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "moneytree:train").apply { acquire(TRAIN_LOCK_MS) }
+    }
+
+    private fun releaseTrain() {
+        trainLock?.let { if (it.isHeld) it.release() }
+        trainLock = null
     }
 
     /** Keeps the CPU awake through the trading session, so one-minute looks stay one minute. */
@@ -358,6 +424,8 @@ class EngineService : Service() {
         /** How long before the open the CPU is held awake, so the first look is on time. */
         private const val OPEN_EARLY_MS = 10 * 60_000L
         private const val SESSION_MAX_MS = 8 * 60 * 60_000L
+        /** Re-taken while training continues; only a safety net if something hangs. */
+        private const val TRAIN_LOCK_MS = 30 * 60_000L
 
         /** Outlives the service, so Stop can finish withdrawing orders after it is gone. */
         private val cleanup = CoroutineScope(SupervisorJob() + Dispatchers.IO)

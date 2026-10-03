@@ -18,6 +18,7 @@ enum class RedFlagKind(val severe: Boolean, val hours: Int) {
     FRAUD(true, 72),
     DELISTING(true, 72),
     OFFERING(true, 72),
+    ACCOUNTING(true, 96),
     GUIDANCE_CUT(false, 48),
     EARNINGS_SOON(false, 36),
     REGULATOR(false, 48),
@@ -181,7 +182,12 @@ data class RadarSnapshot(
     val topics: List<TopicCount> = emptyList(),
     val flags: List<RedFlag> = emptyList(),
     val aiRead: Int = 0,
+    /** The whole market's wire: the most talked-about stocks of the last 24 hours. */
+    val hot: List<HotStock> = emptyList(),
+    val wireSize: Int = 0,
 )
+
+data class HotStock(val symbol: String, val mentions: Int, val mood: Double)
 
 data class SymbolMood(val symbol: String, val mood: Double?, val count24h: Int)
 data class TopicCount(val topic: Topic, val count: Int, val mood: Double)
@@ -195,6 +201,32 @@ data class TopicCount(val topic: Topic, val count: Int, val mood: Double)
 class NewsRadar(private val now: () -> Long) {
     private val lock = Any()
     private val items = LinkedHashMap<Long, NewsItem>()
+    /** Everything else on the wire, for a day: what the whole market is talking about. */
+    private val wire = LinkedHashMap<Long, NewsItem>()
+
+    /** Whole-market items: kept a day, used to find what is hot. Returns how many were new. */
+    fun ingestWire(fresh: List<NewsItem>): Int = synchronized(lock) {
+        var added = 0
+        for (n in fresh) if (wire.put(n.id, n) == null) added++
+        val cutoff = now() - 24 * HOUR
+        wire.values.removeAll { it.createdAt < cutoff }
+        if (wire.size > WIRE_CAP) wire.values.sortedBy { it.createdAt }.take(wire.size - WIRE_CAP).forEach { wire.remove(it.id) }
+        added
+    }
+
+    /** The stocks the whole wire mentions most in a day, round-ups left out. */
+    fun hot(exclude: Set<String> = emptySet(), min: Int = 3): List<HotStock> = synchronized(lock) {
+        val by = HashMap<String, MutableList<NewsItem>>()
+        for (n in (wire.values + items.values).distinctBy { it.id }) {
+            if (n.roundup || now() - n.createdAt > 24 * HOUR) continue
+            for (s in n.symbols) if (s !in exclude) by.getOrPut(s) { ArrayList() } += n
+        }
+        by.filter { it.value.size >= min }
+            .map { (s, list) -> HotStock(s, list.size, list.map { it.mood }.average()) }
+            .sortedByDescending { it.mentions }
+    }
+
+    fun wireLatestAt(): Long? = synchronized(lock) { wire.values.maxOfOrNull { it.createdAt } }
 
     /** Adds what is new, replacing updated items; returns how many were new. */
     fun ingest(fresh: List<NewsItem>): Int = synchronized(lock) {
@@ -287,6 +319,8 @@ class NewsRadar(private val now: () -> Long) {
             topics = topics,
             flags = flags(),
             aiRead = all.count { it.aiScore != null },
+            hot = hot(symbols.toSet()).take(10),
+            wireSize = synchronized(lock) { wire.size },
         )
     }
 
@@ -303,6 +337,7 @@ class NewsRadar(private val now: () -> Long) {
         const val HALF_LIFE_HOURS = 6.0
         const val KEEP_DAYS = 7
         const val CAP = 400
+        const val WIRE_CAP = 1500
         const val SHOWN = 60
 
         /** Below this a stock's mood counts as bad news. */

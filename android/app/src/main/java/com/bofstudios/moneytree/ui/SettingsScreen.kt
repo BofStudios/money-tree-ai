@@ -192,6 +192,18 @@ fun SettingsScreen(
                 tx("Follows every signal to its result and stops buying the kinds that keep losing — only after 10 results of a kind.",
                     "Her sinyali sonucuna kadar takip eder, sürekli kaybettiren türleri almayı bırakır — aynı türden 10 sonuçtan sonra."),
                 settings.learning) { onChange(settings.copy(learning = it)) }
+            BrainSwitch(tx("Improve itself", "Kendini geliştir"),
+                tx("Breeds and tests strategy settings on months of real candles, around the clock, and switches only to ones that prove better on data they never trained on. Never touches your risk settings.",
+                    "Aylarca gerçek mum üzerinde gece gündüz strateji ayarları üretip dener; sadece hiç eğitilmediği veride daha iyi olduğu kanıtlanana geçer. Risk ayarlarına asla dokunmaz."),
+                settings.selfImprove) { onChange(settings.copy(selfImprove = it)) }
+            BrainSwitch(tx("Train at full speed on battery", "Pildeyken de tam hızda eğit"),
+                tx("Off: full speed on the charger, a tenth of that on battery. On: full speed always — the phone gets warm and the battery drains faster.",
+                    "Kapalı: şarjda tam hız, pilde onun onda biri. Açık: her zaman tam hız — telefon ısınır, pil daha hızlı biter."),
+                settings.trainOnBattery) { onChange(settings.copy(trainOnBattery = it)) }
+            BrainSwitch(tx("Find stocks in the news", "Haberlerde hisse bul"),
+                tx("Reads the whole market's news and watches up to three of the most talked-about stocks for three days — only if they pass the five checks.",
+                    "Tüm piyasanın haberlerini okur, en çok konuşulan en fazla 3 hisseyi 3 gün izler — sadece 5 kontrolden geçerlerse."),
+                settings.discover) { onChange(settings.copy(discover = it)) }
             BrainSwitch(tx("AI committee veto", "AI kurulu vetosu"),
                 tx("Two different AI models read the headlines and the research before each buy; either can stop it. Never starts one.",
                     "Her alımdan önce iki farklı AI modeli başlıkları ve araştırmayı okur; biri bile durdurabilir. Asla alım başlatmaz."),

@@ -1,6 +1,9 @@
 package com.bofstudios.moneytree.research
 
 import com.bofstudios.moneytree.engine.BrainStore
+import com.bofstudios.moneytree.engine.CompanyEvents
+import com.bofstudios.moneytree.engine.EventsSource
+import com.bofstudios.moneytree.engine.FilingEvent
 import com.bofstudios.moneytree.engine.Filings
 import com.bofstudios.moneytree.engine.FilingsSource
 import com.bofstudios.moneytree.engine.FiscalYear
@@ -37,8 +40,25 @@ class SecEdgar(
     private val http: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).build(),
     private val now: () -> Long = System::currentTimeMillis,
-) : FilingsSource {
+) : FilingsSource, EventsSource {
     private val ciks = HashMap<String, Pair<Long, String>>()
+
+    /**
+     * The company's filing index (data.sec.gov/submissions): 8-Ks with their
+     * item numbers and acceptance times, Form 4 counts, and the dates results
+     * came out. About 200 KB, a few times a day.
+     */
+    override suspend fun events(symbol: String): CompanyEvents? = withContext(Dispatchers.IO) {
+        val sym = symbol.uppercase()
+        val (cik, _) = cik(sym) ?: return@withContext null
+        val url = "https://data.sec.gov/submissions/CIK%010d.json".format(cik)
+        runCatching {
+            http.newCall(get(url)).execute().use { r ->
+                if (!r.isSuccessful) return@use null
+                parseEvents(sym, JSONObject(r.body?.string().orEmpty()), now())
+            }
+        }.getOrNull()
+    }
 
     override suspend fun filings(symbol: String): Filings? = withContext(Dispatchers.IO) {
         val sym = symbol.uppercase()
@@ -120,6 +140,38 @@ class SecEdgar(
         /** Figures that cover a year (flows), rather than a balance on one day. */
         private val DURATIONS = setOf("revenue", "netIncome", "grossProfit", "costOfRevenue", "operatingIncome", "ocf", "capex", "shares", "interest")
         private val WANTED: Map<String, Int> = CONCEPTS.values.flatten().withIndex().associate { it.value to it.index }
+
+        fun parseEvents(symbol: String, j: JSONObject, now: Long): CompanyEvents? {
+            val r = j.optJSONObject("filings")?.optJSONObject("recent") ?: return null
+            val form = r.optJSONArray("form") ?: return null
+            val date = r.optJSONArray("filingDate")
+            val accepted = r.optJSONArray("acceptanceDateTime")
+            val items = r.optJSONArray("items")
+            val acc = r.optJSONArray("accessionNumber")
+            val events = ArrayList<FilingEvent>()
+            val results = ArrayList<Long>()
+            var insiders = 0
+            for (i in 0 until form.length()) {
+                val f = form.optString(i)
+                val at = accepted?.optString(i)?.let { parseTime(it) }?.takeIf { it > 0 }
+                    ?: date?.optString(i)?.let { parseDay(it) } ?: continue
+                when (f) {
+                    "8-K", "8-K/A" -> {
+                        val its = items?.optString(i).orEmpty().split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                        if ("2.02" in its) results += at
+                        if (now - at <= 90 * DAY) events += FilingEvent(symbol, its, at, acc?.optString(i).orEmpty())
+                    }
+                    "4" -> if (now - at <= 30 * DAY) insiders++
+                }
+            }
+            return CompanyEvents(symbol, events.sortedByDescending { it.filedAt }, insiders, results.sortedDescending(), now)
+        }
+
+        private const val DAY = 86_400_000L
+        private fun parseTime(s: String): Long = runCatching { java.time.Instant.parse(s).toEpochMilli() }.getOrDefault(0L)
+        private fun parseDay(s: String): Long? = runCatching {
+            LocalDate.parse(s).atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
+        }.getOrNull()
 
         private data class Raw(val concept: String, val unit: String, val start: String?, val end: String, val value: Double, val form: String, val filed: String)
 

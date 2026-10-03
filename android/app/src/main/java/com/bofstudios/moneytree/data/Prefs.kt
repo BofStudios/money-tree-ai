@@ -40,6 +40,11 @@ class Prefs(context: Context) : EngineStore {
         get() = p.getBoolean("brain_intro_seen", false)
         set(v) = p.edit().putBoolean("brain_intro_seen", v).apply()
 
+    /** When GitHub was last asked for a newer version. */
+    var updateCheckedAt: Long
+        get() = p.getLong("update_checked_at", 0L)
+        set(v) = p.edit().putLong("update_checked_at", v).apply()
+
     /** Whether the owner left the bot running — used to resume after a reboot. */
     var runWanted: Boolean
         get() = p.getBoolean("run_wanted", false)
@@ -65,6 +70,9 @@ class Prefs(context: Context) : EngineStore {
         qualityMode = runCatching { QualityMode.valueOf(p.getString("quality_mode", "BALANCED")!!) }.getOrDefault(QualityMode.BALANCED),
         newsCheck = p.getBoolean("news_check", true),
         learning = p.getBoolean("learning", true),
+        selfImprove = p.getBoolean("self_improve", true),
+        trainOnBattery = p.getBoolean("train_on_battery", false),
+        discover = p.getBoolean("discover", true),
     )
 
     fun save(s: TradingSettings) {
@@ -85,6 +93,9 @@ class Prefs(context: Context) : EngineStore {
             .putString("quality_mode", s.qualityMode.name)
             .putBoolean("news_check", s.newsCheck)
             .putBoolean("learning", s.learning)
+            .putBoolean("self_improve", s.selfImprove)
+            .putBoolean("train_on_battery", s.trainOnBattery)
+            .putBoolean("discover", s.discover)
             .apply()
     }
 

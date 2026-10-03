@@ -30,7 +30,10 @@ class EmaRsiStrategy(
     val fast: Int = 12,
     val slow: Int = 26,
     val rsiPeriod: Int = 14,
+    /** No entry with RSI at or above this. */
     val overbought: Double = 70.0,
+    /** Exit once RSI runs past this; the same as [overbought] unless evolution tuned it. */
+    val exitRsi: Double = overbought,
 ) {
     val warmupBars = maxOf(slow, rsiPeriod) * 3
 
@@ -59,7 +62,7 @@ class EmaRsiStrategy(
         }
 
         if (crossedDown) return Signal(Action.CLOSE, "EMA$fast crossed below EMA$slow")
-        if (rsiNow > overbought) return Signal(Action.CLOSE, "RSI overbought at $rsiText")
+        if (rsiNow > exitRsi) return Signal(Action.CLOSE, "RSI overbought at $rsiText")
         return Signal(Action.HOLD, "holding position")
     }
 

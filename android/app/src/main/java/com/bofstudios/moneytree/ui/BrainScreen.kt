@@ -25,6 +25,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -64,7 +66,9 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bofstudios.moneytree.data.BrainFiles
+import com.bofstudios.moneytree.engine.AltSignals
 import com.bofstudios.moneytree.engine.BrainSnapshot
+import com.bofstudios.moneytree.engine.Discovery
 import com.bofstudios.moneytree.engine.BucketStats
 import com.bofstudios.moneytree.engine.CheckKind
 import com.bofstudios.moneytree.engine.Decision
@@ -103,16 +107,17 @@ fun BrainScreen(settings: TradingSettings, toast: (String) -> Unit) {
                 Spacer(Modifier.width(10.dp))
                 Tag(tx("${brain.shadowClosed + brain.shadowOpen.size} signals followed", "${brain.shadowClosed + brain.shadowOpen.size} sinyal takipte"))
             }
-            Text(tx("Five checks · news radar · learning from results", "5 kontrol · haber radarı · sonuçlardan öğrenme"),
+            Text(tx("Five checks · the whole market's news · alt data · it improves itself", "5 kontrol · tüm piyasanın haberleri · alternatif veri · kendini geliştiriyor"),
                 color = MT.Text2, fontSize = 12.5.sp)
             Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Chip(tx("Picks", "Seçimler"), tab == 0, { tab = 0 })
                 Chip(tx("News", "Haberler"), tab == 1, { tab = 1 })
                 Chip(tx("Learning", "Öğrenme"), tab == 2, { tab = 2 })
+                Chip(tx("Evolution", "Gelişim"), tab == 3, { tab = 3 })
             }
         }
-        if (brain.reports.isEmpty() && brain.radar.items.isEmpty() && brain.shadowClosed == 0 && brain.shadowOpen.isEmpty()) {
+        if (tab != 3 && brain.reports.isEmpty() && brain.radar.items.isEmpty() && brain.shadowClosed == 0 && brain.shadowOpen.isEmpty()) {
             Column(Modifier.padding(16.dp)) {
                 Card(glow = true) {
                     Text(tx("The brain wakes up with the bot", "Beyin botla birlikte uyanır"), fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
@@ -130,7 +135,8 @@ fun BrainScreen(settings: TradingSettings, toast: (String) -> Unit) {
         when (tab) {
             0 -> PicksTab(brain, settings)
             1 -> NewsTab(brain.radar)
-            else -> LearningTab(brain, settings, toast)
+            2 -> LearningTab(brain, settings, toast)
+            else -> EvolutionTab(brain.evolution, settings, toast)
         }
     }
 }
@@ -160,6 +166,7 @@ private fun PicksTab(brain: BrainSnapshot, settings: TradingSettings) {
         items(reports, key = { it.symbol }) { r ->
             DecisionCard(r, brain.radar.moods[r.symbol]?.mood, brain.radar.moods[r.symbol]?.count24h ?: 0,
                 brain.radar.flags.filter { it.symbol == r.symbol }.map { w.flagName(it.kind) }.distinct(),
+                alt = brain.alt[r.symbol], found = brain.discovered.firstOrNull { it.symbol == r.symbol },
                 expanded = open == r.symbol) { open = if (open == r.symbol) null else r.symbol }
         }
         item {
@@ -176,6 +183,7 @@ private fun PicksTab(brain: BrainSnapshot, settings: TradingSettings) {
 @Composable
 private fun DecisionCard(
     r: QualityReport, mood: Double?, count: Int, flags: List<String>,
+    alt: AltSignals?, found: Discovery?,
     expanded: Boolean, onClick: () -> Unit,
 ) {
     val w = Words(LocalTurkish.current)
@@ -230,6 +238,22 @@ private fun DecisionCard(
                 color = MT.Text3, fontSize = 11.5.sp, modifier = Modifier.weight(1f),
             )
             Text(if (expanded) "▴" else "▾", color = MT.Text3, fontSize = 12.sp)
+        }
+        alt?.let { a ->
+            val parts = listOfNotNull(
+                a.attention?.let { "${w.attentionName(it)} ×" + String.format(java.util.Locale.US, "%.1f", it) },
+                a.insiderFilings30d?.let { tx("insiders $it/30d", "içeriden $it/30g") },
+                a.lastEvent?.let { "8-K " + w.daysAgo(System.currentTimeMillis() - it.filedAt) + ": " + w.eventItems(it.items) },
+                a.nextResults?.let { tx("results ~", "bilanço ~") + w.day(it) },
+            )
+            if (parts.isNotEmpty()) {
+                Text(tx("ALT DATA · ", "ALTERNATİF VERİ · ") + parts.joinToString(" · "), color = MT.Text3, fontSize = 11.sp, lineHeight = 15.sp,
+                    modifier = Modifier.padding(top = 4.dp))
+            }
+        }
+        found?.let { d ->
+            Text(tx("★ Found in the whole market's news · ${d.mentions} stories in 24h", "★ Tüm piyasanın haberlerinde bulundu · 24 saatte ${d.mentions} haber"),
+                color = MT.Accent, fontSize = 11.5.sp, modifier = Modifier.padding(top = 4.dp))
         }
         if (flags.isNotEmpty()) {
             FlowRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -325,6 +349,22 @@ private fun NewsTab(radar: RadarSnapshot) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item { MoodCard(radar, compact = false) }
+        if (radar.hot.isNotEmpty()) item {
+            Card {
+                Label(tx("WHOLE MARKET · MOST TALKED ABOUT, 24H · ${radar.wireSize} STORIES", "TÜM PİYASA · EN ÇOK KONUŞULANLAR, 24 SA · ${radar.wireSize} HABER"))
+                radar.hot.take(8).forEach { h ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(h.symbol, Modifier.width(60.dp), fontFamily = MT.Mono, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
+                        CenterBar(h.mood, Modifier.weight(1f).height(8.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text("${h.mentions}", Modifier.width(30.dp), color = MT.Text2, fontFamily = MT.Mono, fontSize = 12.sp)
+                    }
+                }
+                Text(tx("A few of these may be added to the watch for three days — only if they pass the five checks.",
+                    "Bunlardan birkaçı 3 günlüğüne izlemeye alınabilir — sadece 5 kontrolden geçerse."),
+                    color = MT.Text3, fontSize = 11.sp, modifier = Modifier.padding(top = 6.dp))
+            }
+        }
         if (radar.moods.isNotEmpty()) item {
             Card {
                 Label(tx("BY STOCK · 48H, RECENT COUNTS MORE", "HİSSE BAZINDA · 48 SA, YENİSİ DAHA ÇOK SAYILIR"))

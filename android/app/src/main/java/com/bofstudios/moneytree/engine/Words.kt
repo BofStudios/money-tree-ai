@@ -414,6 +414,7 @@ class Words(val tr: Boolean) {
         RedFlagKind.FRAUD -> if (tr) "dolandırıcılık iddiası" else "fraud allegation"
         RedFlagKind.DELISTING -> if (tr) "borsadan çıkarılma" else "delisting"
         RedFlagKind.OFFERING -> if (tr) "yeni hisse satışı (sulanma)" else "share offering (dilution)"
+        RedFlagKind.ACCOUNTING -> if (tr) "geçmiş mali tablolar güvenilmez (SEC)" else "past financials unreliable (SEC)"
         RedFlagKind.GUIDANCE_CUT -> if (tr) "beklenti düşürüldü" else "guidance cut"
         RedFlagKind.EARNINGS_SOON -> if (tr) "bilanço yaklaşıyor" else "earnings due soon"
         RedFlagKind.REGULATOR -> if (tr) "düzenleyici soruşturma" else "regulator probe"
@@ -458,6 +459,11 @@ class Words(val tr: Boolean) {
         }
         FeatureKey.DAILY_TREND -> if (b.value == "UP") (if (tr) "Günlük trend yukarıyken" else "Daily trend up")
             else (if (tr) "Günlük trend aşağıyken" else "Daily trend down")
+        FeatureKey.ATTENTION -> when (b.value) {
+            "SPIKE" -> if (tr) "İlgi patlamasında alım (Wikipedia ×3+)" else "Buys during an attention spike (Wikipedia ×3+)"
+            "HIGH" -> if (tr) "İlgi yüksekken alım" else "Buys while attention is high"
+            else -> if (tr) "İlgi normalken alım" else "Buys at normal attention"
+        }
         FeatureKey.SYMBOL -> b.value
     }
 
@@ -478,6 +484,101 @@ class Words(val tr: Boolean) {
         }
         val digits = if (a >= 1e12) 2 else if (a >= 1e9) 1 else 0
         return String.format(Locale.US, "%.${digits}f", x) + if (tr) trWord else en
+    }
+
+    // ------------------------------------------------------------ alt data
+    fun readingEvents(count: Int) =
+        if (tr) "$count şirketin SEC olay kayıtlarını okuyor (8-K, içeriden işlemler)" else "Reading SEC filing index for $count companies (8-Ks, insider filings)"
+    fun eventsLine(symbol: String, e: CompanyEvents, now: Long): String {
+        val last = e.events.firstOrNull { it.items.any { i -> i != "9.01" } }
+        val event = last?.let { " · 8-K ${daysAgo(now - it.filedAt)}: ${eventItems(it.items)}" } ?: ""
+        val next = e.nextResults()?.let { if (tr) " · sonraki bilanço ~${day(it)}" else " · next results ~${day(it)}" } ?: ""
+        return "$symbol · " + (if (tr) "içeriden ${e.insiderFilings30d}/30g" else "insiders ${e.insiderFilings30d}/30d") + event + next
+    }
+    fun eventsSummary(ok: Int, total: Int) = if (tr) "$ok/$total şirket okundu" else "$ok of $total read"
+    fun readingAttention(count: Int) = if (tr) "$count şirkete olan ilgiyi ölçüyor (Wikipedia)" else "Measuring attention on $count companies (Wikipedia)"
+    fun attentionLine(symbol: String, ratio: Double, views: Int) =
+        "$symbol · ×${String.format(Locale.US, "%.1f", ratio)} · " + (if (tr) "dün $views okunma" else "$views views yesterday")
+    fun attentionSummary(ok: Int, total: Int) = if (tr) "$ok/$total ölçüldü" else "$ok of $total measured"
+    fun attentionName(ratio: Double) = when {
+        ratio >= 3.0 -> if (tr) "ilgi patlaması" else "attention spike"
+        ratio >= 1.5 -> if (tr) "ilgi yüksek" else "attention high"
+        ratio < 0.7 -> if (tr) "ilgi düşük" else "attention low"
+        else -> if (tr) "ilgi normal" else "attention normal"
+    }
+    fun eventItems(items: List<String>): String = items.filter { it != "9.01" }.mapNotNull { eventItem(it) }.joinToString(", ").ifEmpty { "8-K" }
+    private fun eventItem(code: String): String? = if (!tr) EightK.ITEMS[code] else when (code) {
+        "1.01" -> "önemli anlaşma"; "1.02" -> "anlaşma sona erdi"; "1.03" -> "iflas"; "1.05" -> "siber saldırı"
+        "2.01" -> "satın alma/satış tamamlandı"; "2.02" -> "bilanço (faaliyet sonuçları)"; "2.03" -> "yeni borç"
+        "2.05" -> "yeniden yapılanma"; "2.06" -> "değer düşüklüğü"; "3.01" -> "borsadan çıkarma uyarısı"
+        "3.02" -> "kayıtsız hisse satışı"; "3.03" -> "ortak hakları değişti"; "4.01" -> "denetçi değişti"
+        "4.02" -> "geçmiş tablolar güvenilmez"; "5.01" -> "kontrol değişti"; "5.02" -> "yönetici değişikliği"
+        "5.03" -> "esas sözleşme değişti"; "5.07" -> "hissedar oylaması"; "7.01" -> "kamuya açıklama"; "8.01" -> "diğer olaylar"
+        else -> null
+    }
+    fun daysAgo(ms: Long): String {
+        val d = (ms / 86_400_000L).toInt()
+        return when {
+            d <= 0 -> if (tr) "bugün" else "today"
+            d == 1 -> if (tr) "dün" else "yesterday"
+            else -> if (tr) "$d gün önce" else "$d days ago"
+        }
+    }
+    fun day(epoch: Long): String = DateTimeFormatter.ofPattern("d MMM", locale).format(Instant.ofEpochMilli(epoch).atZone(ny))
+
+    // ------------------------------------------------------------ evolution
+    fun fetchingHistory(count: Int, days: Int, tf: Timeframe) =
+        if (tr) "Kendini geliştirmek için $count hissenin $days günlük ${tfName(tf)} geçmişini çekiyor"
+        else "Fetching $days days of ${tfName(tf)} history for $count stocks to train on"
+    fun historySummary(series: Int, bars: Int) =
+        if (tr) "$series hisse · ${String.format(locale, "%,d", bars)} mum — eğitim verisi hazır" else "$series stocks · ${String.format(Locale.US, "%,d", bars)} candles — training data ready"
+    fun promotionTitle(p: Promotion) =
+        if (p.rollback) (if (tr) "Strateji geri alındı (v${p.version})" else "Strategy rolled back (v${p.version})")
+        else (if (tr) "Kendimi geliştirdim: strateji v${p.version}" else "I improved myself: strategy v${p.version}")
+    fun promotionText(p: Promotion) = if (p.rollback) {
+        if (tr) "Yeni veride eski ayarlar daha iyi gidiyordu; orijinal stratejiye döndüm. Görmediği veride ${rText(p.before)} → ${rText(p.after)} işlem başı."
+        else "On the newest data the original was doing better, so I went back to it. Unseen data: ${rText(p.before)} → ${rText(p.after)} per trade."
+    } else {
+        if (tr) "${p.to.label}\nHiç eğitilmediği veride işlem başı ${rText(p.before)} → ${rText(p.after)} (${p.trades} işlem). Risk ayarların aynı."
+        else "${p.to.label}\nOn data it never trained on: ${rText(p.before)} → ${rText(p.after)} per trade (${p.trades} trades). Your risk settings are unchanged."
+    }
+    fun trainModeName(m: TrainMode) = when (m) {
+        TrainMode.FULL -> if (tr) "Tam güç — şarjda" else "Full power — on the charger"
+        TrainMode.LIGHT -> if (tr) "Hafif — pilde (%10)" else "Light — on battery (10%)"
+        TrainMode.WAITING -> if (tr) "Eğitim verisi bekleniyor" else "Waiting for training data"
+        TrainMode.OFF -> if (tr) "Kapalı" else "Off"
+    }
+
+    // ------------------------------------------------------------ discovery
+    fun scanningMarket(count: Int) =
+        if (tr) "Tüm piyasanın haberlerini tarıyor · en çok konuşulan $count hisse kontrol ediliyor" else "Scanning the whole market's news · checking the $count most talked-about stocks"
+    fun discoverRejected(symbol: String, mentions: Int, why: String) = "✕ $symbol ($mentions) — $why"
+    fun notTradableHere() = if (tr) "Alpaca'da alınamıyor" else "not tradable on Alpaca"
+    fun tooCheap() = if (tr) "5$ altı, çok oynak" else "under \$5, too volatile"
+    fun newsNegative(mood: Double) = if (tr) "haberler olumsuz (${mood.moodText()})" else "news negative (${mood.moodText()})"
+    fun discoverChecks(q: QualityReport) = if (tr) "5 kontrol: ${decisionName(q.decision)} ${String.format(Locale.US, "%.1f", q.score)}/5" else "five checks: ${decisionName(q.decision)} ${String.format(Locale.US, "%.1f", q.score)}/5"
+    fun discoverAccepted(d: Discovery) = "✓ ${d.symbol} · ${d.name} · ${decisionName(d.decision)} ${String.format(Locale.US, "%.1f", d.score)}/5 · " +
+        if (tr) "24 saatte ${d.mentions} haber" else "${d.mentions} stories in 24h"
+    fun discoverSummary(found: Int, total: Int) =
+        if (tr) "$total aday, $found tanesi 3 gün izlemeye alındı" else "$total candidates, $found added to the watch for 3 days"
+    fun discoveredTitle(d: Discovery) = if (tr) "Haberlerde yeni hisse buldum: ${d.symbol}" else "Found a new stock in the news: ${d.symbol}"
+    fun discoveredText(d: Discovery) =
+        if (tr) "${d.name} · ${decisionName(d.decision)} ${String.format(Locale.US, "%.1f", d.score)}/5 · 24 saatte ${d.mentions} haber. 3 gün izleyeceğim; diğerleri gibi tüm kontrollerden geçmeden alınmaz."
+        else "${d.name} · ${decisionName(d.decision)} ${String.format(Locale.US, "%.1f", d.score)}/5 · ${d.mentions} stories in 24h. Watching it for 3 days; like the rest, it is only bought if it passes every check."
+
+    // ------------------------------------------------------------- briefing
+    fun briefingTitle(mood: Double?) =
+        (if (tr) "Sabah brifingi · piyasa havası " else "Morning briefing · market mood ") + (mood?.let { moodName(it) } ?: "—")
+    fun briefingText(
+        best: List<QualityReport>, careful: List<Pair<String, RedFlagKind>>, promotions: List<Promotion>,
+        version: Int, discovered: List<String>, rules: Int,
+    ): String = buildString {
+        if (best.isNotEmpty()) append((if (tr) "En iyiler: " else "Best: ") + best.joinToString { "${it.symbol} ${decisionName(it.decision)} ${String.format(Locale.US, "%.1f", it.score)}" } + "\n")
+        if (careful.isNotEmpty()) append((if (tr) "Dikkat: " else "Careful: ") + careful.joinToString { "${it.first} (${flagName(it.second)})" } + "\n")
+        if (discovered.isNotEmpty()) append((if (tr) "Haberden bulunan: " else "Found in the news: ") + discovered.joinToString() + "\n")
+        append(if (tr) "Strateji v$version" else "Strategy v$version")
+        if (promotions.isNotEmpty()) append(if (tr) " · gece ${promotions.size} kez geliştirdi" else " · improved ${promotions.size}x overnight")
+        if (rules > 0) append(if (tr) " · $rules öğrenilmiş kural" else " · $rules learned rule(s)")
     }
 
     // ----------------------------------------------------------------- names

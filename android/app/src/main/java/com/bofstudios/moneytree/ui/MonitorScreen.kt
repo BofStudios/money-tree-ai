@@ -119,6 +119,7 @@ fun HomeScreen(
     val state by Hub.state.collectAsState()
     val running by Hub.running.collectAsState()
     val armed by Hub.armed.collectAsState()
+    val update by Hub.update.collectAsState()
     // Re-read the journal whenever the feed moves; closes are announced there.
     val journal = remember(steps.size) { trades() }
 
@@ -128,6 +129,7 @@ fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item { MoneyCard(settings, onOpenMoney) }
+        update?.let { u -> item { UpdateCard(u.first, u.second) } }
         if (settings.live && !armed && running) item { ArmBanner(requestArm) }
         if (running) item { BackgroundWarning() }
         if (settings.market == null) item { MarketQuestion(onPickMarket) }
@@ -146,6 +148,22 @@ fun HomeScreen(
         item { TodayCard(journal) }
         if (state.notes.isNotEmpty()) item { NotesCard(state.notes) }
         item { NowPanel(steps, running, onOpenLive) }
+    }
+}
+
+/** A newer version is out on GitHub: one tap to download it (Android asks before installing). */
+@Composable
+private fun UpdateCard(version: String, url: String) {
+    val context = LocalContext.current
+    Card(highlight = true, glow = true) {
+        Text(tx("NEW VERSION", "YENİ SÜRÜM"), color = MT.Accent, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.sp)
+        Text(tx("Money Tree $version is ready", "Money Tree $version hazır"), fontWeight = FontWeight.SemiBold, fontSize = 17.sp,
+            modifier = Modifier.padding(top = 4.dp))
+        Text(tx("It installs over this one and keeps your keys and settings.", "Bunun üstüne kurulur, anahtarların ve ayarların kalır."),
+            color = MT.Text2, fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp))
+        PrimaryButton(tx("Download", "İndir"), {
+            context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+        }, Modifier.fillMaxWidth())
     }
 }
 
@@ -211,6 +229,14 @@ private fun BrainCard(b: BrainSnapshot, onOpen: () -> Unit) {
             Spacer(Modifier.width(6.dp))
             Text(tx("Market mood ", "Piyasa havası ") + (b.radar.market?.let { w.moodName(it) + " " + it.moodText() } ?: "—"),
                 color = MT.Text3, fontSize = 12.sp)
+        }
+        val evo by Hub.evolution.collectAsState()
+        val e = if (evo.tested > 0) evo else b.evolution
+        if (e.tested > 0) {
+            Text(
+                tx("Strategy v${e.version} · ${String.format(Locale.US, "%,d", e.tested)} strategies tested", "Strateji v${e.version} · ${String.format(Locale.US, "%,d", e.tested)} strateji denendi"),
+                color = MT.Accent, fontSize = 12.sp, fontFamily = MT.Mono, modifier = Modifier.padding(top = 4.dp),
+            )
         }
         Text(
             tx("${b.shadowClosed + b.shadowOpen.size} signals followed · ${b.rules.size} rule(s) learned", "${b.shadowClosed + b.shadowOpen.size} sinyal takip edildi · ${b.rules.size} kural öğrenildi") +

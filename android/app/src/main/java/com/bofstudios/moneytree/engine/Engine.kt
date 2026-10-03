@@ -111,6 +111,7 @@ class Engine(
     /** What the research saw for a symbol's latest buy signal, kept for the plan once it is bought. */
     private val researched = HashMap<String, Research>()
     private var warmed = false
+    private var lastBriefingAt = 0L
 
     /**
      * One look at the market. Returns how long to wait before the next.
@@ -121,7 +122,8 @@ class Engine(
     suspend fun cycle(forceLook: Boolean = false): Long = mutex.withLock {
         val s = settings()
         val w = Words(s.turkish)
-        risk = fixedRisk ?: Risk(s.riskConfig())
+        risk = fixedRisk ?: Risk(brain?.riskConfig(s) ?: s.riskConfig())
+        val strat = brain?.strategy(s) ?: strategy
         brain?.takeIf { !warmed }?.let { b ->
             warmed = true
             b.warmUp(s.watchlist)
@@ -153,12 +155,26 @@ class Engine(
 
             brain?.let { b ->
                 val symbols = watched(s, held)
-                if (!quiet) b.refresh(symbols, broker, monitor, w)
-                b.readNews(symbols, broker, monitor, w, verbose = forceLook)
+                // Rate-limited inside: reports weekly, SEC events every two hours,
+                // attention and training history daily, discovery every half hour.
+                val outcome = b.refresh(symbols, broker, monitor, w, s)
+                outcome.rollback?.let { announce(it) }
+                for (d in outcome.discovered) notifier.learned(w.discoveredTitle(d), w.discoveredText(d))
+                b.readNews(watched(s, held), broker, monitor, w, verbose = forceLook)
                 publishBrain(s, held)
             }
 
             if (!clock.isOpen) {
+                brain?.let { b ->
+                    // The morning briefing, once, in the last half hour before the open.
+                    val toOpen = clock.nextOpen - now()
+                    if (toOpen in 1..BRIEFING_BEFORE_OPEN && now() - lastBriefingAt > 12 * 3_600_000L) {
+                        val (title, text) = b.briefing(watched(s, held), s, w, since = lastBriefingAt.takeIf { it > 0 } ?: (now() - 24 * 3_600_000L))
+                        lastBriefingAt = now()
+                        monitor.info(StepKind.INFO, title, null, text.lines())
+                        notifier.briefing(title, text)
+                    }
+                }
                 if (sessionStartedAt != null) {
                     // The session the bot watched just ended: one summary of the day,
                     // counting every trade closed since midnight in New York.
@@ -173,7 +189,7 @@ class Engine(
                     // current work on a weekend. Nothing below this line buys,
                     // sells or moves a stop: the function returns first.
                     monitor.info(StepKind.INFO, w.closedReviewOnly())
-                    look(s, w, held, trading = false)
+                    look(s, w, held, trading = false, strat)
                     monitor.info(StepKind.WAIT, w.waitingForOpen(clock.nextOpen))
                 }
                 lastCycleClosed = true
@@ -199,7 +215,7 @@ class Engine(
 
             // ------------------------------------------------- bars + analysis
             val heldBySymbol = held.associateBy { it.position.symbol }
-            val (signals, snapshots, barsBySymbol) = look(s, w, held, trading = true)
+            val (signals, snapshots, barsBySymbol) = look(s, w, held, trading = true, strat)
             val price = snapshots.filter { it.ready }.associate { it.symbol to it.price }
 
             // ------------------------------------------------ manage what's held
@@ -365,7 +381,7 @@ class Engine(
     suspend fun approve(id: String): ApprovalResult = mutex.withLock {
         val s = settings()
         val w = Words(s.turkish)
-        risk = fixedRisk ?: Risk(s.riskConfig())
+        risk = fixedRisk ?: Risk(brain?.riskConfig(s) ?: s.riskConfig())
         val p = proposals.take(id) ?: return@withLock ApprovalResult(false, w.approveFailedExpired())
         val sym = p.entry.symbol
 
@@ -445,6 +461,7 @@ class Engine(
      */
     private suspend fun look(
         s: TradingSettings, w: Words, held: List<HeldPosition>, trading: Boolean,
+        strategy: EmaRsiStrategy = this.strategy,
     ): Look {
         val symbols = watched(s, held)
         val tf = s.horizon.timeframe
@@ -500,7 +517,14 @@ class Engine(
     }
 
     private fun watched(s: TradingSettings, held: List<HeldPosition>): List<String> =
-        (s.watchlist + held.filter { it.managed }.map { it.position.symbol }).distinct()
+        (s.watchlist + held.filter { it.managed }.map { it.position.symbol } + (brain?.discoveredSymbols(s) ?: emptyList())).distinct()
+
+    /** A change self-improvement made (or undid): in the feed, and on the lock screen. */
+    fun announce(p: Promotion) {
+        val w = Words(settings().turkish)
+        monitor.info(StepKind.LEARN, w.promotionTitle(p), null, w.promotionText(p).lines())
+        notifier.learned(w.promotionTitle(p), w.promotionText(p))
+    }
 
     private fun publishBrain(s: TradingSettings, held: List<HeldPosition>) {
         val b = brain ?: return
@@ -684,7 +708,9 @@ class Engine(
         const val ERROR_SLEEP = 60_000L
         const val BLOCKED_SLEEP = 5 * 60_000L
         const val MIN_SLEEP = 60_000L
-        const val CLOSED_MAX_SLEEP = 3 * 60 * 60_000L
+        /** Closed, it still looks every quarter hour: news, filings, discovery — analysis around the clock. */
+        const val CLOSED_MAX_SLEEP = 15 * 60_000L
+        const val BRIEFING_BEFORE_OPEN = 30 * 60_000L
         /** A stock the AI passed on is not looked at again for an hour. */
         const val AI_SKIP_COOLDOWN = 60 * 60_000L
         const val MAX_NOTES = 8

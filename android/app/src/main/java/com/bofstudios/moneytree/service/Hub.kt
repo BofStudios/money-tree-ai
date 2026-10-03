@@ -34,6 +34,12 @@ object Hub {
 
     @Volatile var engine: Engine? = null
 
+    /** Self-improvement's live counters, refreshed about once a second while it trains. */
+    val evolution = MutableStateFlow(com.bofstudios.moneytree.engine.EvolutionSnapshot())
+
+    /** A newer release on GitHub: version name and APK link. */
+    val update = MutableStateFlow<Pair<String, String>?>(null)
+
     /** The research desk of the running engine, for the screen's "forget" button. */
     @Volatile var brain: Brain? = null
 }

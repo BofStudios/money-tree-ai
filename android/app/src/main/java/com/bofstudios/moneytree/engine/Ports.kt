@@ -67,6 +67,8 @@ interface Notifier {
     fun heldBack(symbol: String, why: String) {}
     /** A new rule learned from results, or the AI's lesson from a closed trade. */
     fun learned(title: String, text: String) {}
+    /** The plan for the day, shortly before the open. */
+    fun briefing(title: String, text: String) {}
 }
 
 /** Optional plain-language explanation of a decision, from a language model. */

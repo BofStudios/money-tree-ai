@@ -71,6 +71,12 @@ data class TradingSettings(
     val newsCheck: Boolean = true,
     /** Let past signals' results hold back (or shrink) the kinds of buy that keep losing. */
     val learning: Boolean = true,
+    /** Keep breeding and testing strategy settings, and adopt the ones that prove better on unseen data. */
+    val selfImprove: Boolean = true,
+    /** Train at full speed off the charger too (uses more battery). */
+    val trainOnBattery: Boolean = false,
+    /** Watch a few stocks the whole market's news is talking about, if they pass the checks. */
+    val discover: Boolean = true,
 ) {
     fun riskConfig(): RiskConfig = RiskConfig(
         maxPositionPct = riskLevel.maxPositionPct,

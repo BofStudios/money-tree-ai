@@ -178,6 +178,31 @@ one and keeps your keys and settings.
     results — so a few unlucky trades never do.
   Then two different AI models (with a free Groq key) read the headlines and the
   research side by side; either can stop the buy. All of it is on the Brain tab.
+- **It improves itself (4.0).** Around the clock, a population of strategy
+  settings (EMA lengths, RSI entry and exit, stop distance in ATRs, target ratio)
+  is bred, mutated and replayed on months of real candles — thousands per
+  second on a phone, at full speed on the charger and a tenth of that on
+  battery. A new setting is adopted only if it beats the current one by 0.08R
+  per trade on a stretch it never trained on (at least 15 trades) and also holds
+  up on a second unseen stretch (at least 10 trades); at most once per half
+  hour, logged with its numbers, and re-checked against the original every day
+  with an automatic rollback. On pure random data it adopts nothing or one lucky
+  setting a month, which the daily re-check can undo. It never touches the
+  owner's risk per trade, position cap or daily loss limit.
+- **Alternative data (4.0).** From the SEC's filing index (no key): new 8-Ks by
+  item — bankruptcy, delisting notices, unreliable past financials and
+  unregistered share sales are red flags — Form 4 insider-filing counts, and the
+  next results date estimated from the company's own filing rhythm. From
+  Wikipedia: daily attention against its usual level. All of it feeds the
+  checks, the learner (attention is one of the buckets) and the AI's brief.
+- **The whole market's news (4.0).** Besides the watchlist, the entire Alpaca
+  news wire is read on every look. The most talked-about stocks are checked —
+  tradable here, $5 or more, news not negative, the five checks at least a
+  strong WAIT — and up to three are watched for three days.
+- **Analysis around the clock (4.0).** With the market closed it still looks
+  every quarter hour (news, filings, discovery, training), and sends a morning
+  briefing half an hour before the open. A card on Home offers new versions as
+  they are released on GitHub.
 - **Stop means stop.** Stopping withdraws any buy order still waiting at Alpaca,
   a look already under way cannot send one, and no notification button brings a
   stopped bot back — only *Start* does. Every order the bot sends is listed with

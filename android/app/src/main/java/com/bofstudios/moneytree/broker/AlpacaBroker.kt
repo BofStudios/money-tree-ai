@@ -1,6 +1,7 @@
 package com.bofstudios.moneytree.broker
 
 import com.bofstudios.moneytree.engine.Account
+import com.bofstudios.moneytree.engine.AssetInfo
 import com.bofstudios.moneytree.engine.Bar
 import com.bofstudios.moneytree.engine.Broker
 import com.bofstudios.moneytree.engine.BrokerError
@@ -148,7 +149,8 @@ class AlpacaBroker(
     override suspend fun newsFeed(symbols: List<String>, since: Long?, limit: Int): List<NewsItem> {
         val j = getObject(
             url(dataBase, "/v1beta1/news") {
-                addQueryParameter("symbols", symbols.joinToString(",") { it.uppercase() })
+                // No symbols: the whole wire, every company Benzinga covers.
+                if (symbols.isNotEmpty()) addQueryParameter("symbols", symbols.joinToString(",") { it.uppercase() })
                 addQueryParameter("limit", limit.coerceIn(1, 50).toString())
                 addQueryParameter("sort", "desc")
                 addQueryParameter("include_content", "false")
@@ -157,6 +159,34 @@ class AlpacaBroker(
         )
         return parseNews(j)
     }
+
+    override suspend fun history(symbol: String, timeframe: Timeframe, days: Int): List<Bar> {
+        val start = Instant.now().minus(days.toLong(), ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS)
+        val j = getObject(
+            url(dataBase, "/v2/stocks/${symbol.uppercase()}/bars") {
+                addQueryParameter("timeframe", timeframe.alpaca)
+                addQueryParameter("limit", "10000")
+                addQueryParameter("start", DateTimeFormatter.ISO_INSTANT.format(start))
+                addQueryParameter("feed", "iex")
+                addQueryParameter("adjustment", "split")
+                addQueryParameter("sort", "desc")
+            }
+        )
+        val arr = j.optJSONArray("bars") ?: return emptyList()
+        return (0 until arr.length()).map { i ->
+            val b = arr.getJSONObject(i)
+            Bar(parseTime(b.optString("t")), b.num("o"), b.num("h"), b.num("l"), b.num("c"), b.num("v"))
+        }.reversed()
+    }
+
+    override suspend fun asset(symbol: String): AssetInfo? = runCatching {
+        val j = getObject(url(tradingBase, "/v2/assets/${symbol.uppercase()}"))
+        AssetInfo(
+            symbol = j.optString("symbol"), name = j.optString("name"), exchange = j.optString("exchange"),
+            tradable = j.optBoolean("tradable"), fractionable = j.optBoolean("fractionable"),
+            active = j.optString("status") == "active",
+        )
+    }.getOrNull()
 
     override suspend fun recentOrders(symbol: String, limit: Int): List<BrokerOrder> {
         val arr = getArray(

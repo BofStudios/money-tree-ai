@@ -20,9 +20,11 @@ data class Features(
     val minuteOfSession: Int?,
     /** The daily chart's direction: above its 50-day average. Null if unknown. */
     val dailyUp: Boolean?,
+    /** Wikipedia attention over its usual level (alt data); null if unknown. */
+    val attention: Double? = null,
 )
 
-enum class FeatureKey { QUALITY, NEWS, RSI, STRETCH, SESSION, DAILY_TREND, SYMBOL }
+enum class FeatureKey { QUALITY, NEWS, RSI, STRETCH, SESSION, DAILY_TREND, ATTENTION, SYMBOL }
 
 /** One feature's bucket: (QUALITY, "WAIT"), (RSI, "60+")… */
 data class Bucket(val key: FeatureKey, val value: String)
@@ -44,6 +46,7 @@ fun Features.buckets(): List<Bucket> = listOf(
         else -> "MIDDAY"
     }),
     Bucket(FeatureKey.DAILY_TREND, when (dailyUp) { true -> "UP"; false -> "DOWN"; null -> "?" }),
+    Bucket(FeatureKey.ATTENTION, when { attention == null -> "?"; attention < 1.5 -> "NORMAL"; attention < 3.0 -> "HIGH"; else -> "SPIKE" }),
     Bucket(FeatureKey.SYMBOL, symbol),
 ).filter { it.value != "?" }
 
@@ -109,7 +112,7 @@ class ShadowBook(private val strategy: EmaRsiStrategy) {
      * came first. A candle that touched both the stop and the target counts
      * as the stop: when in doubt, assume the worse.
      */
-    fun resolve(bars: Map<String, List<Bar>>, rewardRisk: Double): List<ShadowTrade> = synchronized(lock) {
+    fun resolve(bars: Map<String, List<Bar>>, rewardRisk: Double, strategy: EmaRsiStrategy = this.strategy): List<ShadowTrade> = synchronized(lock) {
         val closed = ArrayList<ShadowTrade>()
         for ((i, t) in trades.withIndex()) {
             if (!t.open) continue
