@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+import multiprocessing
+
+if __name__ == "__main__":
+    # The swarm's bots are separate processes. In the exe each one starts as a
+    # copy of it: hand those straight to multiprocessing, before the heavy
+    # imports below, so a bot loads only what it needs.
+    multiprocessing.freeze_support()
+
 import argparse
 import logging
 import os
@@ -19,7 +27,7 @@ from app.common.activity import Monitor
 from app.common.events import EventBus
 from app.common.keystore import KeyStore
 from app.common.logging_config import setup_logging
-from app.common.restart import Restarter, relaunch
+from app.common.restart import Restarter, relaunch, relaunched
 from app.config import APP_NAME, KEYSTORE_PATH, LOG_DIR, Settings, load_settings
 from app.data.base import MarketDataSource
 from app.data.yahoo import YahooData
@@ -42,6 +50,10 @@ from app.research.service import ResearchService
 from app.research.user_profile import ProfileStore
 from app.research.yahoo_research import YahooResearch
 from app.web.server import WebServer, create_app
+from app.brain.brain import Brain
+from app.brain.sources import AlpacaNews, SecClient, Wikipedia, make_asset_check
+from app.brain.words import BrainWords
+from app.config import DATA_DIR
 
 log = logging.getLogger(__name__)
 
@@ -221,6 +233,7 @@ def main() -> None:
     news = NewsFeed(*(keys or ("", "")))
     engine.news = news
     engine.explainer = claude
+    brain = build_brain(engine, data, keys, claude, monitor, events, risk, mentor)
 
     # Company research runs off its own free provider and its own daily candles,
     # so it keeps working in signal mode where no brokerage is connected at all.
@@ -269,8 +282,11 @@ def main() -> None:
     _print_banner(settings, executor, web.local_url + "/" + suffix, phone_url, telegram, claude, data)
 
     engine.start()
+    brain.start()
 
     if args.headless:
+        if not brain.settings.warned:
+            print(f"  Brain    : {brain.settings.bots} strategy bots in parallel processes — this can use a lot of RAM and CPU.")
         restarter.on_request(engine.stop)
         try:
             while engine.running:
@@ -278,6 +294,7 @@ def main() -> None:
         except KeyboardInterrupt:
             pass
         finally:
+            brain.stop()
             engine.stop()
             telegram.stop()
             web.stop()
@@ -293,11 +310,24 @@ def main() -> None:
     qt_app = QApplication(sys.argv)
     qt_app.setQuitOnLastWindowClosed(False)
 
+    from app.gui.warning import power_warning
+    if not brain.settings.warned and not relaunched():
+        choice = power_warning(brain.settings.bots, chosen.language == "tr")
+        if choice is None:
+            brain.stop()
+            engine.stop()
+            telegram.stop()
+            web.stop()
+            sys.exit(0)
+        bots, power, remember = choice
+        brain.apply_settings({"bots": bots, "power": power, "warned": remember})
+
     window = MainWindow(engine, f"{web.local_url}/{suffix}", phone_url, events)
     restarter.on_request(window.restart_requested.emit)
     window.show()
 
     exit_code = qt_app.exec()
+    brain.stop()
     engine.stop()
     telegram.stop()
     web.stop()
@@ -306,6 +336,37 @@ def main() -> None:
         relaunch()
         exit_code = 0
     sys.exit(exit_code)
+
+
+def build_brain(engine, data, keys, claude, monitor, events, risk, mentor) -> Brain:
+    """The research desk and the swarm, wired to the engine. Reads without keys
+    too (SEC, Wikipedia); news and discovery need Alpaca's."""
+    brain = Brain(
+        DATA_DIR / "brain", data,
+        sec=SecClient(), news=AlpacaNews(*keys) if keys else None, wiki=Wikipedia(), ai=claude,
+        asset_check=make_asset_check(*keys) if keys else None,
+        latest_price=getattr(data, "get_quote", None), monitor=monitor,
+    )
+    brain.symbols_fn = engine.watched_symbols
+    brain.timeframe_fn = lambda: engine.timeframe
+    brain.turkish_fn = lambda: engine.language == "tr"
+    brain.risk_fn = lambda: (risk.config.min_stop_pct, risk.config.max_stop_pct)
+
+    def promoted(p) -> None:
+        w = BrainWords(engine.language == "tr")
+        monitor.info("learn", w.promotion_title(p), None, w.promotion_text(p).splitlines())
+        events.publish("brain_promotion", {"title": w.promotion_title(p), "text": w.promotion_text(p)})
+        engine.scan_now()
+
+    def found(d: dict) -> None:
+        w = BrainWords(engine.language == "tr")
+        events.publish("brain_found", {"title": w.discovered(d["symbol"], d["name"], d["decision"], d["score"], d["mentions"])})
+
+    brain.on_promotion = promoted
+    brain.swarm.on_promotion = promoted
+    brain.on_found = found
+    engine.brain = brain
+    return brain
 
 
 def _print_banner(

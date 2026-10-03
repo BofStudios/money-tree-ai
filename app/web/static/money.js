@@ -78,7 +78,7 @@ function renderCard() {
   const tag = tagFor(broker, armed);
   const account = s.account;
 
-  card.dataset.money = tag.cls;
+  card.dataset.kind = tag.cls;
   $("mcTag").className = `mc-tag ${tag.cls}`;
   $("mcTag").innerHTML = `<i></i>${esc(tag.text)}`;
 
@@ -113,23 +113,51 @@ function renderCard() {
   $("mcActions").innerHTML = real
     ? `<button class="primary" data-money="add">${esc(t("mc.add"))}</button>
        <button class="ghost" data-money="out">${esc(t("mc.withdraw"))}</button>`
-    : `<button class="ghost" data-money="add">${esc(t("mc.add"))}</button>
-       <button class="link-accent" data-goto-settings>${esc(t("mc.goReal"))}</button>`;
+    : `<button class="primary" data-go-real>${esc(t("mc.goReal"))}</button>
+       <button class="ghost" data-money="add">${esc(t("mc.add"))}</button>`;
 }
 
 document.addEventListener("click", (e) => {
   if (e.target.closest("[data-back-home]")) { window.showView?.("home"); return; }
-  const opener = e.target.closest("[data-money]");
+  const opener = e.target.closest("button[data-money]");
   if (opener) {
     withdrawFirst = opener.dataset.money === "out";
     window.showView?.("money");
     return;
   }
+  if (e.target.closest("[data-go-real]")) { goReal(); return; }
   if (e.target.closest("[data-goto-settings]")) {
     window.showView?.("settings");
     setTimeout(() => $("sMoneyBlock")?.scrollIntoView({ block: "start" }), 60);
   }
 });
+
+/* "Switch to real money" is the switch itself, never a trip to Alpaca: with
+   working live keys it opens the typed confirmation straight away; without
+   them it opens Settings on the live-key form and says why. */
+async function goReal() {
+  if (!keys) await loadKeys();
+  if (liveUsable()) { confirmReal(); return; }
+  window.showView?.("settings");
+  await loadKeys();
+  setTimeout(() => {
+    const row = document.querySelector('.key-row[data-account="live"]');
+    if (!row) return;
+    row.scrollIntoView({ block: "center" });
+    row.querySelector(".key-form").hidden = false;
+    row.querySelector(".key-actions").hidden = true;
+    const note = row.querySelector("[data-key-note]");
+    const problem = keys && keys.alpaca_live && keys.alpaca_live.problem;
+    note.className = "note key-note bad";
+    note.textContent = problem ? t("sm.keyRefused", { why: problem }) : t("sm.needLive");
+    row.querySelector("input[name=key]").focus();
+  }, 80);
+}
+
+function liveUsable() {
+  const view = keys && keys.alpaca_live;
+  return Boolean(view && view.set && !view.problem);
+}
 
 /* ------------------------------------------------------ money view */
 
@@ -327,10 +355,7 @@ document.addEventListener("click", async (e) => {
 
 /* Real money is typed, not clicked. */
 function confirmReal() {
-  if (!(keys && keys.alpaca_live && keys.alpaca_live.set)) {
-    window.showAlert?.({ tone: "bad", title: t("sm.needLive") });
-    return;
-  }
+  if (!liveUsable()) { goReal(); return; }
   const word = t("sm.confirmWord");
   const box = $("confirmReal");
   box.hidden = false;

@@ -43,6 +43,8 @@ def main() -> None:
         # PyInstaller cannot see these — they are reached dynamically at runtime.
         "--hidden-import", "app.data.alpaca_data",
         "--hidden-import", "app.execution.alpaca_executor",
+        # The swarm's bots run app.brain in their own processes.
+        "--collect-submodules", "app.brain",
         # uvicorn picks its event loop and protocol implementations by name.
         "--collect-submodules", "uvicorn",
         "--collect-all", "pandas_market_calendars",

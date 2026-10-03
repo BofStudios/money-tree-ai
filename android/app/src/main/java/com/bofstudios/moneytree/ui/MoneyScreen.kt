@@ -56,13 +56,15 @@ private fun open(context: Context, url: String) =
 
 /** The first thing on Home: whose money this is, and how to move it. */
 @Composable
-fun MoneyCard(settings: TradingSettings, onOpen: (withdraw: Boolean) -> Unit) {
+fun MoneyCard(settings: TradingSettings, onOpen: (withdraw: Boolean) -> Unit, onGoReal: () -> Unit = {}) {
     val state by Hub.state.collectAsState()
     val w = Words(LocalTurkish.current)
     val account = state.account
 
     if (!settings.live) {
-        Card(Modifier.clickable { onOpen(false) }) {
+        // "Real money" means the switch. Before 4.0.1 this opened Alpaca's
+        // deposit steps instead, which read as the switch sending you to Alpaca.
+        Card(Modifier.clickable { onGoReal() }) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(tx("PRACTICE MONEY", "DENEME PARASI"), color = MT.Text3, fontSize = 11.sp,

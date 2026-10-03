@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from typing import Protocol
@@ -112,6 +113,15 @@ class PortfolioEngine:
         # AI that explains a buy in plain words after it fills.
         self.news = None
         self.explainer: Explainer | None = None
+        # The research desk (app/brain): the five checks, the news radar, alt
+        # data, learning and the swarm. Optional — without it the engine
+        # trades exactly as before.
+        self.brain = None
+        self._default_strategy = strategy
+        self._risk_originals = (risk.config.atr_multiple, risk.config.reward_risk)
+        self._held_back: dict[str, object] = {}     # symbol -> candle its signal was held back on
+        self._ai_passed: dict[str, float] = {}      # symbol -> until when the AI's pass holds
+        self._research: dict[str, object] = {}      # symbol -> the research behind a pending buy
 
         self._history: dict[str, pd.DataFrame] = {}
         self._snapshots: dict[str, dict] = {}
@@ -506,11 +516,23 @@ class PortfolioEngine:
         self._read_account(w)
         self._sync_broker(w)
 
+        if self.brain is not None:
+            self.strategy = self.brain.live_strategy(self._default_strategy)
+            self.brain.tune_risk(self.risk.config, self._risk_originals)
         with self._lock:
             symbols = self._scan_symbols()
         self.mentor.scan_start(len(symbols), self.timeframe)
         frames = self._fetch_bars(symbols, w)
         looked = self._analyse(symbols, frames, trade, w)
+        if self.brain is not None:
+            try:
+                for rule in self.brain.after_scan(frames, looked, self.risk.config, self.timeframe):
+                    from app.brain.words import BrainWords
+                    text = BrainWords(self.language == "tr").learned_rule(rule)
+                    self.monitor.info("learn", text)
+                    self.events.publish("brain_learned", {"text": text})
+            except Exception:
+                log.exception("the brain's after-scan step failed")
 
         signals_raised = 0
         if trade:
@@ -775,6 +797,12 @@ class PortfolioEngine:
             self.monitor.info(activity.INFO, w.not_placed(symbol, locked))
             return False
 
+        research = None
+        if position is None and signal.action is Action.BUY and self.brain is not None:
+            research = self._research_gate(symbol, snapshot, w)
+            if research is False:
+                return False
+
         balance, max_positions, position_pct = self._effective_limits()
 
         # Signals you have not answered yet still count against the cap, otherwise
@@ -811,11 +839,12 @@ class PortfolioEngine:
 
         self.mentor.considering(symbol, signal.reason, snapshot)
 
+        size = research.size if research is not None else 1.0
         intent = TradeIntent(
             symbol=symbol,
             side=order.side,
             action=signal.action,
-            qty=self._round_qty(order.qty, price),
+            qty=self._round_qty(order.qty * size, price),
             price=price,
             reason=signal.reason,
             stop_loss=order.stop_loss,
@@ -827,6 +856,11 @@ class PortfolioEngine:
             self.mentor.rejected(symbol, "buy", f"the position would be under {unit}")
             self.monitor.info(activity.INFO, w.too_small(symbol))
             return False
+
+        if research is not None and not self._ai_gate(symbol, research, intent, w):
+            return False
+        if research is not None:
+            self._research[symbol] = research
 
         self.mentor.explain_entry(intent, snapshot, balance.total)
         self.events.publish("intent", {"intent": intent.to_dict()})
@@ -859,6 +893,7 @@ class PortfolioEngine:
             return not self.executor.is_automatic
 
         self._register_position(opened, intent.reason)
+        self._brain_bought(opened)
         self.mentor.opened(opened, self.executor.is_automatic)
         self.events.publish(
             "trade_opened", {"position": opened.to_dict(), "reason": intent.reason}
@@ -981,6 +1016,13 @@ class PortfolioEngine:
             self._broker_stops.discard(trade.symbol)
 
         self.repo.save_closed_trade(trade, self.mode, self.executor.name, entry_reason)
+        if self.brain is not None:
+            try:
+                for rule in self.brain.closed(trade.symbol, trade.entry_price, trade.exit_price):
+                    from app.brain.words import BrainWords
+                    self.monitor.info("learn", BrainWords(self.language == "tr").learned_rule(rule))
+            except Exception:
+                log.exception("the brain could not count the closed trade")
         self.repo.clear_open_position(trade.symbol, self.mode)
         equity = self.executor.get_balance().total
         self.risk.record_closed_trade(trade, equity)
@@ -1166,9 +1208,79 @@ class PortfolioEngine:
             )
             self.monitor.info(activity.INFO, self.words().restored(restored))
 
+    def watched_symbols(self) -> list[str]:
+        with self._lock:
+            return self._scan_symbols()
+
     def _scan_symbols(self) -> list[str]:
-        """The watchlist plus anything held that is not on it. Call under the lock."""
-        return list(self.symbols) + [s for s in self._positions if s not in self.symbols]
+        """The watchlist, anything held that is not on it, and what the brain
+        found in the news. Call under the lock."""
+        held = [s for s in self._positions if s not in self.symbols]
+        found = self.brain.discovered_symbols() if self.brain is not None else []
+        return list(dict.fromkeys(list(self.symbols) + held + found))
+
+    # ------------------------------------------------------------ the brain
+
+    def _research_gate(self, symbol: str, snapshot: dict, w: Words):
+        """The research desk on one buy signal: False when it holds the buy back,
+        else the research (whose size may shrink the order)."""
+        from app.brain.words import BrainWords
+        bw = BrainWords(self.language == "tr")
+        with self._lock:
+            history = self._history.get(symbol)
+        if history is None or history.empty:
+            return None
+        candle = history.index[-1]
+        if self._held_back.get(symbol) == candle:
+            return False  # this candle's signal was already judged and held back
+        until = self._ai_passed.get(symbol)
+        if until and time.time() < until:
+            return False
+        try:
+            r = self.brain.research(symbol, history, snapshot, self.timeframe != "1d")
+        except Exception:
+            log.exception("research failed for %s", symbol)
+            return None
+        self.monitor.info("research", bw.research_title(symbol, r.ok, r.size),
+                          f"{bw.decision(r.report.decision)} {r.report.score:.1f}/5" if r.report else None,
+                          bw.research_lines(r))
+        if not r.ok:
+            self._held_back[symbol] = candle
+            why = bw.held_back_why(r)
+            self.mentor.rejected(symbol, "buy", why)
+            self.events.publish("brain_held_back", {"symbol": symbol, "why": why})
+            return False
+        return r
+
+    def _ai_gate(self, symbol: str, research, intent: TradeIntent, w: Words) -> bool:
+        from app.brain.words import BrainWords
+        bw = BrainWords(self.language == "tr")
+        brief = (f"Buy {intent.qty:g} {symbol} at about {intent.price:.2f}, stop {intent.stop_loss or 0:.2f}, "
+                 f"target {intent.take_profit or 0:.2f}. Rule: {intent.reason}. " + self.brain.dossier(research))
+        handle = None
+        if self.brain.ai is not None and getattr(self.brain.ai, "available", False) and self.brain.settings.ai_check:
+            handle = self.monitor.begin(activity.AI, bw.ai_committee(symbol))
+        verdict = self.brain.vet(symbol, brief, self.language == "tr")
+        if handle is not None:
+            if verdict is None:
+                handle.fail(bw.t("no answer — the rules decide", "cevap yok — kurallar karar verir"))
+            else:
+                handle.done((bw.t("OK", "Sorun yok") if verdict[0] else bw.t("SKIP", "Vazgeç")) + (f" — {verdict[1]}" if verdict[1] else ""))
+        if verdict is not None and not verdict[0]:
+            self._ai_passed[symbol] = time.time() + 3600
+            self.monitor.info(activity.WARN, bw.ai_skip(symbol), verdict[1])
+            self.mentor.rejected(symbol, "buy", verdict[1])
+            return False
+        return True
+
+    def _brain_bought(self, opened: Position) -> None:
+        research = self._research.pop(opened.symbol, None)
+        if self.brain is None or research is None or not opened.stop_loss:
+            return
+        try:
+            self.brain.bought(opened.symbol, opened.entry_price, opened.stop_loss, research.features)
+        except Exception:
+            log.exception("the brain could not note the buy")
 
     def _effective_limits(self) -> tuple[Balance, int, float | None]:
         """Money and caps for the next entry, honouring an active challenge.

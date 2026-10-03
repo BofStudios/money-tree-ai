@@ -63,6 +63,9 @@ fun SettingsScreen(
     toast: (String) -> Unit,
     onOpenMoney: () -> Unit,
     onRedoSetup: () -> Unit,
+    /** Opened from Home's "Real money ->": go straight to the switch. */
+    askLive: Boolean = false,
+    onAskedLive: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val secure = remember { SecureStore(context) }
@@ -72,6 +75,16 @@ fun SettingsScreen(
     val turkish = LocalTurkish.current
     val w = Words(turkish)
     var confirmLive by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(askLive) {
+        if (!askLive) return@LaunchedEffect
+        onAskedLive()
+        when {
+            settings.live -> Unit
+            secure.has(SecureStore.LIVE_KEY) && secure.has(SecureStore.LIVE_SECRET) -> confirmLive = true
+            else -> toast(pick(turkish, "First add your LIVE Alpaca keys under Keys below, then tap Switch to real money.",
+                "Önce aşağıda Anahtarlar'a CANLI Alpaca anahtarlarını ekle, sonra Gerçek paraya geç'e bas."))
+        }
+    }
     var keysVersion by remember { mutableStateOf(0) }
 
     Column(
@@ -231,7 +244,7 @@ fun SettingsScreen(
             Spacer(Modifier.height(12.dp))
             if (!settings.live) {
                 GhostButton(tx("Switch to real money…", "Gerçek paraya geç…"), {
-                    if (!secure.has(SecureStore.LIVE_KEY)) toast(pick(turkish, "Add your live Alpaca keys below first.", "Önce aşağıya canlı Alpaca anahtarlarını ekle."))
+                    if (!secure.has(SecureStore.LIVE_KEY) || !secure.has(SecureStore.LIVE_SECRET)) toast(pick(turkish, "Add your live Alpaca keys below first.", "Önce aşağıya canlı Alpaca anahtarlarını ekle."))
                     else confirmLive = true
                 }, color = MT.Down)
             } else {
@@ -362,7 +375,9 @@ fun SettingsScreen(
                     Hub.armed.value = false
                     onChange(settings.copy(live = true))
                     if (running) EngineService.restart(context)
-                    onOpenMoney()
+                    // Stay here: the switch is done, and arming is the next step on this page.
+                    toast(pick(turkish, "Switched to real money. It buys nothing until you tap Arm.",
+                        "Gerçek paraya geçildi. Devreye al'a basana kadar hiçbir şey almaz."))
                 }) { Text(tx("Switch", "Geç"), color = MT.Down) }
             },
             dismissButton = { TextButton({ confirmLive = false }) { Text(tx("Cancel", "Vazgeç")) } },

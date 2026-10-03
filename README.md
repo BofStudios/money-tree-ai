@@ -21,6 +21,48 @@ It runs in one of three modes:
 | `paper` | Trades by itself with practice money: your Alpaca paper account once its keys are saved, otherwise a simulation on this PC. | Nothing. Alpaca paper keys are optional. |
 | `live` | Trades by itself with real money through Alpaca, behind an explicit **Arm** step that starts disarmed every run. | An Alpaca account and its live keys. |
 
+## Desktop 3.0: the research desk and the swarm
+
+**A research desk before every buy.** Each stock gets the five checks a careful
+long-term investor asks — business, moat, management, value, risk — from the
+company's own SEC filings (data.sec.gov, no key), the same thresholds as the phone
+app. On top of that, alternative data: 8-K events (earnings, leadership changes,
+delisting or accounting warnings), insider filings in the last 30 days, the next
+results date worked out from the rhythm of past ones, and Wikipedia page views as
+a measure of how much attention a stock is getting. News comes from Alpaca's feed,
+both for the stocks being watched and the whole market's wire. Headlines are
+scored by a transparent word list, red flags (trading halts, bankruptcy, offerings,
+fraud, guidance cuts, earnings in the next day) stop buys, and the AI reads the
+headlines and can veto a buy. It also finds stocks the whole market keeps talking
+about and runs the five checks on them.
+
+**Learning from results.** Every buy signal is followed in its head — bought or
+not — to its stop, target or sell signal. Once a kind of signal (for example *bad
+news + far above its average*) has at least ten results that lose on average, it
+becomes a rule: those buys are blocked, and mixed ones are bought smaller.
+
+**The swarm: ten strategy bots in parallel.** Ten processes (Hawk, Viper, Raven,
+Titan, Comet, Blaze, Specter, Nova, Onyx, Fang) each evolve trading strategies —
+trend, breakout and pullback families — on real candles, together tens of thousands
+of strategies a second. Only one strategy ever trades the account. A bot's best
+replaces it only when it beats it on two stretches of history no bot trained on,
+over enough trades (15 and 10), by a clear margin, at most once every 30 minutes;
+a daily re-check rolls a change back if it stops working. The other bots
+paper-trade their best on live candles for the leaderboard. **Reset** brings back
+the original strategy at any time.
+
+**It is heavy, and it says so.** On start the app warns that ten bots can use
+1–2 GB of RAM and most CPU cores: other apps slow down, laptops heat up and drain
+faster. Choose full power, light (two bots at 15%), or quit; bots and power can be
+changed any time on the Swarm tab, and the bots run at below-normal priority.
+
+**What it cannot do.** Evolved strategies that won on the past can still lose on
+the future, and no check can see everything. This is not investment advice.
+
+The look is new too: a yellow-dominant black theme and a new emblem
+(`assets/mark.svg`, rendered by `scripts/make_logo.py` into the app icon, the
+dashboard and `assets/pfp.png`).
+
 ## Why signal mode exists
 
 **Midas has no API.** Their own broker listing says so plainly: *"Algoritmik işlem
@@ -232,9 +274,11 @@ screen is in English and Turkish.
 
 | Tab | What is on it |
 |---|---|
-| **Home** | Money first: whose money this is (real, Alpaca paper or simulated), the balance, today's change, what the AI has made or lost you, and buttons for adding or withdrawing money through Alpaca. Then what the bot is doing right now, buys waiting for your OK, holdings and the day's numbers |
+| **Home** | Money first: whose money this is (real, Alpaca paper or simulated), the balance, today's change, what the AI has made or lost you, buttons for adding or withdrawing money through Alpaca, and *Switch to real money*, which opens the typed confirmation — never Alpaca. Then what the bot is doing right now, buys waiting for your OK, holdings and the day's numbers |
 | **Live** | Every step the engine takes, as it takes it: checking the market, reading the account, fetching bars, analysing each stock, reading the news, placing an order, moving a stop, asking the AI to explain a buy. A step spins for exactly as long as the real call takes, shows its result underneath, and turns red if it failed. Filter to trades or problems, or press **Look now** |
 | **Research** | A full company screen per symbol (below) |
+| **Brain** | The five checks per stock with alt data, the news radar (mood per stock, the market wire, red flags, topics), what it has learned, and switches for every gate |
+| **Swarm** | The ten bots: strategies tested, the strategy the account trades and how it scores on unseen data, the leaderboard, every change it made, power and bot count |
 | **Chart** | Full-height candles with EMAs, entry/stop/target lines drawn on any held position, plus a plain-English read of the symbol |
 | **Market** | Every ticker with price, window change, trend, EMA gap, RSI and volatility. Click a row to jump to its chart |
 | **News** | Headlines for everything being watched |
@@ -494,6 +538,7 @@ app/
   strategy/    indicators, Strategy interface, EMA/RSI strategy
   risk/        sizing, stops, arm/disarm, daily loss kill switch
   engine/      the watchlist scanner, the Live feed's words, markets, backtester
+  brain/       the five checks, SEC/news/alt-data sources, news radar, learning, the swarm
   common/      the Live step monitor, the encrypted key store, in-app restart
   mentor/      rule-based narrator + optional AI (Groq, Gemini, Ollama, Claude)
   notify/      Telegram bot and message formatting

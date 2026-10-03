@@ -108,6 +108,7 @@ fun HomeScreen(
     toast: (String) -> Unit,
     onOpenLive: () -> Unit,
     onOpenMoney: (withdraw: Boolean) -> Unit,
+    onGoReal: () -> Unit,
     onPickMarket: (Market) -> Unit,
     requestArm: () -> Unit,
     trades: () -> List<TradeRecord>,
@@ -128,7 +129,7 @@ fun HomeScreen(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 130.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item { MoneyCard(settings, onOpenMoney) }
+        item { MoneyCard(settings, onOpenMoney, onGoReal) }
         update?.let { u -> item { UpdateCard(u.first, u.second) } }
         if (settings.live && !armed && running) item { ArmBanner(requestArm) }
         if (running) item { BackgroundWarning() }

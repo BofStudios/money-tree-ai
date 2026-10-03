@@ -117,11 +117,11 @@
   content: ""; position: absolute; inset: 0; pointer-events: none;
   background: radial-gradient(120% 90% at 100% 0%, rgba(255, 214, 10, 0.10), transparent 55%);
 }
-.moneycard[data-money="real"] {
+.moneycard[data-kind="real"] {
   border-color: rgba(255, 214, 10, 0.5);
   box-shadow: 0 0 0 1px rgba(255, 214, 10, 0.08), 0 24px 60px -30px rgba(255, 214, 10, 0.55);
 }
-.moneycard[data-money="real"]::before {
+.moneycard[data-kind="real"]::before {
   background: radial-gradient(120% 100% at 100% 0%, rgba(255, 214, 10, 0.18), transparent 60%);
 }
 .mc-top { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }

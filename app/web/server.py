@@ -14,6 +14,7 @@ from app.engine.portfolio_engine import PortfolioEngine
 from app.mentor.ai import AIMentor
 from app.mentor.narrator import Narrator
 from app.storage.repository import Repository
+from app.web.brain_routes import build_brain_router
 from app.web.money_routes import build_money_router
 from app.web.routes import build_router
 from app.web.ws import WebSocketHub
@@ -57,6 +58,8 @@ def create_app(
     api.include_router(
         build_money_router(engine, repo, settings, keystore, restarter, token, config_path, key_problems)
     )
+    api.include_router(build_brain_router(engine, token))
+
     @api.middleware("http")
     async def _revalidate_static(request, call_next):
         """Make the browser check for a newer dashboard on every load.

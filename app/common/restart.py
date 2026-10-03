@@ -22,6 +22,8 @@ from app.config import FROZEN, PROJECT_ROOT
 
 log = logging.getLogger(__name__)
 
+RELAUNCHED = "MONEYTREE_RELAUNCHED"
+
 
 class Restarter:
     def __init__(self) -> None:
@@ -54,4 +56,11 @@ def relaunch() -> None:
     if os.name == "nt":
         flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
     log.info("restarting: %s", " ".join(command))
-    subprocess.Popen(command, cwd=str(PROJECT_ROOT), creationflags=flags, close_fds=True)
+    # The owner already answered the start-up questions in this sitting.
+    env = {**os.environ, RELAUNCHED: "1"}
+    subprocess.Popen(command, cwd=str(PROJECT_ROOT), creationflags=flags, close_fds=True, env=env)
+
+
+def relaunched() -> bool:
+    """True in a copy started by relaunch(), not by the owner."""
+    return os.environ.get(RELAUNCHED) == "1"

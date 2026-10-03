@@ -156,6 +156,7 @@ class MainActivity : FragmentActivity() {
     @Composable
     private fun Main() {
         var tab by rememberSaveable { mutableIntStateOf(0) }
+        var askLive by rememberSaveable { mutableStateOf(false) }
         // The money page opens over the tabs: null = closed, else which section leads.
         var money by rememberSaveable { mutableStateOf<String?>(null) }
         BackHandler(enabled = money != null) { money = null }
@@ -189,6 +190,7 @@ class MainActivity : FragmentActivity() {
                             settings, ::toast,
                             onOpenLive = { tab = 1 },
                             onOpenMoney = { withdraw -> money = if (withdraw) "withdraw" else "deposit" },
+                            onGoReal = { askLive = true; tab = 4 },
                             onPickMarket = { picked -> update(settings.copy(market = picked, watchlist = picked.watchlist)) },
                             requestArm = ::armWithAuth,
                             trades = prefs::trades,
@@ -204,7 +206,7 @@ class MainActivity : FragmentActivity() {
                         2 -> BrainScreen(settings, ::toast)
                         3 -> PortfolioScreen(prefs)
                         else -> SettingsScreen(settings, ::update, ::armWithAuth, ::toast, onOpenMoney = { money = "deposit" },
-                            onRedoSetup = { onboarded = false })
+                            onRedoSetup = { onboarded = false }, askLive = askLive, onAskedLive = { askLive = false })
                     }
                 }
             }
