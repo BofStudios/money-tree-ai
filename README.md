@@ -13,13 +13,69 @@ it profitable — the full table is under
 [Did any of it help?](#did-any-of-it-help). This is a research and education tool,
 not investment advice.
 
-It runs in one of three modes:
+It trades only through Alpaca, in one of two modes:
 
 | Mode | What it does | What you need |
 |---|---|---|
-| **`signal`** | **Midas mode.** Analyses the market and tells you exactly what to buy or sell; you place it in Midas yourself. | Nothing. No brokerage API. |
-| `paper` | Trades by itself with practice money: your Alpaca paper account once its keys are saved, otherwise a simulation on this PC. | Nothing. Alpaca paper keys are optional. |
 | `live` | Trades by itself with real money through Alpaca, behind an explicit **Arm** step that starts disarmed every run. | An Alpaca account and its live keys. |
+| `paper` | Trades by itself with practice money: your Alpaca paper account once its keys are saved, otherwise a simulation on this PC. | Nothing. Alpaca paper keys are optional. |
+
+Practice money stays because it is the only way to see the bot work before any
+money is at risk, and because a new Alpaca live account cannot trade until it
+is funded. (Midas signal mode was removed in 4.0: an old config that still says
+`signal` starts on practice money.)
+
+## Desktop 4.0: Stop that stops, plain words, two editions
+
+**Stop.** The red **STOP** switch is in the top bar on every screen. From the
+moment you press it the bot sends no buy order and sells nothing on a signal,
+even in the middle of a scan: the check sits right before the order is sent.
+Buys waiting for your approval are cancelled. Stop-loss and take-profit stay
+active, because they protect what you hold. The stop is saved to
+`data/engine_state.json`, so a restart does not start trading again; only
+**START** does. Typing `stop` (or `dur`, `durdur`) in the chat or in Telegram
+does the same thing at once. It never goes to the AI, which could say it
+stopped the bot without doing it.
+
+**Plain words.** Every step in the Live tab, the narrator and the AI answers
+follow ASD-STE100 Simplified Technical English rules: one fact per sentence,
+active voice, simple tenses. A step says what the bot does, the line under it
+says what happened, and a finished step starts with "Done". The Turkish texts
+follow the same rules.
+
+**Two editions** (`app/edition.py`):
+
+| | Personal (your copy) | Pro (the copy you sell) |
+|---|---|---|
+| Built with | source, or `build_exe.py --personal` | `build_exe.py` |
+| Licence key | no | yes, checked against Lemon Squeezy |
+| Telegram | yes | no, nothing is pre-connected |
+| Risk per trade | your setting | at most 1% |
+| Daily loss limit | your setting | at most 3% |
+| Open positions | your setting | at most 5 |
+| One stock | your setting | at most 25% of the account |
+| Strategy bots | up to 10 | up to 4 |
+
+The Pro limits are applied when the app starts, so editing `config.yaml` can
+lower them but never raise them.
+
+**Your keys never ship.** Alpaca, AI and Telegram keys live in `.env`, the
+encrypted key store and `data/`. The build copies none of them and stops with
+an error if one of those files ends up in the output.
+
+### Selling the Pro edition
+
+1. Create a product on [Lemon Squeezy](https://www.lemonsqueezy.com) with
+   licence keys turned on and an activation limit (for example 2 PCs).
+2. Put its store id and product id in `app/common/licensing.py`
+   (`STORE_ID`, `PRODUCT_ID`).
+3. Install Inno Setup once: `winget install JRSoftware.InnoSetup --scope user`.
+4. Run `.venv\Scripts\python scripts\build_exe.py`. It writes
+   `dist\MoneyTreeAI-Setup-<version>.exe`, the installer you sell.
+
+The licence check needs no secret, so nothing private is inside the exe. A
+buyer activates once per PC, and **Settings → Licence** frees the PC to move the
+key to another one.
 
 ## Desktop 3.0: the research desk and the swarm
 
@@ -63,25 +119,6 @@ The look is new too: a yellow-dominant black theme and a new emblem
 (`assets/mark.svg`, rendered by `scripts/make_logo.py` into the app icon, the
 dashboard and `assets/pfp.png`).
 
-## Why signal mode exists
-
-**Midas has no API.** Their own broker listing says so plainly: *"Algoritmik işlem
-ve API erişimi sunulmamaktadır"* — algorithmic trading and API access are not
-offered. No bot can place an order in Midas, and the only ways around that
-(reverse-engineering their private app API, or scripting taps on the phone) break
-their terms, risk your account, and shatter on every app update.
-
-So the bot splits the job. It does the part a computer is good at — watching eight
-tickers all day, computing indicators, sizing positions, enforcing stops — and
-hands you the part only you can do: pressing buy in Midas. You get a message with
-the ticker, share count, entry, stop, target and the reason. You place it, tap
-**Taken**, and the bot tracks that position and tells you when to get out.
-
-If you later want full automation, open a free Alpaca account (it accepts Turkish
-residents — US residency is **not** required), paste its keys in
-**Settings → Money & keys**, and switch to **Real money** there. The same brain
-starts placing its own orders. Nothing else changes.
-
 ## Setup
 
 ```bash
@@ -97,7 +134,7 @@ copy config\config.example.yaml config\config.yaml
 `.env` holds your keys and never leaves your machine. `config/config.yaml` holds
 the watchlist, timeframe and risk limits.
 
-Signal mode needs **no keys at all** — market data comes from a free public feed.
+Practice money needs **no keys at all**: market data comes from a free public feed.
 
 ### Alpaca keys
 
@@ -117,7 +154,7 @@ If Alpaca refuses the saved keys at startup (say you regenerated them on the
 phone), the app does not crash: it runs on the simulation, says so in the Live
 tab, and marks the keys in red in Settings until you paste new ones.
 
-### Telegram (recommended)
+### Telegram (personal edition only)
 
 1. Message [@BotFather](https://t.me/BotFather), send `/newbot`, follow the prompts.
 2. Put the token in `.env` as `TELEGRAM_BOT_TOKEN`.
@@ -403,7 +440,7 @@ hold a conversation, and it says so instead of pretending.
 Tell it something once and it keeps it, across restarts:
 
 ```
-remember I place my real trades in Midas, not Alpaca
+remember I am a beginner, explain things simply
 remember I am a beginner, keep it short
 ```
 
@@ -499,7 +536,8 @@ what `scripts/run_backtest.py` is for.
 
 ## Safety model
 
-- **Signal mode cannot spend your money.** It has no brokerage credentials.
+- **Stop wins.** The STOP switch is checked right before every order, saved across
+  restarts, and also works by typing `stop` in the chat or Telegram.
 - **Stops live at Alpaca.** A whole-share buy goes in as a GTC bracket, so its
   stop-loss and target sit at Alpaca and protect the position overnight and while
   this PC is off (a DAY bracket's stop would expire at the close). A trailing stop
@@ -534,10 +572,11 @@ what `scripts/run_backtest.py` is for.
 ```
 app/
   data/        market data sources (Yahoo keyless, Alpaca)
-  execution/   signal (Midas), paper, and Alpaca order handling
+  execution/   practice (simulation) and Alpaca order handling
   strategy/    indicators, Strategy interface, EMA/RSI strategy
   risk/        sizing, stops, arm/disarm, daily loss kill switch
   engine/      the watchlist scanner, the Live feed's words, markets, backtester
+  edition.py   personal vs pro: licence, Telegram, fixed safety limits
   brain/       the five checks, SEC/news/alt-data sources, news radar, learning, the swarm
   common/      the Live step monitor, the encrypted key store, in-app restart
   mentor/      rule-based narrator + optional AI (Groq, Gemini, Ollama, Claude)

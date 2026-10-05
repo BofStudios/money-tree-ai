@@ -118,3 +118,93 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 @keyframes emblem-in { from { opacity: 0; transform: scale(0.4) rotate(-90deg); } to { opacity: 1; transform: none; } }
 @keyframes emblem-glow { 50% { filter: drop-shadow(0 0 30px rgba(255, 214, 10, 0.95)); } }
 .logo img { border-radius: 9px; }
+
+/* =============================================================== 4.0 premium
+   One switch on every screen, a calmer type system, and surfaces with depth.
+   Windows fonts first: Segoe UI Variable on Windows 11, Segoe UI before it,
+   Cascadia Mono for numbers. Nothing is downloaded. */
+
+:root {
+  --sans: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --display: "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --mono: "Cascadia Mono", "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+  --gold-line: linear-gradient(90deg, rgba(255, 214, 10, 0.55), rgba(255, 214, 10, 0.08) 45%, rgba(255, 214, 10, 0.35));
+  --card: linear-gradient(180deg, #15110a 0%, #0c0a06 100%);
+  --card-edge: rgba(255, 214, 10, 0.14);
+  --lift: 0 1px 0 rgba(255, 247, 200, 0.06) inset, 0 22px 50px -32px rgba(0, 0, 0, 0.95);
+}
+
+body { font-family: var(--sans); font-feature-settings: "tnum" 1, "ss01" 1; -webkit-font-smoothing: antialiased; }
+.figure, .mv-figure, .mega, #heroEquity, .top-clock, .num { font-variant-numeric: tabular-nums; }
+h1, .figure, .mv-figure, .boot-name, .now-head b, .ai-title b { font-family: var(--display); }
+.figure { letter-spacing: -0.035em; font-weight: 700; }
+
+/* ------------------------------------------------------------ header switch */
+
+.halt-btn {
+  display: inline-flex; align-items: center; gap: 9px;
+  height: 34px; padding: 0 16px 0 13px; border-radius: 999px;
+  font: 800 12px/1 var(--sans); letter-spacing: 0.12em; cursor: pointer;
+  border: 1px solid transparent; transition: transform 0.15s var(--spring), box-shadow 0.2s ease;
+}
+.halt-btn:hover { transform: translateY(-1px); }
+.halt-btn:active { transform: scale(0.97); }
+.halt-btn[data-state="on"] {
+  color: #fff; border-color: #ff7a72;
+  background: linear-gradient(180deg, #ff5a52, #d8261c);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 0 22px -6px rgba(255, 70, 60, 0.85);
+}
+.halt-btn[data-state="off"] {
+  color: #000; border-color: var(--accent);
+  background: linear-gradient(180deg, var(--accent-hot), var(--accent) 60%, var(--accent-deep));
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.4) inset, 0 0 22px -6px rgba(255, 214, 10, 0.8);
+}
+.halt-led { width: 8px; height: 8px; border-radius: 2px; background: currentColor; flex: none; }
+.halt-btn[data-state="on"] .halt-led { animation: halt-blink 1.6s ease-in-out infinite; }
+.halt-btn[data-state="off"] .halt-led { border-radius: 0; width: 0; height: 0; background: none;
+  border-left: 8px solid currentColor; border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
+@keyframes halt-blink { 50% { opacity: 0.35; } }
+
+.ed-badge {
+  font: 800 9.5px/1 var(--sans); letter-spacing: 0.14em; font-style: normal; text-transform: uppercase;
+  margin-left: 6px; padding: 3px 7px; border-radius: 6px; vertical-align: 2px;
+  color: #000; background: linear-gradient(180deg, var(--accent-hot), var(--accent));
+}
+body[data-edition="personal"] .ed-badge { color: var(--accent); background: var(--accent-soft); border: 1px solid rgba(255, 214, 10, 0.35); }
+
+/* ------------------------------------------------------------- surfaces */
+
+.top { height: 58px; box-shadow: 0 1px 0 rgba(255, 214, 10, 0.05), 0 12px 32px -20px rgba(255, 214, 10, 0.4); }
+.top-mode { font-weight: 700; letter-spacing: 0.04em; }
+
+.now, .moneycard, .proposal, .mv-card, .fl-card, .bot, .confirm-card, .block.card {
+  background: var(--card);
+  border: 1px solid var(--card-edge);
+  box-shadow: var(--lift);
+}
+.now, .moneycard { border-radius: 22px; }
+.moneycard { padding: 24px 26px 22px; }
+.moneycard .figure { font-size: 56px; }
+.now { position: relative; overflow: hidden; }
+.now::before, .moneycard::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px; pointer-events: none;
+  background: var(--gold-line); opacity: 0.8;
+}
+.now[data-state="stopped"] { border-color: rgba(255, 90, 82, 0.45); box-shadow: var(--lift), 0 0 0 1px rgba(255, 90, 82, 0.08); }
+.now[data-state="stopped"] .now-head b { color: #ff8a82; }
+
+.block { border-top-color: rgba(255, 214, 10, 0.08); }
+.block-head h2 { font-size: 11.5px; letter-spacing: 0.16em; }
+
+button.primary, button.solid { border-radius: 12px; letter-spacing: 0.01em; }
+.tabbar { border-radius: 24px; padding: 7px; }
+.tab { border-radius: 17px; font-size: 10.5px; font-weight: 600; }
+
+/* Live steps read as a log of finished work: what was done, what happened. */
+.now-feed li { font-size: 13.2px; }
+.now-feed li em { color: var(--text-3); font-style: normal; }
+
+@media (max-width: 1000px) {
+  .halt-btn { height: 32px; padding: 0 12px 0 10px; font-size: 11px; }
+  .moneycard .figure { font-size: 44px; }
+}

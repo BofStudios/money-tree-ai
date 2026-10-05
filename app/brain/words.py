@@ -38,39 +38,39 @@ class BrainWords:
 
     # -------------------------------------------------------- research steps
     def reading_filings(self, n: int) -> str:
-        return self.t(f"Reading annual reports for {n} companies (SEC)", f"{n} şirketin yıllık raporlarını okuyor (SEC)")
+        return self.t(f"The bot reads the annual reports of {n} companies (SEC).", f"Bot {n} şirketin yıllık raporlarını okur (SEC).")
 
     def filings_line(self, symbol: str, name: str, years: int, fund: bool) -> str:
         if fund:
-            return self.t(f"{symbol} — a fund (ETF): judged as a fund", f"{symbol} — fon (ETF): fon gibi değerlendirilecek")
+            return self.t(f"{symbol}: a fund (ETF). The bot examines it as a fund.", f"{symbol}: fon (ETF). Bot onu fon olarak inceler.")
         return self.t(f"{symbol} · {name} · {years} years", f"{symbol} · {name} · {years} yıl")
 
     def reading_events(self, n: int) -> str:
-        return self.t(f"Reading the SEC filing index for {n} companies (8-Ks, insiders)",
-                      f"{n} şirketin SEC olay kayıtlarını okuyor (8-K, içeriden işlemler)")
+        return self.t(f"The bot reads the SEC filings of {n} companies (8-K events, insider trades).",
+                      f"Bot {n} şirketin SEC kayıtlarını okur (8-K olayları, içeriden işlemler).")
 
     def reading_attention(self, n: int) -> str:
-        return self.t(f"Measuring attention on {n} companies (Wikipedia)", f"{n} şirkete olan ilgiyi ölçüyor (Wikipedia)")
+        return self.t(f"The bot measures the public attention on {n} companies (Wikipedia).", f"Bot {n} şirkete olan ilgiyi ölçer (Wikipedia).")
 
     def fetching_daily(self, n: int) -> str:
-        return self.t(f"Fetching daily charts for {n} stocks", f"{n} hisse için günlük grafik çekiyor")
+        return self.t(f"The bot gets the daily charts of {n} stocks.", f"Bot {n} hissenin günlük grafiğini alır.")
 
     def fetching_history(self, n: int, bars: int, tf: str) -> str:
-        return self.t(f"Fetching {bars} {tf} candles each for {n} stocks — training data for the swarm",
-                      f"{n} hisse için {bars}'er {tf} mum çekiyor — sürünün eğitim verisi")
+        return self.t(f"The bot gets {bars} {tf} candles for each of {n} stocks. The swarm trains on them.",
+                      f"Bot {n} hissenin her biri için {bars} {tf} mum alır. Sürü bunlarla eğitilir.")
 
     def history_done(self, series: int, bars: int) -> str:
-        return self.t(f"{series} stocks · {bars:,} candles ready", f"{series} hisse · {bars:,} mum hazır".replace(",", "."))
+        return self.t(f"Done. Stocks: {series}. Candles: {bars:,}.", f"Bitti. Hisse: {series}. Mum: {bars:,}.".replace(",", "."))
 
     def news_wire(self, added: int, kept: int) -> str:
-        return self.t(f"News wire · {added} new headline(s) ({kept} kept)", f"Haber akışı · {added} yeni başlık (toplam {kept})")
+        return self.t(f"Done. New headlines: {added}. Total: {kept}.", f"Bitti. Yeni başlık: {added}. Toplam: {kept}.")
 
     def ai_scoring(self, n: int) -> str:
-        return self.t(f"AI reading and scoring {n} headlines", f"AI {n} başlığı okuyup puanlıyor")
+        return self.t(f"The AI reads and scores {n} headlines.", f"Yapay zekâ {n} başlığı okur ve puanlar.")
 
     def scanning_market(self, n: int) -> str:
-        return self.t(f"Scanning the whole market's news · checking the {n} most talked-about stocks",
-                      f"Tüm piyasanın haberlerini tarıyor · en çok konuşulan {n} hisse kontrol ediliyor")
+        return self.t(f"The bot reads the news of the whole market. It examines the {n} stocks with the most news.",
+                      f"Bot tüm piyasanın haberlerini okur. En çok haberi olan {n} hisseyi inceler.")
 
     def discovered(self, symbol: str, name: str, decision: str, score: float, mentions: int) -> str:
         return self.t(f"✓ {symbol} · {name} · {self.decision(decision)} {score:.1f}/5 · {mentions} stories in 24h",
@@ -82,8 +82,8 @@ class BrainWords:
     # ------------------------------------------------------------- research
     def research_title(self, symbol: str, ok: bool, size: float) -> str:
         tail = "" if size >= 0.999 else self.t(f" · size {size * 100:.0f}%", f" · boyut %{size * 100:.0f}")
-        return (self.t(f"Research · {symbol} → cleared", f"Araştırma · {symbol} → geçti") + tail) if ok \
-            else self.t(f"Research · {symbol} → held back", f"Araştırma · {symbol} → bekletildi")
+        return (self.t(f"Research: {symbol}. Result: pass.", f"Araştırma: {symbol}. Sonuç: geçti.") + tail) if ok \
+            else self.t(f"Research: {symbol}. Result: the bot does not buy now.", f"Araştırma: {symbol}. Sonuç: bot şimdi almaz.")
 
     def research_lines(self, r) -> list[str]:
         mark = lambda ok: "✓" if ok else "✕"  # noqa: E731

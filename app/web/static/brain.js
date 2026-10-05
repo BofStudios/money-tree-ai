@@ -315,7 +315,7 @@ function renderSwarm() {
       </div>
       <div class="hero-right">
         <span class="label">${esc(t("swarm.bots"))}</span>
-        <div class="bot-count">${[0, 2, 4, 6, 8, 10].map((n) => `<button class="seg ${set.bots === n ? "active" : ""}" data-swarm-bots="${n}">${n}</button>`).join("")}</div>
+        <div class="bot-count">${[0, 1, 2, 4, 6, 8, 10].filter((n) => n <= (set.max_bots ?? 10)).map((n) => `<button class="seg ${set.bots === n ? "active" : ""}" data-swarm-bots="${n}">${n}</button>`).join("")}</div>
         <span class="label">${esc(t("swarm.power"))}</span>
         <div class="seg-row">
           <button class="seg ${set.power === "full" ? "active" : ""}" data-swarm-power="full">${esc(t("swarm.full"))}</button>

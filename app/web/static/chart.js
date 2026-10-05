@@ -560,14 +560,14 @@ function renderStatus(s) {
   // real money without working keys runs on the simulation, and says so.
   const mode = $("modeChip");
   const broker = s.broker || s.mode;
-  if (broker === "signal") { mode.textContent = "Midas"; mode.className = "top-mode"; }
-  else if (broker === "alpaca_paper") { mode.textContent = "Alpaca paper"; mode.className = "top-mode"; }
+  if (broker === "alpaca_paper") { mode.textContent = tr("mode.practice", null, "Practice"); mode.className = "top-mode"; }
   else if (broker === "alpaca_live") { mode.textContent = s.risk.armed ? "REAL · armed" : "REAL"; mode.className = "top-mode " + (s.risk.armed ? "armed" : "live"); }
-  else { mode.textContent = "Simulation"; mode.className = "top-mode"; }
+  else { mode.textContent = tr("mode.simulation", null, "Practice · PC"); mode.className = "top-mode"; }
+  renderHalt(s);
 
   $("heroEquity").classList.remove("skeleton");
   setNumber($("heroEquity"), s.equity, (v) => "$" + money(v));
-  const run = s.running ? (s.last_error ? "retrying" : "running") : "stopped";
+  const run = s.halted || !s.running ? "stopped" : (s.last_error ? "retrying" : "running");
   $("heroMode").textContent = tr(`hero.${run}`, null, run);
 
   const daily = s.risk.daily_realized_pnl;
@@ -590,7 +590,6 @@ function renderStatus(s) {
   renderPositions(s);
   renderWatchlist(s);
   renderControls(s);
-  renderSignals(s);
   renderChartRead();
   renderRun(s.challenge);
 }
@@ -695,27 +694,18 @@ function renderWatchlist(s) {
 }
 
 function renderControls(s) {
-  $("btnStart").disabled = s.running;
-  $("btnStop").disabled = !s.running;
+  $("btnStart").disabled = !s.halted && s.running;
+  $("btnStop").disabled = !!s.halted;
   $("btnScan").disabled = !s.running;
 
   const arm = $("btnArm");
   const hint = $("armHint");
 
-  if (s.mode === "signal") {
-    arm.hidden = true;
-    hint.className = "note";
-    hint.textContent =
-      "Midas mode. Midas has no API, so I cannot place orders there — instead I do the "
-      + "analysis and hand you the exact trade. I hold no brokerage keys at all, so I "
-      + "cannot spend your money even by accident.";
-    return;
-  }
   arm.hidden = false;
   if (s.mode === "paper") {
     arm.disabled = true;
     hint.className = "note";
-    hint.textContent = "Paper mode: real prices, simulated money.";
+    hint.textContent = tr("hint.paper", null, "Practice money. The prices are real. The money is not real.");
     return;
   }
   arm.disabled = false;
@@ -724,37 +714,6 @@ function renderControls(s) {
   hint.textContent = s.risk.armed
     ? "Armed — placing real orders with real money."
     : s.risk.disarm_reason ? `Disarmed (${s.risk.disarm_reason}).` : "Disarmed. No real orders until you arm.";
-}
-
-function renderSignals(s) {
-  const tray = $("signalTray");
-  const pending = s.pending_signals || [];
-  if (!pending.length) { tray.innerHTML = ""; return; }
-
-  tray.innerHTML = pending.map((sig) => {
-    const exit = sig.kind === "exit";
-    const rows = exit
-      ? `<div class="row"><span>Sell</span><b>${sig.qty} shares</b></div>
-         <div class="row"><span>Around</span><b>${money(sig.price)}</b></div>`
-      : `<div class="row"><span>Buy</span><b>${sig.qty} shares</b></div>
-         <div class="row"><span>Entry</span><b>${money(sig.price)}</b></div>
-         <div class="row"><span>Stop</span><b class="down">${money(sig.stop_loss)}</b></div>
-         <div class="row"><span>Target</span><b class="up">${money(sig.take_profit)}</b></div>
-         <div class="row"><span>At risk</span><b>$${money(sig.risk_amount)}</b></div>`;
-    return `<div class="signal">
-      <div class="signal-top">
-        <span class="signal-title">${exit ? "Sell" : "Buy"} ${sig.symbol}</span>
-        <span class="signal-tag">place in Midas</span>
-      </div>
-      <div class="signal-why">${sig.reason}</div>
-      <div class="rows signal-rows">${rows}</div>
-      <div class="signal-actions">
-        <input type="number" step="0.01" placeholder="fill" data-fill="${sig.id}">
-        <button class="solid" data-taken="${sig.id}">Taken</button>
-        <button data-skipped="${sig.id}">Skipped</button>
-      </div>
-    </div>`;
-  }).join("");
 }
 
 function renderTrades(payload) {
@@ -910,7 +869,7 @@ function connect() {
       get("/api/trades").then(renderTrades).catch(() => {});
       loadEquity().catch(() => {});
       alertTradeClosed(msg);
-    } else if (msg.type === "trade_opened" || msg.type === "signal_raised") {
+    } else if (msg.type === "trade_opened") {
       if (selected) loadChart(selected).catch(() => {});
       if (msg.type === "trade_opened") alertTradeOpened(msg);
     } else if (msg.type === "catalyst" && msg.event === "window_open") {
@@ -1042,8 +1001,39 @@ async function act(fn) {
 const newsRefresh = $("newsRefresh");
 if (newsRefresh) newsRefresh.onclick = () => loadNews().catch(() => {});
 
-$("btnStart").onclick = () => act(() => post("/api/engine/start"));
-$("btnStop").onclick = () => act(() => post("/api/engine/stop"));
+$("btnStart").onclick = () => startBot();
+$("btnStop").onclick = () => stopBot();
+
+/* The switch in the header. Stop never asks: it must work in one click.
+   Start on real money asks once, because it lets the bot buy again. */
+function renderHalt(s) {
+  const btn = $("haltBtn");
+  if (!btn) return;
+  const halted = !!s.halted || !s.running;
+  btn.dataset.state = halted ? "off" : "on";
+  $("haltLabel").textContent = halted ? tr("halt.start", null, "START") : tr("halt.stop", null, "STOP");
+  btn.title = halted
+    ? tr("halt.offTip", null, "The bot is stopped. It does not buy. Click to start it.")
+    : tr("halt.onTip", null, "The bot can trade. Click to stop it now.");
+}
+
+async function stopBot() {
+  const btn = $("haltBtn");
+  btn.dataset.state = "off";   // show it at once; the server confirms below
+  await act(() => post("/api/engine/stop"));
+}
+
+async function startBot() {
+  const s = window.mtState || {};
+  if (s.broker === "alpaca_live" && !confirm(tr("halt.confirmStart", null,
+      "Start the bot? It can buy with real money again."))) return;
+  await act(() => post("/api/engine/start"));
+}
+
+$("haltBtn").onclick = () => {
+  const s = window.mtState || {};
+  if (s.halted || !s.running) startBot(); else stopBot();
+};
 $("btnScan").onclick = () => act(() => post("/api/engine/scan"));
 
 $("btnArm").onclick = () => {
@@ -1155,18 +1145,6 @@ document.addEventListener("click", async (e) => {
       act(() => post(`/api/close/${close.dataset.close}`));
     return;
   }
-
-  const taken = e.target.closest("[data-taken]");
-  if (taken) {
-    const id = taken.dataset.taken;
-    const input = document.querySelector(`[data-fill="${id}"]`);
-    const price = input && input.value ? parseFloat(input.value) : null;
-    act(() => post(`/api/signals/${id}/taken`, { price }));
-    return;
-  }
-
-  const skipped = e.target.closest("[data-skipped]");
-  if (skipped) { act(() => post(`/api/signals/${skipped.dataset.skipped}/skipped`)); return; }
 
   const catStatus = e.target.closest("[data-cat-status]");
   if (catStatus) {

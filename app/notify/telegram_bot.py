@@ -22,7 +22,7 @@ from app.common.events import EventBus
 from app.common.models import Position, Side
 from app.config import TelegramConfig
 from app.engine.portfolio_engine import PortfolioEngine
-from app.execution.signal_executor import SignalExecutor
+from app.engine import commands
 from app.mentor.ai import AIMentor
 from app.notify import formatting as fmt
 
@@ -36,9 +36,10 @@ MENU_COMMANDS = [
     ("positions", "What I am holding right now"),
     ("watchlist", "Every symbol and where it stands"),
     ("pnl", "Win rate and totals"),
-    ("signals", "Signals waiting on your answer"),
     ("chart", "Where one symbol stands — /chart AAPL"),
     ("close", "Close a position now — /close AAPL"),
+    ("stop", "Stop the bot now: no buys, no signal sells"),
+    ("start", "Start the bot again"),
     ("disarm", "Stop live orders immediately"),
     ("help", "All commands"),
 ]
@@ -54,14 +55,14 @@ HELP = """*Money Tree AI commands*
 /positions — what I am holding right now
 /watchlist — every symbol and where it stands
 /pnl — win rate and totals
-/signals — signals waiting on your answer
 /chart SYMBOL — where one symbol stands
 /add SYMBOL — add to the watchlist
 /remove SYMBOL — drop from the watchlist
 /close SYMBOL — close a position now
 /arm — allow live orders (live mode only)
+/stop — stop the bot now: no buys, no signal sells
+/start — start the bot again
 /disarm — stop live orders immediately
-/equity AMOUNT — tell me your real Midas balance
 /help — this message
 
 You can also just talk to me. Ask "why did you buy NVDA" or
@@ -175,7 +176,9 @@ class TelegramNotifier:
             log.debug("telegram shutdown error", exc_info=True)
 
     def _register_handlers(self, app: Application) -> None:
-        app.add_handler(CommandHandler(["start", "help"], self._cmd_help))
+        app.add_handler(CommandHandler("help", self._cmd_help))
+        app.add_handler(CommandHandler("start", self._cmd_start))
+        app.add_handler(CommandHandler("stop", self._cmd_stop))
         app.add_handler(CommandHandler("status", self._cmd_status))
         app.add_handler(CommandHandler("run", self._cmd_run))
         app.add_handler(CommandHandler("catalysts", self._cmd_catalysts))
@@ -185,14 +188,12 @@ class TelegramNotifier:
         app.add_handler(CommandHandler("positions", self._cmd_positions))
         app.add_handler(CommandHandler("watchlist", self._cmd_watchlist))
         app.add_handler(CommandHandler("pnl", self._cmd_pnl))
-        app.add_handler(CommandHandler("signals", self._cmd_signals))
         app.add_handler(CommandHandler("chart", self._cmd_chart))
         app.add_handler(CommandHandler("add", self._cmd_add))
         app.add_handler(CommandHandler("remove", self._cmd_remove))
         app.add_handler(CommandHandler("close", self._cmd_close))
         app.add_handler(CommandHandler("arm", self._cmd_arm))
         app.add_handler(CommandHandler("disarm", self._cmd_disarm))
-        app.add_handler(CommandHandler("equity", self._cmd_equity))
         app.add_handler(CallbackQueryHandler(self._on_button))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self._on_text))
 
@@ -246,7 +247,7 @@ class TelegramNotifier:
             return
         text = " ".join(context.args or "").strip()
         if not text:
-            await update.message.reply_text("Give me something to remember, like /remember I trade in Midas.")
+            await update.message.reply_text("Give me something to remember, like /remember I am a beginner.")
             return
         try:
             self.claude.memory.remember(text)
@@ -298,20 +299,6 @@ class TelegramNotifier:
         await update.message.reply_text(
             fmt.stats_message(stats), parse_mode=ParseMode.MARKDOWN
         )
-
-    async def _cmd_signals(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
-        if not self._allowed(update):
-            return
-        pending = self.engine.status().get("pending_signals", [])
-        if not pending:
-            await update.message.reply_text("Nothing waiting on you.")
-            return
-        for signal in pending:
-            await update.message.reply_text(
-                fmt.signal_message(signal),
-                parse_mode=ParseMode.MARKDOWN,
-                reply_markup=_signal_buttons(signal["id"]),
-            )
 
     async def _cmd_chart(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not self._allowed(update):
@@ -393,33 +380,28 @@ class TelegramNotifier:
             ),
         )
 
+    async def _cmd_stop(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
+        if not self._allowed(update):
+            return
+        self.engine.halt("telegram")
+        await update.message.reply_text(self.engine.words().chat_stopped())
+
+    async def _cmd_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Telegram sends /start when a chat opens: show the help then. With the
+        word "bot" or "trading" after it, start the bot again."""
+        if not self._allowed(update):
+            return
+        if not context.args and not self.engine.halted:
+            await self._cmd_help(update, context)
+            return
+        self.engine.resume("telegram")
+        await update.message.reply_text(self.engine.words().chat_started())
+
     async def _cmd_disarm(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
         if not self._allowed(update):
             return
         self.engine.disarm("disarmed from Telegram")
         await update.message.reply_text("Disarmed. No further live orders.")
-
-    async def _cmd_equity(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        if not self._allowed(update):
-            return
-        executor = self.engine.executor
-        if not isinstance(executor, SignalExecutor):
-            await update.message.reply_text(
-                "I read the balance from the broker in this mode, so there is nothing to set."
-            )
-            return
-        if not context.args:
-            await update.message.reply_text("Usage: /equity 5000")
-            return
-        try:
-            amount = float(context.args[0].replace(",", ""))
-        except ValueError:
-            await update.message.reply_text("That did not look like a number.")
-            return
-        executor.set_declared_equity(amount)
-        await update.message.reply_text(
-            f"Got it — sizing positions against ${amount:,.2f} from now on."
-        )
 
     # ------------------------------------------------------------------ buttons
 
@@ -439,10 +421,6 @@ class TelegramNotifier:
                 await query.edit_message_text("Cancelled. Still disarmed.")
             return
 
-        if action in ("taken", "skipped"):
-            await self._resolve_signal(query, action, payload)
-            return
-
         if action == "apr":
             # approve() may place a real order over the network; keep it off
             # the event loop so the bot stays responsive while it runs.
@@ -455,57 +433,6 @@ class TelegramNotifier:
             note = "Skipped." if done else "No longer open."
             await query.edit_message_text(f"{query.message.text}\n\n— {note}")
 
-    async def _resolve_signal(self, query, action: str, signal_id: str) -> None:
-        executor = self.engine.executor
-        if not isinstance(executor, SignalExecutor):
-            await query.edit_message_text("Signals are not used in this mode.")
-            return
-
-        if action == "skipped":
-            executor.confirm_skipped(signal_id)
-            await query.edit_message_text(f"{query.message.text}\n\n— Skipped.")
-            return
-
-        pending = {s.id: s for s in executor.pending_signals()}
-        signal = pending.get(signal_id)
-        if signal is None:
-            await query.edit_message_text(f"{query.message.text}\n\n— No longer available.")
-            return
-
-        if signal.is_exit:
-            position = self.engine.position_for(signal.intent.symbol)
-            executor.confirm_taken(signal_id, signal.intent.price)
-            if position is not None:
-                from app.execution.signal_executor import _build_trade
-
-                trade = _build_trade(position, signal.intent.price, signal.intent.reason)
-                self.engine.register_confirmed_exit(trade)
-                await query.edit_message_text(
-                    f"{query.message.text}\n\n— Done. {fmt.signed(trade.pnl)} "
-                    f"({fmt.signed(trade.pnl_pct)}%)."
-                )
-                return
-            await query.edit_message_text(f"{query.message.text}\n\n— Marked closed.")
-            return
-
-        executor.confirm_taken(signal_id, signal.intent.price)
-        position = Position(
-            symbol=signal.intent.symbol,
-            side=signal.intent.side,
-            qty=signal.intent.qty,
-            entry_price=signal.intent.price,
-            opened_at=datetime.now(timezone.utc),
-            stop_loss=signal.intent.stop_loss,
-            take_profit=signal.intent.take_profit,
-            current_price=signal.intent.price,
-        )
-        self.engine.register_confirmed_entry(
-            signal.intent.symbol, position, signal.intent.reason
-        )
-        await query.edit_message_text(
-            f"{query.message.text}\n\n— Tracking it. I will tell you when to get out."
-        )
-
     # --------------------------------------------------------------- free text
 
     async def _on_text(self, update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
@@ -513,6 +440,16 @@ class TelegramNotifier:
             return
         question = (update.message.text or "").strip()
         if not question:
+            return
+
+        command = commands.command(question)
+        if command == "stop":
+            self.engine.halt("telegram")
+            await update.message.reply_text(self.engine.words().chat_stopped())
+            return
+        if command == "start":
+            self.engine.resume("telegram")
+            await update.message.reply_text(self.engine.words().chat_started())
             return
 
         quick = self._quick_answer(question)
@@ -573,12 +510,7 @@ class TelegramNotifier:
             return
         kind = event.get("type")
 
-        if kind == "signal_raised" and self.config.push_signals:
-            signal = event["signal"]
-            self.broadcast_sync(
-                fmt.signal_message(signal), _signal_buttons(signal["id"])
-            )
-        elif kind == "approval_needed":
+        if kind == "approval_needed":
             # Always pushed: on semi-auto nothing happens until someone answers.
             proposal = event["proposal"]
             self.broadcast_sync(fmt.proposal_message(proposal), _approval_buttons(proposal["id"]))
@@ -618,10 +550,3 @@ def _approval_buttons(proposal_id: str) -> InlineKeyboardMarkup:
     )
 
 
-def _signal_buttons(signal_id: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        [[
-            InlineKeyboardButton("Taken", callback_data=f"taken:{signal_id}"),
-            InlineKeyboardButton("Skipped", callback_data=f"skipped:{signal_id}"),
-        ]]
-    )

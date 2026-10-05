@@ -8,7 +8,7 @@ import pandas as pd
 class MarketDataSource(ABC):
     """Where candles come from.
 
-    Deliberately separate from order execution: in Midas signal mode the bot
+    Deliberately separate from order execution: before any key is saved the bot
     reads prices from a free public feed and never touches a brokerage API.
     """
 

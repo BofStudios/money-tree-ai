@@ -33,7 +33,7 @@ CACHE_SECONDS = 45
 class YahooData(MarketDataSource):
     """Free US market candles with no account and no API key.
 
-    This is what makes Midas signal mode work on day one: the bot can analyse
+    This lets the app work on day one, before any key is saved: the bot can analyse
     the market without any brokerage integration at all. Data is delayed by
     roughly 15 minutes, which is fine for 15m-and-slower strategies but not
     for scalping.

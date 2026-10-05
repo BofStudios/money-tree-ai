@@ -16,10 +16,11 @@ Telegram has no API for a bot to set its own picture: send logo.png to
 from __future__ import annotations
 
 import shutil
+import struct
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, Qt
+from PySide6.QtCore import QBuffer, QByteArray, QIODevice, Qt
 from PySide6.QtGui import QGuiApplication, QImage, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 
@@ -45,13 +46,37 @@ def render(size: int, square: bool = False) -> QImage:
     return image
 
 
+def png_bytes(image: QImage) -> bytes:
+    data = QByteArray()
+    buffer = QBuffer(data)
+    buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+    image.save(buffer, "PNG")
+    buffer.close()
+    return bytes(data)
+
+
+def write_ico(path: Path, sizes: tuple[int, ...]) -> None:
+    """A Windows icon with one PNG picture per size (Windows Vista and later)."""
+    pictures = [(size, png_bytes(render(size))) for size in sizes]
+    header = struct.pack("<HHH", 0, 1, len(pictures))
+    offset = 6 + 16 * len(pictures)
+    entries, blobs = b"", b""
+    for size, blob in pictures:
+        edge = 0 if size >= 256 else size
+        entries += struct.pack("<BBBBHHII", edge, edge, 0, 0, 1, 32, len(blob), offset)
+        offset += len(blob)
+        blobs += blob
+    path.write_bytes(header + entries + blobs)
+
+
 def main() -> None:
     QGuiApplication.instance() or QGuiApplication(sys.argv)
     render(640).save(str(ASSETS / "logo.png"), "PNG")
     render(640).save(str(ASSETS / "bot-avatar.png"), "PNG")
     render(1024, square=True).save(str(ASSETS / "pfp.png"), "PNG")
-    # Windows picks the size it needs out of the .ico.
-    QPixmap.fromImage(render(256)).save(str(ASSETS / "logo.ico"), "ICO")
+    # Windows picks the size it needs out of the .ico, so it gets every size:
+    # one 256 px picture alone shows blank or blurred in small places.
+    write_ico(ASSETS / "logo.ico", (16, 20, 24, 32, 40, 48, 64, 96, 128, 256))
     render(256).save(str(STATIC / "logo.png"), "PNG")
     render(192).save(str(STATIC / "icon-192.png"), "PNG")
     render(512).save(str(STATIC / "icon-512.png"), "PNG")

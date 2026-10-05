@@ -82,8 +82,8 @@ class AccountSummary:
 class Executor(ABC):
     """What happens after the bot decides something.
 
-    Three shapes exist: tell the user (signal mode, for Midas), simulate
-    (paper), or actually send the order (Alpaca live).
+    Two shapes exist: simulate on this PC (practice money without keys), or
+    send the order to Alpaca (paper or live account).
     """
 
     name: str = "base"

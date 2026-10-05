@@ -9,7 +9,6 @@ from app.config import AppConfig, MentorConfig, RiskConfig, StrategyConfig
 from app.data.base import MarketDataSource
 from app.engine.portfolio_engine import PortfolioEngine
 from app.execution.paper_executor import PaperExecutor
-from app.execution.signal_executor import SignalExecutor
 from app.mentor.narrator import Narrator
 from app.risk.risk_manager import RiskManager
 from app.storage.db import create_session_factory
@@ -81,15 +80,11 @@ def make_config(**overrides) -> AppConfig:
     return AppConfig(**base)
 
 
-def build(tmp_path, mode="paper", strategy=None, config=None):
+def build(tmp_path, mode="paper", strategy=None, config=None, state_path=None):
     events = EventBus()
     app_config = config or make_config(mode=mode)
     data = FakeData()
-    executor = (
-        SignalExecutor(events=events, starting_balance=10_000.0)
-        if mode == "signal"
-        else PaperExecutor(starting_balance=10_000.0, slippage_pct=0.0)
-    )
+    executor = PaperExecutor(starting_balance=10_000.0, slippage_pct=0.0)
     engine = PortfolioEngine(
         config=app_config,
         data=data,
@@ -99,6 +94,7 @@ def build(tmp_path, mode="paper", strategy=None, config=None):
         repo=Repository(create_session_factory(tmp_path / f"{mode}.db")),
         events=events,
         mentor=Narrator(app_config.mentor, events),
+        state_path=state_path,
     )
     engine.data = data
     return engine
@@ -232,72 +228,78 @@ def test_open_positions_survive_a_restart(tmp_path):
     assert {p["symbol"] for p in revived.status()["positions"]} == held
 
 
-# ----------------------------------------------------------- signal mode
+# --------------------------------------------------------- stop that stops
 
 
-def test_signal_mode_raises_a_signal_instead_of_opening_a_position(tmp_path):
-    engine = build(tmp_path, mode="signal")
+def test_stop_blocks_every_buy(tmp_path):
+    engine = build(tmp_path)
+    engine.halt("test")
     engine._scan(FakeMarket())
-
-    status = engine.status()
-    assert status["positions"] == []
-    assert len(status["pending_signals"]) == 2  # portfolio cap still applies
-    signal = status["pending_signals"][0]
-    assert signal["kind"] == "entry"
-    assert signal["stop_loss"] == pytest.approx(98.0)
-    assert signal["reward_risk"] == pytest.approx(2.0)
+    assert engine.status()["positions"] == []
+    assert engine.status()["halted"] is True
 
 
-def test_signal_mode_does_not_repeat_a_signal_while_one_is_pending(tmp_path):
-    engine = build(tmp_path, mode="signal")
+def test_stop_pressed_during_a_scan_still_wins(tmp_path):
+    """The research and AI checks run between the signal and the order; a Stop
+    pressed then must still keep the order from being sent."""
+    engine = build(tmp_path)
+    original = engine._place
+
+    def press_stop_then_place(intent, w):
+        engine.halt("during the scan")
+        return original(intent, w)
+
+    engine._place = press_stop_then_place
     engine._scan(FakeMarket())
+    assert engine.status()["positions"] == []
+
+
+def test_stop_keeps_the_stop_loss_working(tmp_path):
+    engine = build(tmp_path)
     engine._scan(FakeMarket())
-
-    assert len(engine.status()["pending_signals"]) == 2
-
-
-def test_confirming_a_signal_starts_tracking_the_position(tmp_path):
-    engine = build(tmp_path, mode="signal")
+    held = [p["symbol"] for p in engine.status()["positions"]]
+    assert held
+    engine.halt("test")
+    for symbol in held:
+        engine.data.prices[symbol] = 90.0  # under the 2% stop
     engine._scan(FakeMarket())
-    pending = engine.executor.pending_signals()[0]
-
-    engine.executor.confirm_taken(pending.id, price=101.0)
-    position = engine.executor.get_positions()[0]
-    engine.register_confirmed_entry(position.symbol, position, pending.intent.reason)
-
-    tracked = engine.status()["positions"]
-    assert len(tracked) == 1
-    assert tracked[0]["entry_price"] == pytest.approx(101.0)
+    assert engine.status()["positions"] == []  # protective exits still ran
 
 
-def test_skipping_a_signal_leaves_us_flat(tmp_path):
-    engine = build(tmp_path, mode="signal")
+def test_stop_survives_a_restart_and_start_clears_it(tmp_path):
+    state = tmp_path / "engine_state.json"
+    engine = build(tmp_path, state_path=state)
+    engine.halt("test")
+    again = build(tmp_path, state_path=state)
+    assert again.halted
+    again._scan(FakeMarket())
+    assert again.status()["positions"] == []
+    again.resume("test")
+    assert not build(tmp_path, state_path=state).halted
+
+
+def test_stop_cancels_buys_waiting_for_approval(tmp_path):
+    engine = build(tmp_path)
+    engine.set_autonomy("semi")
     engine._scan(FakeMarket())
-    for signal in engine.executor.pending_signals():
-        engine.executor.confirm_skipped(signal.id)
-
-    assert engine.executor.get_positions() == []
-    assert engine.status()["pending_signals"] == []
-
-
-def test_a_tracked_signal_position_produces_an_exit_signal_at_the_stop(tmp_path):
-    engine = build(tmp_path, mode="signal")
-    engine._scan(FakeMarket())
-    pending = engine.executor.pending_signals()[0]
-    symbol = pending.intent.symbol
-
-    engine.executor.confirm_taken(pending.id, price=100.0)
-    position = next(p for p in engine.executor.get_positions() if p.symbol == symbol)
-    engine.register_confirmed_entry(symbol, position, "test entry")
-
-    engine.data.prices[symbol] = 97.0
-    engine._scan(FakeMarket())
-
-    exits = [s for s in engine.executor.pending_signals() if s.is_exit]
-    assert exits and exits[0].intent.symbol == symbol
+    waiting = engine.status()["approvals"]
+    assert waiting
+    engine.halt("test")
+    assert engine.status()["approvals"] == []
+    result = engine.approve(waiting[0]["id"])
+    assert not result["ok"]
+    assert engine.status()["positions"] == []
 
 
-# ------------------------------------------------------------- reporting
+def test_typed_stop_and_start_commands():
+    from app.engine.commands import command
+
+    for text in ("stop", "STOP!", "Stop the bot", "durdur", "DURDUR", "botu durdur", "dur", "stop now please"):
+        assert command(text) == "stop", text
+    for text in ("start", "başlat", "BAŞLAT", "devam et"):
+        assert command(text) == "start", text
+    for text in ("why did you stop?", "stop neden çalışmadı", "how are we doing", "start buying everything now"):
+        assert command(text) is None, text
 
 
 def test_status_reports_market_and_risk_state(tmp_path):

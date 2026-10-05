@@ -59,7 +59,7 @@
     <header class="ai-head">
       <span class="logo" aria-hidden="true"><img src="/mark.svg" alt=""></span>
       <div class="ai-title">
-        <b>Money Tree AI</b>
+        <b>Money Tree AI <em class="ed-badge" id="edBadge" hidden></em></b>
         <span id="aiState">thinking out loud</span>
       </div>
       <button class="icon" id="aiClose" aria-label="Close">
@@ -103,6 +103,11 @@
       <div class="top-right">
         <span class="top-clock" id="clockNY">--:--</span>
         <span class="top-mode" id="modeChip">—</span>
+        <!-- The bot's one switch. Stop wins at once; the server refuses every
+             later order. Always on screen, on every tab. -->
+        <button class="halt-btn" id="haltBtn" data-state="on" aria-live="polite">
+          <i class="halt-led"></i><span id="haltLabel">STOP</span>
+        </button>
       </div>
     </header>
 
@@ -111,7 +116,6 @@
          things worth interrupting the screen for. -->
     <div class="alert-stack" id="alertStack"></div>
 
-    <div class="signal-tray" id="signalTray"></div>
 
     <main class="page">
 
@@ -480,6 +484,12 @@
         <section class="block money-block" id="sMoneyBlock">
           <div class="block-head"><h2 data-i18n="sm.title">Money &amp; keys</h2></div>
           <div id="sMoney"></div>
+        </section>
+
+        <!-- The licence of a sold copy; hidden on the owner's copy. -->
+        <section class="block" id="sLicenseBlock" hidden>
+          <div class="block-head"><h2 data-i18n="lic.title">Licence</h2></div>
+          <div id="sLicense"></div>
         </section>
 
         <section class="block">

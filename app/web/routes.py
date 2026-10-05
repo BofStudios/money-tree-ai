@@ -11,7 +11,7 @@ from app.catalysts.news import NewsFeed
 from app.common.models import Position
 from app.config import Settings, write_secret
 from app.engine.portfolio_engine import PortfolioEngine
-from app.execution.signal_executor import SignalExecutor, _build_trade
+from app.engine import commands
 from app.mentor.ai import AIMentor
 from app.engine.autonomy import HORIZON_TIMEFRAMES, resolve_autonomy
 from app.engine.markets import watchlist_for
@@ -301,8 +301,8 @@ def build_router(
                 "title": "Open an Alpaca brokerage account",
                 "body": (
                     "Alpaca accepts Turkish residents — US residency is not required. "
-                    "It is commission-free on US stocks and gives you an API, which is "
-                    "the piece Midas does not offer."
+                    "It is commission-free on US stocks and gives you an API. "
+                    "The bot trades only through Alpaca."
                 ),
                 "action": "https://alpaca.markets",
                 "action_label": "alpaca.markets",
@@ -370,67 +370,19 @@ def build_router(
             },
         }
 
-    @router.get("/signals", dependencies=guarded)
-    def signals() -> dict:
-        executor = engine.executor
-        if not isinstance(executor, SignalExecutor):
-            return {"pending": [], "recent": [], "enabled": False}
-        return {
-            "enabled": True,
-            "pending": [s.to_dict() for s in executor.pending_signals()],
-            "recent": [s.to_dict() for s in executor.recent_signals()],
-        }
-
     # ----------------------------------------------------------------- actions
-
-    @router.post("/signals/{signal_id}/taken", dependencies=guarded)
-    def signal_taken(signal_id: str, price: float | None = Body(default=None, embed=True)) -> dict:
-        executor = engine.executor
-        if not isinstance(executor, SignalExecutor):
-            raise HTTPException(status_code=400, detail="not in signal mode")
-
-        pending = {s.id: s for s in executor.pending_signals()}
-        signal = pending.get(signal_id)
-        if signal is None:
-            raise HTTPException(status_code=404, detail="signal not found or already answered")
-
-        fill = price if price is not None else signal.intent.price
-        if signal.is_exit:
-            position = engine.position_for(signal.intent.symbol)
-            executor.confirm_taken(signal_id, fill)
-            if position is not None:
-                engine.register_confirmed_exit(
-                    _build_trade(position, fill, signal.intent.reason)
-                )
-        else:
-            executor.confirm_taken(signal_id, fill)
-            engine.register_confirmed_entry(
-                signal.intent.symbol,
-                Position(
-                    symbol=signal.intent.symbol,
-                    side=signal.intent.side,
-                    qty=signal.intent.qty,
-                    entry_price=fill,
-                    opened_at=datetime.now(timezone.utc),
-                    stop_loss=signal.intent.stop_loss,
-                    take_profit=signal.intent.take_profit,
-                    current_price=fill,
-                ),
-                signal.intent.reason,
-            )
-        return engine.status()
-
-    @router.post("/signals/{signal_id}/skipped", dependencies=guarded)
-    def signal_skipped(signal_id: str) -> dict:
-        executor = engine.executor
-        if not isinstance(executor, SignalExecutor):
-            raise HTTPException(status_code=400, detail="not in signal mode")
-        if executor.confirm_skipped(signal_id) is None:
-            raise HTTPException(status_code=404, detail="signal not found or already answered")
-        return engine.status()
 
     @router.post("/ask", dependencies=guarded)
     def ask(question: str = Body(..., embed=True)) -> dict:
+        # Stop and Start never go to the AI: they are done here, at once.
+        command = commands.command(question)
+        w = engine.words()
+        if command == "stop":
+            engine.halt("chat")
+            return {"answer": w.chat_stopped(), "action": "halted"}
+        if command == "start":
+            engine.resume("chat")
+            return {"answer": w.chat_started(), "action": "resumed"}
         answer = claude.answer(question, engine.mentor_context())
         if answer is None:
             raise HTTPException(
@@ -479,12 +431,12 @@ def build_router(
 
     @router.post("/engine/start", dependencies=guarded)
     def start_engine() -> dict:
-        engine.start()
+        engine.resume("button")
         return engine.status()
 
     @router.post("/engine/stop", dependencies=guarded)
     def stop_engine() -> dict:
-        engine.stop()
+        engine.halt("button")
         return engine.status()
 
     @router.post("/engine/scan", dependencies=guarded)

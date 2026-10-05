@@ -56,7 +56,7 @@ function renderNow(s) {
   card.hidden = false;
 
   let title, state;
-  if (!s.running) { title = t("now.stopped"); state = "stopped"; }
+  if (s.halted || !s.running) { title = t("now.stopped"); state = "stopped"; }
   else if (s.last_error) { title = t("now.retrying"); state = "warn"; }
   else if (!s.market.is_open) { title = t("now.closed"); state = "idle"; }
   else { title = t("now.watching", { n: s.watchlist.length }); state = "live"; }

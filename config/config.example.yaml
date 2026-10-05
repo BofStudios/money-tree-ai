@@ -1,11 +1,10 @@
 # Copy to config/config.yaml and adjust. Non-secret settings only.
 
-# How the bot acts on its own decisions:
-#   signal — analyses only and tells you what to do (use this with Midas).
-#            No brokerage API needed. You place the trade yourself.
-#   paper  — Alpaca paper account. Simulated money, real prices.
-#   live   — Alpaca live account. Real money. Still requires arming in the UI.
-mode: signal
+# Which money the bot trades. It trades only through Alpaca.
+#   live   — your Alpaca live account. Real money. You must also press Arm.
+#   paper  — your Alpaca paper account (or a simulation on this PC without keys).
+#            Practice money, real prices.
+mode: paper
 
 market: us_stocks
 

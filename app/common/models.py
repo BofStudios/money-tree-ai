@@ -159,8 +159,7 @@ class Balance:
 class TradeIntent:
     """What the bot wants to do, before anything is executed.
 
-    In signal mode this is the whole product: it gets formatted into a message
-    you act on inside Midas. In paper/live modes it becomes an actual order.
+    It becomes an actual order at Alpaca, or a simulated one on this PC.
     """
 
     symbol: str

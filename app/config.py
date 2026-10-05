@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 APP_NAME = "Money Tree AI"
@@ -23,7 +23,7 @@ DATA_DIR = PROJECT_ROOT / "data"
 LOG_DIR = PROJECT_ROOT / "logs"
 ASSETS = BUNDLE_ROOT / "assets"
 
-ExecutionMode = Literal["signal", "paper", "live"]
+ExecutionMode = Literal["paper", "live"]
 
 
 def write_secret(key: str, value: str) -> None:
@@ -223,10 +223,15 @@ class WebConfig(BaseModel):
 
 
 class AppConfig(BaseModel):
-    # signal = analyse only, you place the trade in Midas yourself
-    # paper   = Alpaca paper account, simulated money
-    # live    = Alpaca live account, real money (still requires arming)
-    mode: ExecutionMode = "signal"
+    # live  = Alpaca live account, real money (still requires arming)
+    # paper = Alpaca paper account (or a simulation without keys), practice money
+    mode: ExecutionMode = "paper"
+
+    @field_validator("mode", mode="before")
+    @classmethod
+    def _old_signal_mode(cls, value):
+        # Midas signal mode was removed in 4.0: such a config starts on practice money.
+        return "paper" if value == "signal" else value
     market: Literal["us_stocks"] = "us_stocks"
     watchlist: list[str] = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "SPY"]
     timeframe: str = "15m"
@@ -240,9 +245,6 @@ class AppConfig(BaseModel):
     telegram: TelegramConfig = TelegramConfig()
     web: WebConfig = WebConfig()
 
-    @property
-    def is_signal_mode(self) -> bool:
-        return self.mode == "signal"
 
 
 class Settings(BaseModel):

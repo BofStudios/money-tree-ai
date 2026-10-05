@@ -14,6 +14,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
+from app import edition
 from app.common.keystore import KeyStore
 from app.common.restart import Restarter
 from app.config import Settings, set_config_value
@@ -168,8 +169,8 @@ def build_money_router(
         separate, deliberate step.
         """
         s = need(settings, "Settings")
-        if mode not in ("signal", "paper", "live"):
-            raise HTTPException(status_code=400, detail="mode must be signal, paper or live")
+        if mode not in ("paper", "live"):
+            raise HTTPException(status_code=400, detail="mode must be paper or live")
         if mode == "live":
             key, secret = s.secrets.alpaca_keys(True)
             if not (key and secret):
@@ -229,6 +230,33 @@ def build_money_router(
     @router.get("/markets", dependencies=guarded)
     def markets() -> dict:
         return {"markets": MARKETS, "watchlist": list(engine.symbols)}
+
+    # ------------------------------------------------------- edition, licence
+
+    @router.get("/edition", dependencies=guarded)
+    def edition_info() -> dict:
+        info = {"edition": edition.NAME, "limits": edition.limits().to_dict(), "license": None}
+        if edition.PRO:
+            from app.common import licensing
+            from app.config import DATA_DIR
+
+            saved = licensing.License(DATA_DIR / "license.json")._load()
+            info["license"] = {"active": bool(saved.get("instance_id")), "customer": saved.get("customer", "")}
+        return info
+
+    @router.post("/license/deactivate", dependencies=owner)
+    def license_deactivate() -> dict:
+        """Free this PC's activation so the key works on another PC. The app
+        stops trading at once and asks for a key on its next start."""
+        if not edition.PRO:
+            raise HTTPException(status_code=400, detail="This copy has no licence.")
+        from app.common import licensing
+        from app.config import DATA_DIR
+
+        if not licensing.License(DATA_DIR / "license.json").deactivate():
+            raise HTTPException(status_code=503, detail="The licence server did not answer. Try again.")
+        engine.halt("licence moved")
+        return {"ok": True}
 
     return router
 

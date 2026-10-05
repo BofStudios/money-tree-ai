@@ -18,37 +18,6 @@ def signed(value: float | None, digits: int = 2) -> str:
     return f"{value:+,.{digits}f}"
 
 
-def signal_message(signal: dict) -> str:
-    """The message you act on inside Midas."""
-    is_exit = signal.get("kind") == "exit"
-    symbol = signal["symbol"]
-
-    if is_exit:
-        head = f"*CLOSE {symbol}*"
-        body = [
-            f"Sell {signal['qty']:g} shares at about `{money(signal['price'])}`",
-            "",
-            f"_Why:_ {signal['reason']}",
-        ]
-    else:
-        side = signal["side"].upper()
-        head = f"*{side} {symbol}*"
-        body = [
-            f"Buy {signal['qty']:g} shares at about `{money(signal['price'])}`",
-            f"Position size `${money(signal['notional'])}`",
-            "",
-            f"Stop-loss  `{money(signal['stop_loss'])}`",
-            f"Take-profit `{money(signal['take_profit'])}`",
-            f"Risk `${money(signal['risk_amount'])}` for `{signal['reward_risk']:.1f}:1`",
-            "",
-            f"_Why:_ {signal['reason']}",
-        ]
-
-    body.append("")
-    body.append("Place it in Midas, then tell me below.")
-    return f"{head}\n" + "\n".join(body)
-
-
 def position_line(position: dict) -> str:
     arrow = UP if position["unrealized_pnl"] >= 0 else DOWN
     return (
@@ -194,10 +163,10 @@ def status_message(status: dict) -> str:
 
     if status["mode"] == "live":
         lines.append(f"Live trading: *{'ARMED' if risk['armed'] else 'disarmed'}*")
-    if status.get("pending_signals"):
-        lines.append(f"Waiting on you: {len(status['pending_signals'])} signal(s)")
-    if not status["running"]:
-        lines.append("_Engine is stopped._")
+    if status.get("halted"):
+        lines.append("_Stopped by you. No buys. Send /start to trade again._")
+    elif not status["running"]:
+        lines.append("_Engine is not running._")
     return "\n".join(lines)
 
 
@@ -310,7 +279,7 @@ def memory_message(facts: list[dict]) -> str:
     if not facts:
         return (
             "I have not been told to remember anything yet.\n"
-            "Try /remember I trade in Midas, not Alpaca."
+            "Try /remember I am a beginner. Explain things simply."
         )
     lines = ["*What I remember*", ""]
     lines += [f"{i}. {f['text']}" for i, f in enumerate(facts, start=1)]

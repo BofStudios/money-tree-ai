@@ -1,0 +1,58 @@
+﻿MONEY TREE AI — read this before installing
+===========================================
+
+What it is
+----------
+A Windows desktop app for researching US stocks and testing a mechanical
+trading strategy: company research with plain-language explanations,
+paper trading on real prices, trade signals you place yourself, and optional
+real-money trading through your own Alpaca account.
+
+What it is not
+--------------
+It is not investment advice and it does not promise returns. In a year of
+hourly backtests the built-in EMA/RSI strategy finished close to break-even;
+the risk rules reduced the worst drawdown but did not make it profitable.
+Trading can lose real money. Test with paper money first.
+
+Your keys stay yours
+--------------------
+Nothing is pre-connected. Brokerage, AI and Telegram keys are entered by you,
+stored encrypted on this PC (Windows DPAPI), and sent only to the service
+they belong to.
+
+Licence
+-------
+Your purchase includes a licence key by email. The app checks it online once
+per day at most and keeps working offline for up to 14 days. The source code
+is open (MIT licence, shown on the next page).
+
+
+MONEY TREE AI — kurmadan önce oku
+=================================
+
+Nedir
+-----
+ABD hisselerini araştırmak ve mekanik bir alım-satım stratejisini test etmek
+için bir Windows uygulaması: düz dille açıklanan şirket araştırması, gerçek
+fiyatlarla sahte parayla işlem, senin uyguladığın sinyaller ve isteğe bağlı
+olarak kendi Alpaca hesabınla gerçek parayla işlem.
+
+Ne değildir
+-----------
+Yatırım tavsiyesi değildir ve getiri vaat etmez. Bir yıllık saatlik
+backtestte yerleşik EMA/RSI stratejisi başa başa yakın bitti; risk kuralları
+en kötü düşüşü azalttı ama stratejiyi kârlı yapmadı. Alım-satım gerçek para
+kaybettirebilir. Önce sahte parayla dene.
+
+Anahtarların sende kalır
+------------------------
+Hiçbir şey önceden bağlı gelmez. Aracı kurum, yapay zeka ve Telegram
+anahtarlarını sen girersin; bu bilgisayarda şifreli saklanır (Windows DPAPI)
+ve yalnızca ait oldukları servise gönderilir.
+
+Lisans
+------
+Satın alımınla e-postana bir lisans anahtarı gelir. Uygulama bunu en fazla
+günde bir kez internetten doğrular ve 14 güne kadar çevrimdışı çalışır.
+Kaynak kodu açıktır (MIT lisansı, bir sonraki sayfada).

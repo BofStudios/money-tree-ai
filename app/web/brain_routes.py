@@ -6,6 +6,8 @@ this PC, or a device with the token — like keys and the money mode.
 """
 from __future__ import annotations
 
+from app import edition
+
 import secrets as pysecrets
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
@@ -66,7 +68,8 @@ def build_brain_router(engine, token: str) -> APIRouter:
     def get_swarm() -> dict:
         b = brain()
         snap = b.swarm.snapshot()
-        snap["settings"] = {"bots": b.settings.bots, "power": b.settings.power, "self_improve": b.settings.self_improve}
+        snap["settings"] = {"bots": b.settings.bots, "power": b.settings.power, "self_improve": b.settings.self_improve,
+                            "max_bots": edition.limits().max_bots}
         return snap
 
     @router.post("/swarm/reset", dependencies=owner)

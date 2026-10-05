@@ -94,7 +94,7 @@ def test_a_stop_that_fired_at_alpaca_is_booked_from_the_real_fill(tmp_path):
     assert trade["symbol"] == held
     assert trade["exit_reason"] == "stop-loss"
     assert trade["exit_price"] == pytest.approx(97.9)
-    assert any("closed at Alpaca" in t for t in titles(engine, activity.SELL))
+    assert any("Alpaca closed" in t for t in titles(engine, activity.SELL))
 
 
 def test_positions_the_bot_did_not_open_are_shown_but_never_sold(tmp_path):
@@ -213,8 +213,8 @@ def test_the_feed_speaks_turkish_when_the_owner_does(tmp_path):
     engine = broker_engine(tmp_path, language="tr")
     engine._scan(FakeMarket())
 
-    assert "Hesabı okuyor" in titles(engine, activity.ACCOUNT)
-    assert any(t.startswith("Emir gönderiyor") for t in titles(engine, activity.ORDER))
+    assert "Bot hesabını okur." in titles(engine, activity.ACCOUNT)
+    assert any(t.startswith("Bot emir gönderir") for t in titles(engine, activity.ORDER))
 
 
 def test_a_closed_market_review_looks_but_never_trades(tmp_path):
@@ -228,9 +228,9 @@ def test_a_closed_market_review_looks_but_never_trades(tmp_path):
 
     assert engine.status()["positions"] == []
     assert titles(engine, activity.ORDER) == []
-    assert any("reviewing the charts" in t for t in titles(engine, activity.INFO))
+    assert any("examines the charts" in t for t in titles(engine, activity.INFO))
     analysis = next(s for s in engine.monitor.snapshot() if s["kind"] == activity.ANALYSE)
-    assert "not trading" in analysis["detail"]
+    assert "does not trade" in analysis["detail"]
 
 
 def test_switching_markets_keeps_watching_what_is_held(tmp_path):

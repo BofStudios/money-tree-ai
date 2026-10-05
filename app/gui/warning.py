@@ -44,30 +44,26 @@ def power_warning(bots: int, turkish: bool) -> tuple[int, str, bool] | None:
 
     warn = QLabel(t("⚠  WARNING · HIGH RESOURCE USE", "⚠  UYARI · YÜKSEK KAYNAK KULLANIMI"))
     warn.setObjectName("warn")
-    title = QLabel(t("Ten bots are about to start mining strategies", "On bot strateji kazmaya başlamak üzere"))
+    title = QLabel(t(f"{bots} strategy bots start now", f"{bots} strateji botu şimdi başlar"))
     title.setObjectName("title")
     title.setWordWrap(True)
     body = QLabel(t(
-        f"Money Tree 3.0 runs up to {bots} strategy bots as separate processes, each breeding and testing "
-        f"thousands of strategies a second on months of real candles, while the research desk reads SEC filings, "
-        f"the whole market's news and alternative data around the clock.\n\n"
-        f"It can use a lot of RAM (roughly 1–2 GB) and most of your {cores} CPU cores. The consequences are real:\n"
-        f"  •  other programs and games may slow down\n"
-        f"  •  a laptop gets hot, its fans spin up and its battery drains much faster\n"
-        f"  •  the PC uses more electricity while it runs\n"
-        f"  •  more computing does not mean more profit — real money can still be lost\n\n"
-        f"The bots run at low priority so the PC stays usable, and you can change the number of bots or the power "
-        f"at any time on the Swarm page.",
-        f"Money Tree 3.0, en fazla {bots} strateji botunu ayrı işlemler olarak çalıştırır. Her biri aylarca gerçek mum "
-        f"üzerinde saniyede binlerce strateji üretip dener. Bu sırada araştırma masası SEC raporlarını, tüm piyasanın "
-        f"haberlerini ve alternatif veriyi gece gündüz okur.\n\n"
-        f"Çok RAM (yaklaşık 1–2 GB) ve {cores} işlemci çekirdeğinin çoğunu kullanabilir. Bunun gerçek sonuçları var:\n"
-        f"  •  başka programlar ve oyunlar yavaşlayabilir\n"
-        f"  •  dizüstü ısınır, fanları hızlanır, pili çok daha hızlı biter\n"
-        f"  •  çalıştığı sürece bilgisayar daha çok elektrik harcar\n"
-        f"  •  daha çok hesaplama daha çok kâr demek değildir — gerçek para yine de kaybedilebilir\n\n"
-        f"Botlar düşük öncelikte çalışır, bilgisayar kullanılabilir kalır. Bot sayısını ya da gücü istediğin zaman "
-        f"Sürü sayfasından değiştirebilirsin."))
+        f"Money Tree runs {bots} strategy bots as separate processes. Each bot tests thousands of strategies "
+        f"a second on real prices. The research desk also reads SEC reports and the news of the whole market.\n\n"
+        f"This can use 1–2 GB of RAM and most of your {cores} CPU cores. Know these results:\n"
+        f"  •  Other programs and games can become slow.\n"
+        f"  •  A laptop gets hot. Its fans get loud. Its battery empties faster.\n"
+        f"  •  The PC uses more electricity.\n"
+        f"  •  More computing does not give more profit. You can lose real money.\n\n"
+        f"The bots run at low priority. You can change the number of bots or the power on the Swarm page.",
+        f"Money Tree {bots} strateji botunu ayrı işlemler olarak çalıştırır. Her bot gerçek fiyatlarla saniyede "
+        f"binlerce strateji dener. Araştırma masası ayrıca SEC raporlarını ve tüm piyasanın haberlerini okur.\n\n"
+        f"Bu, 1–2 GB RAM ve {cores} işlemci çekirdeğinin çoğunu kullanabilir. Sonuçları bil:\n"
+        f"  •  Başka programlar ve oyunlar yavaşlayabilir.\n"
+        f"  •  Dizüstü ısınır. Fanları ses yapar. Pili daha hızlı biter.\n"
+        f"  •  Bilgisayar daha çok elektrik harcar.\n"
+        f"  •  Daha çok hesaplama daha çok kâr vermez. Gerçek para kaybedebilirsin.\n\n"
+        f"Botlar düşük öncelikte çalışır. Bot sayısını ya da gücü Sürü sayfasından değiştirebilirsin."))
     body.setObjectName("body")
     body.setWordWrap(True)
     remember = QCheckBox(t("Don't show this again", "Bunu bir daha gösterme"))

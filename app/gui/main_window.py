@@ -71,7 +71,7 @@ class MainWindow(QMainWindow):
         self._really_quitting = False
 
         money = {"alpaca_live": "REAL MONEY", "alpaca_paper": "Alpaca paper",
-                 "simulation": "simulation", "signal": "signals"}.get(engine.executor.broker, engine.mode)
+                 "simulation": "simulation"}.get(engine.executor.broker, engine.mode)
         self.setWindowTitle(f"{APP_NAME} — {money}")
         self.resize(1480, 960)
         self.setWindowIcon(_app_icon())
@@ -194,9 +194,12 @@ class MainWindow(QMainWindow):
 
 def _app_icon() -> QIcon:
     """The Money Tree mark. Falls back to a drawn one if the asset is missing."""
-    logo = ASSETS / "logo.png"
-    if logo.exists():
-        return QIcon(str(logo))
+    icon = QIcon()
+    for name in ("logo.ico", "logo.png"):
+        if (ASSETS / name).exists():
+            icon.addFile(str(ASSETS / name))
+    if not icon.isNull():
+        return icon
 
     pixmap = QPixmap(64, 64)
     pixmap.fill(Qt.GlobalColor.transparent)

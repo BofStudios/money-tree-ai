@@ -36,7 +36,6 @@ from app.engine.portfolio_engine import PortfolioEngine
 from app.engine.words import Words
 from app.execution.base import Executor
 from app.execution.paper_executor import PaperExecutor
-from app.execution.signal_executor import SignalExecutor
 from app.mentor.ai import AIMentor
 from app.mentor.narrator import Narrator
 from app.notify.telegram_bot import TelegramNotifier
@@ -54,6 +53,7 @@ from app.brain.brain import Brain
 from app.brain.sources import AlpacaNews, SecClient, Wikipedia, make_asset_check
 from app.brain.words import BrainWords
 from app.config import DATA_DIR
+from app import edition
 
 log = logging.getLogger(__name__)
 
@@ -97,7 +97,6 @@ class Brokerage:
 def build_executor(settings: Settings, events: EventBus) -> Brokerage:
     """The executor for the money mode.
 
-    signal — Midas: the bot only tells you what to trade.
     paper  — Alpaca's paper account when its keys are saved, else a local simulation.
     live   — Alpaca's live account. Without working live keys it falls back to the
              simulation and says so: nothing real can happen without them.
@@ -105,9 +104,6 @@ def build_executor(settings: Settings, events: EventBus) -> Brokerage:
     mode = settings.app.mode
     secrets = settings.secrets
     starting = settings.app.risk.starting_paper_balance
-
-    if mode == "signal":
-        return Brokerage(SignalExecutor(events=events, starting_balance=starting))
 
     live = mode == "live"
     account = "live" if live else "paper"
@@ -150,7 +146,7 @@ def build_data_source(keys: tuple[str, str] | None) -> MarketDataSource:
 
         # Yahoo fills whatever Alpaca leaves out, including everything when the keys fail.
         return FallbackData(AlpacaData(*keys), YahooData())
-    # No keys: free public candles. This is what makes signal mode work on day one.
+    # No keys: free public candles, so the app works before any key is saved.
     return YahooData()
 
 
@@ -168,14 +164,19 @@ def lan_ip() -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=f"{APP_NAME} — US stocks")
     parser.add_argument("--headless", action="store_true", help="run without the desktop window")
-    parser.add_argument("--mode", choices=["signal", "paper", "live"], default=None)
+    parser.add_argument("--mode", choices=["paper", "live"], default=None)
     parser.add_argument("--no-telegram", action="store_true")
     parser.add_argument("--host", default=None, help="bind address (default from config: all interfaces)")
     parser.add_argument("--port", type=int, default=None, help="dashboard port (default from config)")
     args = parser.parse_args()
 
     setup_logging(LOG_DIR)
+    _taskbar_identity()
     settings = load_settings()
+    for change in edition.clamp_risk(settings.app.risk):
+        log.info("%s edition limit: %s", edition.NAME, change)
+    if not _licensed(settings, args.headless):
+        sys.exit(0)
     if args.mode:
         settings.app.mode = args.mode
     if args.host:
@@ -227,6 +228,7 @@ def main() -> None:
         mentor=mentor,
         challenges=challenges,
         monitor=monitor,
+        state_path=DATA_DIR / "engine_state.json",
     )
 
     catalysts = CatalystManager(session_factory, events)
@@ -236,7 +238,7 @@ def main() -> None:
     brain = build_brain(engine, data, keys, claude, monitor, events, risk, mentor)
 
     # Company research runs off its own free provider and its own daily candles,
-    # so it keeps working in signal mode where no brokerage is connected at all.
+    # so it works before any brokerage key is saved.
     research = ResearchService(YahooResearch(), YahooData(), timeframe="1d")
     analyst = Analyst(claude)
     profiles = ProfileStore(settings.user_profile_path)
@@ -257,7 +259,8 @@ def main() -> None:
         monitor.info(activity.WARN, notice(Words(chosen.language == "tr")))
 
     telegram = TelegramNotifier(
-        token="" if args.no_telegram else settings.secrets.telegram_bot_token,
+        # The sold copy is never connected to anyone's Telegram.
+        token="" if args.no_telegram or not edition.limits().telegram else settings.secrets.telegram_bot_token,
         allowed_chat_ids=settings.secrets.allowed_chat_ids,
         config=settings.app.telegram,
         engine=engine,
@@ -265,7 +268,7 @@ def main() -> None:
         claude=claude,
         catalysts=catalysts,
     )
-    if settings.app.telegram.enabled:
+    if settings.app.telegram.enabled and edition.limits().telegram:
         telegram.start()
 
     token = settings.secrets.dashboard_token
@@ -307,8 +310,11 @@ def main() -> None:
 
     from app.gui.main_window import MainWindow
 
-    qt_app = QApplication(sys.argv)
+    # The activation window may already have made one.
+    qt_app = QApplication.instance() or QApplication(sys.argv)
     qt_app.setQuitOnLastWindowClosed(False)
+    from app.gui.main_window import _app_icon
+    qt_app.setWindowIcon(_app_icon())
 
     from app.gui.warning import power_warning
     if not brain.settings.warned and not relaunched():
@@ -336,6 +342,43 @@ def main() -> None:
         relaunch()
         exit_code = 0
     sys.exit(exit_code)
+
+
+def _taskbar_identity() -> None:
+    """Without its own id, Windows groups the window under python(w).exe and
+    shows Python's icon on the taskbar when the app runs from source."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("BofStudios.MoneyTreeAI")
+    except Exception:
+        log.debug("could not set the taskbar id", exc_info=True)
+
+
+def _licensed(settings: Settings, headless: bool) -> bool:
+    """Only the sold (pro) exe asks for a key; the owner's copy never does."""
+    from app.common import licensing
+
+    if not edition.PRO:
+        return True
+    if not licensing.configured():
+        # scripts/build_exe.py refuses to make a pro build without the ids.
+        print("This build has no licence settings.", file=sys.stderr)
+        return False
+    lic = licensing.License(DATA_DIR / "license.json")
+    verdict = lic.check()
+    if verdict.ok:
+        return True
+    if headless:
+        print("This copy is not activated. Open the app once with its window to enter the licence key.",
+              file=sys.stderr)
+        return False
+    from app.gui.license import activate
+
+    turkish = ProfileStore(settings.user_profile_path).get().language == "tr"
+    return activate(lic, verdict, turkish)
 
 
 def build_brain(engine, data, keys, claude, monitor, events, risk, mentor) -> Brain:
@@ -380,7 +423,6 @@ def _print_banner(
 ) -> None:
     app = settings.app
     mode_note = {
-        "signal": "analysis only — you place the trades in Midas",
         "simulation": "simulated money on real prices",
         "alpaca_paper": "Alpaca paper account — practice money",
         "alpaca_live": "REAL MONEY at Alpaca (still needs arming in the dashboard)",

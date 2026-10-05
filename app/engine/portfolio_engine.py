@@ -11,11 +11,13 @@ touched.
 """
 from __future__ import annotations
 
+import json
 import logging
 import threading
 import time
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Protocol
 
 import pandas as pd
@@ -44,7 +46,6 @@ from app.engine.autonomy import (
 )
 from app.engine.words import Words
 from app.execution.base import AccountSummary, BrokerView, Executor, Holding, tick
-from app.execution.signal_executor import SignalExecutor
 from app.mentor.narrator import Narrator
 from app.challenge.manager import ChallengeManager
 from app.risk.protections import Protections
@@ -71,8 +72,12 @@ class PortfolioEngine:
     """Scans a watchlist of US stocks on a fixed interval and acts on what it finds.
 
     Polling rather than streaming: US equity data sources are request-based, and
-    a scan loop keeps the same code path working for Yahoo, Alpaca, and the
-    signal-only Midas mode.
+    a scan loop keeps the same code path working for Yahoo and Alpaca.
+
+    Stop (halt) and Start (resume) are separate from the thread: a stopped
+    engine keeps looking, so prices stay fresh and each position's stop-loss
+    and take-profit stay active, but it never opens a position and never sells
+    on a signal. The stop is saved, so a restart does not start trading again.
     """
 
     def __init__(
@@ -87,6 +92,7 @@ class PortfolioEngine:
         mentor: Narrator,
         challenges: "ChallengeManager | None" = None,
         monitor: Monitor | None = None,
+        state_path: Path | None = None,
     ) -> None:
         self.config = config
         self.data = data
@@ -143,6 +149,10 @@ class PortfolioEngine:
         self._force_look = False
         self._closed_reviewed = False
 
+        # Stop/Start from the owner. Saved to disk so it survives a restart.
+        self._state_path = state_path
+        self._halted, self._halted_at = self._load_halt()
+
         self._lock = threading.RLock()
         # One trading action at a time: a scan, a manual close, an approval.
         self._trade_lock = threading.RLock()
@@ -167,11 +177,13 @@ class PortfolioEngine:
             activity.INFO,
             self.words().started(self.mode, self.executor.broker, self.autonomy, self.timeframe),
         )
+        if self._halted:
+            self.monitor.info(activity.WARN, self.words().still_halted(self._halted_at))
 
     def stop(self) -> None:
         self._stop.set()
         self._wake.set()
-        self.mentor.note("Stopping. Open positions stay open — I just stop watching them.")
+        self.mentor.note("The app closes. Open positions stay open. Alpaca keeps their stop-loss and target.")
         self.events.publish("status", self.status())
 
     def join(self, timeout: float | None = None) -> None:
@@ -186,6 +198,81 @@ class PortfolioEngine:
     @property
     def running(self) -> bool:
         return self._thread is not None and self._thread.is_alive() and not self._stop.is_set()
+
+    # ------------------------------------------------------------ stop / start
+
+    @property
+    def halted(self) -> bool:
+        return self._halted
+
+    def halt(self, by: str = "button") -> bool:
+        """The owner's Stop. From this moment no buy order is sent and no
+        position is sold on a signal: _act() and _place() check the flag, so a
+        scan that is already running cannot buy either. Waiting approvals are
+        cancelled. Stop-loss and take-profit stay active. Returns False when it
+        was already stopped."""
+        with self._lock:
+            was = self._halted
+            self._halted = True
+            self._halted_at = datetime.now(timezone.utc)
+        self._save_halt()
+        self.proposals.clear_pending()
+        if not was:
+            log.warning("trading stopped by the owner (%s)", by)
+            w = self.words()
+            self.monitor.info(activity.WARN, w.halted(), w.halted_detail())
+            self.mentor.note("Stopped by you. I will not buy, and I will not sell on a signal. "
+                             "Stop-loss and take-profit stay active.")
+        self.events.publish("status", self.status())
+        return not was
+
+    def resume(self, by: str = "button") -> bool:
+        """The owner's Start. Returns False when it was not stopped."""
+        with self._lock:
+            was = self._halted
+            self._halted = False
+            self._halted_at = None
+        self._save_halt()
+        if was:
+            log.warning("trading started again by the owner (%s)", by)
+            self.monitor.info(activity.INFO, self.words().resumed())
+        if not (self._thread and self._thread.is_alive()):
+            self.start()
+        self.scan_now()
+        self.events.publish("status", self.status())
+        return was
+
+    def _load_halt(self) -> tuple[bool, datetime | None]:
+        if self._state_path is None:
+            return False, None
+        try:
+            saved = json.loads(self._state_path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return False, None
+        except (OSError, ValueError):
+            # Unreadable: be careful and stay stopped. Start clears it.
+            log.warning("engine state unreadable; starting stopped")
+            return True, None
+        at = saved.get("halted_at")
+        try:
+            when = datetime.fromisoformat(at) if at else None
+        except ValueError:
+            when = None
+        return bool(saved.get("halted")), when
+
+    def _save_halt(self) -> None:
+        if self._state_path is None:
+            return
+        try:
+            self._state_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self._state_path.with_suffix(".tmp")
+            tmp.write_text(json.dumps({
+                "halted": self._halted,
+                "halted_at": self._halted_at.isoformat() if self._halted_at else None,
+            }), encoding="utf-8")
+            tmp.replace(self._state_path)
+        except OSError:
+            log.exception("could not save the Stop state")
 
     # ------------------------------------------------------------------ actions
 
@@ -233,7 +320,7 @@ class PortfolioEngine:
             if symbol in self.symbols:
                 return False
             self.symbols.append(symbol)
-        self.mentor.note(f"Added {symbol} to the watchlist.")
+        self.mentor.note(f"Done. The bot added {symbol} to the watchlist.")
         self._wake.set()
         return True
 
@@ -245,7 +332,7 @@ class PortfolioEngine:
             self.symbols.remove(symbol)
             self._history.pop(symbol, None)
             self._snapshots.pop(symbol, None)
-        self.mentor.note(f"Removed {symbol} from the watchlist.")
+        self.mentor.note(f"Done. The bot removed {symbol} from the watchlist.")
         return True
 
     def set_watchlist(self, symbols: list[str]) -> list[str]:
@@ -271,7 +358,7 @@ class PortfolioEngine:
                     self._snapshots.pop(symbol, None)
                     self._last_signal.pop(symbol, None)
         self.proposals.clear_pending()
-        self.mentor.note(f"Now watching {', '.join(clean)}.")
+        self.mentor.note(f"Done. The bot now monitors {', '.join(clean)}.")
         self.scan_now()
         return clean
 
@@ -311,6 +398,8 @@ class PortfolioEngine:
             "data_source": self.data.name,
             "timeframe": self.timeframe,
             "running": self.running,
+            "halted": self._halted,
+            "halted_at": self._halted_at.isoformat() if self._halted_at else None,
             "market": market.to_dict(),
             "balance": balance.to_dict(),
             "equity": round(balance.total, 2),
@@ -327,7 +416,6 @@ class PortfolioEngine:
             "risk": self.risk.snapshot(balance.total),
             "small_account": self.config.risk.fractional_shares,
             "language": self.language,
-            "pending_signals": self._pending_signal_dicts(),
             "challenge": self._challenge_dict(),
             "locks": self.protections.active_locks(),
             "autonomy": self.autonomy,
@@ -340,6 +428,7 @@ class PortfolioEngine:
         """What the Live tab's header needs between steps."""
         return {
             "running": self.running,
+            "halted": self._halted,
             "focus": self._focus,
             "next_look_at": self._next_look_at.isoformat() if self._next_look_at else None,
             "language": self.language,
@@ -543,8 +632,6 @@ class PortfolioEngine:
         self._scan_count += 1
         self._last_scan_at = datetime.now(timezone.utc)
 
-        if isinstance(self.executor, SignalExecutor):
-            self.executor.expire_stale()
         for stale in self.proposals.expire():
             self.events.publish("proposal_expired", {"proposal": stale.to_dict()})
 
@@ -559,7 +646,9 @@ class PortfolioEngine:
         with self._lock:
             holding = len(self._positions)
         self.mentor.scan_summary(len(symbols), holding, signals_raised, balance.total)
-        if is_open:
+        if self._halted:
+            m.info(activity.WAIT, w.halted_scan(holding))
+        elif is_open:
             m.info(activity.WAIT, w.scan_done(holding, self.config.scan_interval_seconds))
         else:
             m.info(activity.WAIT, w.waiting_for_open(getattr(market, "next_open", None)))
@@ -778,14 +867,15 @@ class PortfolioEngine:
             position = self._positions.get(symbol)
             open_count = len(self._positions)
 
+        # Stopped by the owner: no buy, and no sell on a signal.
+        if self._halted:
+            return False
+
         if signal.action is Action.CLOSE:
             if position is None:
                 return False
             self._exit(position, price, signal.reason, w)
             return True
-
-        if isinstance(self.executor, SignalExecutor) and self.executor.has_pending_for(symbol):
-            return False
         # A buy already waiting on the owner (or already suggested) is not
         # re-proposed every minute while the same bar is still the latest.
         if position is None and self.proposals.has_pending_for(symbol):
@@ -805,8 +895,7 @@ class PortfolioEngine:
 
         balance, max_positions, position_pct = self._effective_limits()
 
-        # Signals you have not answered yet still count against the cap, otherwise
-        # signal mode would queue up far more trades than the limit allows.
+        # Buys waiting for your OK count against the cap.
         committed = open_count + self._pending_entry_count()
         if position is None and committed >= max_positions:
             held = (
@@ -889,12 +978,11 @@ class PortfolioEngine:
         headlines = self._read_news(symbol, w)
         opened, _ = self._place(intent, w)
         if opened is None:
-            # Signal mode: raised for the owner to act on in Midas.
-            return not self.executor.is_automatic
+            return False
 
         self._register_position(opened, intent.reason)
         self._brain_bought(opened)
-        self.mentor.opened(opened, self.executor.is_automatic)
+        self.mentor.opened(opened, True)
         self.events.publish(
             "trade_opened", {"position": opened.to_dict(), "reason": intent.reason}
         )
@@ -904,13 +992,11 @@ class PortfolioEngine:
     def _place(self, intent: TradeIntent, w: Words) -> tuple[Position | None, str | None]:
         """Send the order as a Live step. Returns (position, why it failed)."""
         symbol = intent.symbol
-        if not self.executor.is_automatic:
-            self.executor.open_position(intent)  # raises the signal for the owner
-            self.mentor.awaiting_confirmation(intent)
-            self.monitor.info(
-                activity.ORDER, w.signal_sent(symbol, intent.qty, intent.price), w.signal_detail()
-            )
-            return None, None
+        # The last check before money moves. Research and the AI check can take
+        # seconds; a Stop pressed during them must still win.
+        if self._halted:
+            self.monitor.info(activity.WARN, w.not_placed(symbol, w.halted_reason()))
+            return None, "stopped"
 
         where = self._stop_home(intent.qty)
         handle = self.monitor.begin(
@@ -982,9 +1068,7 @@ class PortfolioEngine:
     def _exit(self, position: Position, price: float, reason: str, w: Words | None = None) -> bool:
         w = w or self.words()
         symbol = position.symbol
-        automatic = self.executor.is_automatic
-        title = w.selling(symbol, reason) if automatic else w.exit_signal(symbol, reason)
-        handle = self.monitor.begin(activity.SELL, title)
+        handle = self.monitor.begin(activity.SELL, w.selling(symbol, reason))
         try:
             trade = self.executor.close_position(position, price, reason)
         except Exception as exc:
@@ -992,14 +1076,10 @@ class PortfolioEngine:
             return False
 
         if trade is None:
-            if automatic:
-                # Its bracket may already be cancelled; watch the stop here.
-                with self._lock:
-                    self._broker_stops.discard(symbol)
-                handle.fail(w.sell_failed())
-            else:
-                # Signal mode: the exit is a recommendation until you confirm it.
-                handle.done(w.exit_sent())
+            # Its bracket may already be cancelled; watch the stop here.
+            with self._lock:
+                self._broker_stops.discard(symbol)
+            handle.fail(w.sell_failed())
             return False
 
         self._record_closed(trade)
@@ -1047,7 +1127,7 @@ class PortfolioEngine:
         self.repo.clear_open_position(symbol, self.mode)
         # Whatever took it away, do not buy it straight back.
         self.protections.cool_down(symbol)
-        self.mentor.note(f"{symbol} is no longer in the account, so I stopped tracking it.")
+        self.mentor.note(f"{symbol} is not in the account now. The bot stops to monitor it.")
 
     # ------------------------------------------------------------- autonomy
 
@@ -1075,7 +1155,7 @@ class PortfolioEngine:
                 self._snapshots.clear()
                 self._last_signal.clear()
             self.proposals.clear_pending()
-            self.mentor.note(f"Now reading {timeframe} candles.")
+            self.mentor.note(f"Done. The bot now reads {timeframe} candles.")
             self.scan_now()
         return timeframe
 
@@ -1103,6 +1183,8 @@ class PortfolioEngine:
             self.events.publish("proposal_resolved", {"proposal": proposal.to_dict()})
             return {"ok": False, "message": f"Did not buy {symbol}: {message}."}
 
+        if self._halted:
+            return fail(w.halted_reason())
         if not self.clock.state().is_open:
             return fail("the market is closed")
         if self.mode == "live" and not self.risk.armed:
@@ -1159,17 +1241,6 @@ class PortfolioEngine:
         self.events.publish("status", self.status())
         return True
 
-    # ---------------------------------------------- signal-mode confirmations
-
-    def register_confirmed_entry(self, symbol: str, position: Position, reason: str) -> None:
-        """Called after you confirm in Telegram that you took a signal in Midas."""
-        self._register_position(position, reason)
-        self.mentor.opened(position, automatic=False)
-        self.events.publish("trade_opened", {"position": position.to_dict(), "reason": reason})
-
-    def register_confirmed_exit(self, trade: ClosedTrade) -> None:
-        self._record_closed(trade)
-
     # ---------------------------------------------------------------- internals
 
     def _credit_challenge(self, trade: ClosedTrade) -> None:
@@ -1203,8 +1274,8 @@ class PortfolioEngine:
             restored += 1
         if restored:
             self.mentor.note(
-                f"Picked up {restored} open position{'s' if restored > 1 else ''} "
-                "from last session."
+                f"The bot found {restored} open position(s) "
+                "from the last session."
             )
             self.monitor.info(activity.INFO, self.words().restored(restored))
 
@@ -1325,15 +1396,7 @@ class PortfolioEngine:
     def _pending_entry_count(self) -> int:
         # Approvals hold a slot: approving them all must never exceed the cap.
         # Suggestions do not — manual mode never turns them into positions.
-        waiting = len(self.proposals.pending("approval"))
-        if not isinstance(self.executor, SignalExecutor):
-            return waiting
-        return waiting + sum(1 for s in self.executor.pending_signals() if not s.is_exit)
-
-    def _pending_signal_dicts(self) -> list[dict]:
-        if not isinstance(self.executor, SignalExecutor):
-            return []
-        return [s.to_dict() for s in self.executor.pending_signals()]
+        return len(self.proposals.pending("approval"))
 
 
 def _closed_delay(market) -> float:
