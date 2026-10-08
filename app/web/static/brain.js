@@ -306,7 +306,20 @@ function reflexTab() {
       <p class="small faint">${esc(p.title)}</p></div>`).join("");
   const cards = (reflex.decisions || []).map(reflexCard).join("")
     || `<div class="fl-card"><p class="note">${esc(t("reflex.empty"))}</p></div>`;
-  return head + pending + cards;
+  return head + blockers() + pending + cards;
+}
+
+/* Why the bot is only watching: every reason it cannot buy, with what to press. */
+function blockers() {
+  const st = window.mtState || {};
+  const why = [];
+  if (st.halted) why.push(["rx.b.halted", "rx.b.haltedDo"]);
+  if (st.broker === "alpaca_live" && !(st.risk && st.risk.armed)) why.push(["rx.b.arm", "rx.b.armDo"]);
+  if (st.autonomy && st.autonomy !== "full") why.push(["rx.b.auto", "rx.b.autoDo"]);
+  if (st.market && st.market.is_open === false) why.push(["rx.b.closed", "rx.b.closedDo"]);
+  if (!why.length) return `<div class="fl-card accent-border"><p class="note up">${esc(t("rx.b.ready"))}</p></div>`;
+  return `<div class="fl-card hot"><span class="label accent">${esc(t("rx.b.title"))}</span>${why.map(([a, b]) => `
+    <p><b>${esc(t(a))}</b> <span class="small faint">${esc(t(b))}</span></p>`).join("")}</div>`;
 }
 
 function reflexCard(d) {

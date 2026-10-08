@@ -13,6 +13,14 @@ import logging
 import os
 import socket
 import sys
+
+# The dashboard window runs without the graphics card. Over an hour or two the
+# GPU process of QtWebEngine can lose its context and leave a grey window; the
+# page here is light enough for software drawing.
+_flags = os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", "")
+if "--disable-gpu" not in _flags:
+    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (_flags + " --disable-gpu --disable-gpu-compositing"
+                                                 " --disable-gpu-rasterization").strip()
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable

@@ -4,6 +4,7 @@ import logging
 
 from PySide6.QtCore import QPointF, QUrl, Qt, Signal
 from PySide6.QtGui import QAction, QColor, QDesktopServices, QIcon, QPainter, QPen, QPixmap
+from PySide6.QtCore import QTimer
 from PySide6.QtWebEngineCore import QWebEnginePage
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import QMainWindow, QMenu, QMessageBox, QSystemTrayIcon
@@ -81,12 +82,58 @@ class MainWindow(QMainWindow):
         self.view.setPage(_DashboardPage(home, self.view))
         self.view.load(home)
         self.setCentralWidget(self.view)
+        self._home = home
+        self._reloads = 0
+        # A crashed or frozen page must come back by itself, never stay grey.
+        self.view.page().renderProcessTerminated.connect(self._page_died)
+        self.view.page().loadingChanged.connect(self._load_changed)
+        self._watchdog = QTimer(self)
+        self._watchdog.setInterval(30_000)
+        self._watchdog.timeout.connect(self._ping)
+        self._watchdog.start()
+        self._awaiting = False
 
         self._build_tray()
         self.restart_requested.connect(self._restart_now)
         self.notify_requested.connect(self._notify)
         if events is not None:
             events.subscribe(self._on_event)
+
+    def _page_died(self, status, code) -> None:
+        log.warning("the dashboard page stopped (%s, code %s); reloading", status, code)
+        QTimer.singleShot(800, self._reload)
+
+    def _load_changed(self, info) -> None:
+        # status 2 = failed (the server was not reachable for a moment)
+        try:
+            failed = info.status() == info.LoadStatus.LoadFailedStatus
+        except Exception:
+            failed = False
+        if failed:
+            QTimer.singleShot(3000, self._reload)
+
+    def _ping(self) -> None:
+        """Every 30 seconds ask the page a question. No answer in 10 seconds
+        means it is frozen: reload it."""
+        if self._awaiting or not self.isVisible():
+            return
+        self._awaiting = True
+
+        def answered(_result) -> None:
+            self._awaiting = False
+
+        def check() -> None:
+            if self._awaiting:
+                self._awaiting = False
+                log.warning("the dashboard page did not answer; reloading")
+                self._reload()
+
+        self.view.page().runJavaScript("1", answered)
+        QTimer.singleShot(10_000, check)
+
+    def _reload(self) -> None:
+        self._reloads += 1
+        self.view.load(self._home)
 
     def _build_tray(self) -> None:
         self.tray = QSystemTrayIcon(_app_icon(), self)
