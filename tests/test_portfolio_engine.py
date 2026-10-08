@@ -490,3 +490,52 @@ def test_mentor_context_is_json_shaped_for_claude(tmp_path):
 
     json.dumps(context, default=str)  # must not raise
     assert set(context) >= {"mode", "equity", "open_positions", "watchlist", "strategy"}
+
+
+# ------------------------------------------------------------- news trades
+
+
+def news_engine(tmp_path):
+    from types import SimpleNamespace
+    engine = build(tmp_path, strategy=EmaRsiStrategy(), state_path=tmp_path / "state.json")
+    market = SimpleNamespace(is_open=True, to_dict=lambda: {"is_open": True}, next_open=None, next_close=None)
+    engine.clock = SimpleNamespace(state=lambda: market)
+    return engine
+
+
+def test_a_news_buy_goes_through_the_gates_and_gets_a_time_limit(tmp_path):
+    engine = news_engine(tmp_path)
+    assert engine.news_buy("AAPL", "news: test", size=0.5, hours=4) == "bought"
+    assert engine.news_positions() == ["AAPL"]
+    assert engine.news_buy("AAPL", "news: again") == "already held"
+    full = engine.position_for("AAPL").qty
+    other = news_engine(tmp_path / "b")
+    other.news_buy("MSFT", "news: test", size=1.0)
+    assert full < other.position_for("MSFT").qty            # half size is smaller
+
+
+def test_stop_blocks_news_buys_and_news_sells(tmp_path):
+    engine = news_engine(tmp_path)
+    engine.news_buy("AAPL", "news: test")
+    engine.halt("test")
+    assert engine.news_buy("MSFT", "news: test") == "you stopped the bot"
+    assert engine.news_sell("AAPL", "news: bad") == "you stopped the bot"
+    assert engine.position_for("AAPL") is not None
+
+
+def test_a_news_trade_ends_at_its_time_limit(tmp_path):
+    engine = news_engine(tmp_path)
+    engine.news_buy("AAPL", "news: test", hours=1)
+    engine._news_deadline["AAPL"] = 0          # the hour is over
+    engine._scan(FakeMarket())
+    assert engine.position_for("AAPL") is None
+    trade = engine.repo.recent_trades("paper")[0]
+    assert trade["exit_reason"] == "news trade time limit"
+
+
+def test_news_sell_and_deadlines_survive_a_restart(tmp_path):
+    engine = news_engine(tmp_path)
+    engine.news_buy("AAPL", "news: test", hours=10)
+    again = build(tmp_path, strategy=EmaRsiStrategy(), state_path=tmp_path / "state.json")
+    assert "AAPL" in again._news_deadline
+    assert engine.news_sell("AAPL", "news: bad") == "sold"

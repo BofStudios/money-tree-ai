@@ -13,7 +13,8 @@ import secrets as pysecrets
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
 LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost"}
-SETTABLE = {"quality_mode", "news_check", "learning", "ai_check", "self_improve", "discover", "bots", "power", "warned"}
+SETTABLE = {"quality_mode", "news_check", "learning", "ai_check", "self_improve", "discover", "bots", "power", "warned",
+            "news_trading", "news_max_positions", "news_min_confidence"}
 
 
 def build_brain_router(engine, token: str) -> APIRouter:
@@ -77,5 +78,18 @@ def build_brain_router(engine, token: str) -> APIRouter:
         p = brain().swarm.reset()
         engine.scan_now()
         return {"ok": True, "rollback": p.to_dict() if p else None}
+
+    @router.get("/reflex", dependencies=guarded)
+    def reflex() -> dict:
+        r = getattr(engine, "reflex", None)
+        if r is None:
+            raise HTTPException(status_code=503, detail="The news reflex is not running.")
+        snap = r.snapshot()
+        b = engine.brain
+        if b is not None:
+            snap["settings"] = {"news_trading": b.settings.news_trading,
+                                "news_max_positions": b.settings.news_max_positions,
+                                "news_min_confidence": b.settings.news_min_confidence}
+        return snap
 
     return router

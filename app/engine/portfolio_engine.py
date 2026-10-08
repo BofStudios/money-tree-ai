@@ -151,6 +151,7 @@ class PortfolioEngine:
 
         # Stop/Start from the owner. Saved to disk so it survives a restart.
         self._state_path = state_path
+        self._news_deadline: dict[str, float] = {}   # symbol -> epoch when a news trade must end
         self._halted, self._halted_at = self._load_halt()
 
         self._lock = threading.RLock()
@@ -258,6 +259,7 @@ class PortfolioEngine:
             when = datetime.fromisoformat(at) if at else None
         except ValueError:
             when = None
+        self._news_deadline = {str(k): float(v) for k, v in (saved.get("news_deadlines") or {}).items()}
         return bool(saved.get("halted")), when
 
     def _save_halt(self) -> None:
@@ -269,6 +271,7 @@ class PortfolioEngine:
             tmp.write_text(json.dumps({
                 "halted": self._halted,
                 "halted_at": self._halted_at.isoformat() if self._halted_at else None,
+                "news_deadlines": self._news_deadline,
             }), encoding="utf-8")
             tmp.replace(self._state_path)
         except OSError:
@@ -283,6 +286,75 @@ class PortfolioEngine:
     def disarm(self, reason: str = "manual") -> None:
         self.risk.disarm(reason)
         self.events.publish("status", self.status())
+
+    # ------------------------------------------------------------ news trades
+
+    def news_buy(self, symbol: str, reason: str, size: float = 1.0, hours: float = 24.0) -> str:
+        """A buy the news reflex decided on. It goes through the same gates as
+        every other buy: Stop, the market clock, protections, the position cap,
+        the risk rules, arming and the autonomy choice. Returns what happened:
+        "bought", "waiting" (for your approval or idea only) or the reason it did not."""
+        symbol = symbol.strip().upper()
+        w = self.words()
+        with self._trade_lock:
+            if self._halted:
+                return w.halted_reason()
+            if not self.clock.state().is_open:
+                return "the market is closed"
+            with self._lock:
+                if symbol in self._positions:
+                    return "already held"
+            try:
+                history = self.data.get_ohlcv(symbol, self.timeframe, limit=HISTORY_BARS)
+            except Exception as exc:
+                return f"no prices: {_short(exc)}"
+            if history is None or history.empty:
+                return "no prices"
+            snapshot = self.strategy.snapshot(history)
+            price = float(history["close"].iloc[-1])
+            with self._lock:
+                self._history[symbol] = history
+                self._snapshots[symbol] = snapshot
+            signal = Signal(Action.BUY, reason, symbol=symbol,
+                            detail={"news": True, "size": min(max(size, 0.25), 1.0)})
+            acted = self._act(symbol, signal, snapshot, price, w)
+            with self._lock:
+                held = symbol in self._positions
+            if held:
+                self._news_deadline[symbol] = time.time() + min(max(hours, 1.0), 72.0) * 3600
+                self._save_halt()
+                return "bought"
+            if acted or self.proposals.has_pending_for(symbol):
+                return "waiting"
+            return "the rules did not allow it (see the Live tab)"
+
+    def news_sell(self, symbol: str, reason: str) -> str:
+        """Sell a held position because the news turned against it."""
+        symbol = symbol.strip().upper()
+        w = self.words()
+        with self._trade_lock:
+            if self._halted:
+                return w.halted_reason()
+            problem = self.why_not_close(symbol)
+            if problem:
+                return problem
+            with self._lock:
+                position = self._positions.get(symbol)
+            if position is None:
+                return "not held"
+            price = position.current_price or position.entry_price
+            return "sold" if self._exit(position, price, reason, w) else "the sale failed"
+
+    def status_positions(self) -> list[dict]:
+        with self._lock:
+            return [{"symbol": s} for s in self._positions]
+
+    def market_open(self) -> bool:
+        return bool(self.clock.state().is_open)
+
+    def news_positions(self) -> list[str]:
+        with self._lock:
+            return [s for s in self._news_deadline if s in self._positions]
 
     def why_not_close(self, symbol: str) -> str | None:
         """Why a manual close cannot happen right now, or None when it can.
@@ -400,6 +472,7 @@ class PortfolioEngine:
             "running": self.running,
             "halted": self._halted,
             "halted_at": self._halted_at.isoformat() if self._halted_at else None,
+            "news_deadlines": dict(self._news_deadline),
             "market": market.to_dict(),
             "balance": balance.to_dict(),
             "equity": round(balance.total, 2),
@@ -810,6 +883,13 @@ class PortfolioEngine:
             position = self._positions.get(symbol)
         if position is not None and self._protect(position, price, w):
             return False
+        if position is not None and not self._halted and time.time() >= self._news_deadline.get(symbol, float("inf")):
+            self._news_deadline.pop(symbol, None)
+            self._save_halt()
+            self._exit(position, price, "news trade time limit", w)
+            return False
+        if position is None and symbol in self._news_deadline:
+            self._news_deadline.pop(symbol, None)
         if not signal.is_actionable:
             return False
         return self._act(symbol, signal, snapshot, price, w)
@@ -888,7 +968,8 @@ class PortfolioEngine:
             return False
 
         research = None
-        if position is None and signal.action is Action.BUY and self.brain is not None:
+        news = bool(signal.detail.get("news"))
+        if position is None and signal.action is Action.BUY and self.brain is not None and not news:
             research = self._research_gate(symbol, snapshot, w)
             if research is False:
                 return False
@@ -928,7 +1009,7 @@ class PortfolioEngine:
 
         self.mentor.considering(symbol, signal.reason, snapshot)
 
-        size = research.size if research is not None else 1.0
+        size = research.size if research is not None else float(signal.detail.get("size", 1.0))
         intent = TradeIntent(
             symbol=symbol,
             side=order.side,

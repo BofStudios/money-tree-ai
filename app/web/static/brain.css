@@ -205,3 +205,36 @@
   .wire-row { grid-template-columns: 44px 1fr 60px; }
   .wire-row > span:nth-child(2) { display: none; }
 }
+
+/* ============================================================ news reflex */
+.rx-head .rx-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.rx-switch { margin: 0; padding: 0; border: 0; }
+.rx-lead { font-size: 15px; line-height: 1.5; color: var(--text-2); margin: 8px 0 14px; }
+.rx-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+.rx-stats div { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 14px; background: rgba(255, 214, 10, 0.06); border: 1px solid rgba(255, 214, 10, 0.12); }
+.rx-stats b { font-size: 20px; color: #fff8cc; }
+.rx-stats span { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.06em; }
+.rx-sources { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.rx-conf { margin-top: 4px; }
+.rx-card { display: flex; flex-direction: column; gap: 8px; }
+.rx-meta { display: flex; align-items: center; gap: 8px; }
+.rx-title { color: var(--text); font-weight: 650; font-size: 15.5px; line-height: 1.4; text-decoration: none; }
+.rx-title:hover { color: var(--accent-hot); }
+.rx-event { margin: 0; font-size: 13px; color: var(--accent); }
+.rx-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 3px; font-size: 13px; color: var(--text-2); }
+.rx-ideas { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 14px; background: rgba(0, 0, 0, 0.25); border: 1px solid var(--line-soft); }
+.rx-idea { display: grid; grid-template-columns: 58px 16px 90px 40px minmax(0, 1fr); align-items: center; gap: 8px; }
+.rx-bar { height: 6px; border-radius: 6px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.rx-bar i { display: block; height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--accent-deep), var(--accent-hot)); }
+.rx-why { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rx-out { margin: 0; font-size: 13.5px; font-weight: 600; }
+.rx-out.up { color: var(--up); } .rx-out.down { color: var(--down); }
+.rx-out.accent { color: var(--accent); } .rx-out.faint { color: var(--text-3); font-weight: 500; }
+@media (max-width: 700px) {
+  .rx-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rx-idea { grid-template-columns: 54px 14px 60px 36px; }
+  .rx-why { grid-column: 1 / -1; white-space: normal; }
+}
+.rx-sources .pill { font-size: 11px; }
+.rx-sources .pill.up { color: var(--up); border-color: rgba(50, 213, 131, 0.4); background: rgba(50, 213, 131, 0.08); }
+.rx-sources .pill.down { color: var(--down); border-color: rgba(255, 107, 96, 0.4); background: rgba(255, 107, 96, 0.08); }

@@ -25,6 +25,53 @@ money is at risk, and because a new Alpaca live account cannot trade until it
 is funded. (Midas signal mode was removed in 4.0: an old config that still says
 `signal` starts on practice money.)
 
+## Desktop 4.1: the news reflex
+
+The bot reads breaking news every 15 seconds and can trade on it within
+seconds. **Brain → Reflex** shows every headline it acted on, step by step.
+
+**Sources, no key needed** (all tested, all meant to be read by machines):
+Federal Reserve press releases, White House news and presidential actions,
+NVIDIA's own newsroom, and the GlobeNewswire, PR Newswire and Business Wire
+company press-release feeds. With working Alpaca keys it also reads Alpaca's
+whole news wire (Benzinga). Official pages (an FOMC statement, an executive
+order) are opened and read in full.
+
+**How it thinks**, for each new headline:
+
+1. *Read* who it is about (tickers like `(NASDAQ: MU)`, company names) and the
+   kind of event (an earnings beat, a guidance cut, a contract, a red flag).
+2. *Ripple* first-order effects (the company) and second-order effects from
+   the ripple map (`app/brain/ripples.py`): an NVIDIA chip launch reaches
+   TSMC, Micron, Broadcom, ASML, Arista, Vertiv and nuclear power; a rate cut
+   reaches home builders; new tariffs hurt importers and help US steel; an oil
+   shock helps producers and hurts airlines; defense, crypto, nuclear and drug
+   pricing have their own chains. Every link says why.
+3. *Think* the AI works through it step by step (what happened, is it new and
+   material, first order, second order, is it priced in) and rates each stock
+   with a confidence and a time limit. It may only rate stocks from the map or
+   the headline, so it cannot invent a ticker, and it treats the headline as
+   data, never as instructions.
+4. *Confirm* the price must agree: at least +0.15% since the news, never more
+   than the "move is over" limit (3% to 6% by how wild the stock is), and not
+   down 0.8% (the market disagrees). It waits up to ten minutes. Penny stocks
+   (under $5) and thin stocks are skipped.
+5. *Act* through the engine's normal gates: Stop, arming, the risk rules, the
+   position cap and approval in semi-auto. At most two news trades are open at
+   once; size grows with confidence (40% of a normal trade at 60% sure, a full
+   trade at 90%). A news trade ends at its time limit. A held stock that the
+   news hurts (with a red flag) is sold.
+
+Without an AI only clear first-order news is traded; second-order trades need
+the AI's reasoning. News older than 15 minutes is shown, never traded, and the
+bot does not buy news at the open. The minimum confidence (60%, 70% or 80%) and
+an on/off switch are on the Reflex screen.
+
+**Be honest about the odds.** Professional firms read the same headlines in
+microseconds; a bot polling every 15 seconds is late to most of them, which is
+why it refuses to chase. News trading is risky and can lose money. Run it on
+practice money first and judge it by its record.
+
 ## Desktop 4.0: Stop that stops, plain words, two editions
 
 **Stop.** The red **STOP** switch is in the top bar on every screen. From the
@@ -577,7 +624,8 @@ app/
   risk/        sizing, stops, arm/disarm, daily loss kill switch
   engine/      the watchlist scanner, the Live feed's words, markets, backtester
   edition.py   personal vs pro: licence, Telegram, fixed safety limits
-  brain/       the five checks, SEC/news/alt-data sources, news radar, learning, the swarm
+  brain/       reflex.py (news reflex), wires.py (feeds), ripples.py (ripple map),
+               the five checks, SEC/news/alt-data sources, news radar, learning, the swarm
   common/      the Live step monitor, the encrypted key store, in-app restart
   mentor/      rule-based narrator + optional AI (Groq, Gemini, Ollama, Claude)
   notify/      Telegram bot and message formatting

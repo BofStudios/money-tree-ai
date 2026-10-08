@@ -55,6 +55,9 @@ class BrainSettings:
     discover: bool = True
     bots: int = field(default_factory=lambda: edition.limits().max_bots)
     power: str = "full"              # full / light
+    news_trading: bool = True        # the news reflex may buy and sell
+    news_max_positions: int = 2      # news trades open at once
+    news_min_confidence: float = 0.6 # how sure an idea must be before the bot buys
     warned: bool = False             # the start-up warning was acknowledged
 
     @staticmethod
@@ -166,6 +169,8 @@ class Brain:
                 s.quality_mode = "BALANCED"
             if s.power not in ("full", "light"):
                 s.power = "full"
+            s.news_max_positions = int(min(max(int(s.news_max_positions), 0), 5))
+            s.news_min_confidence = float(min(max(float(s.news_min_confidence), 0.5), 0.95))
             s.save(self.dir / "settings.json")
         if "bots" in changes or "self_improve" in changes:
             self._restart_swarm()

@@ -286,6 +286,8 @@ def main() -> None:
 
     engine.start()
     brain.start()
+    reflex = build_reflex(engine, brain, data, keys, claude, monitor, events)
+    reflex.start()
 
     if args.headless:
         if not brain.settings.warned:
@@ -297,6 +299,7 @@ def main() -> None:
         except KeyboardInterrupt:
             pass
         finally:
+            reflex.stop()
             brain.stop()
             engine.stop()
             telegram.stop()
@@ -320,6 +323,7 @@ def main() -> None:
     if not brain.settings.warned and not relaunched():
         choice = power_warning(brain.settings.bots, chosen.language == "tr")
         if choice is None:
+            reflex.stop()
             brain.stop()
             engine.stop()
             telegram.stop()
@@ -333,6 +337,7 @@ def main() -> None:
     window.show()
 
     exit_code = qt_app.exec()
+    reflex.stop()
     brain.stop()
     engine.stop()
     telegram.stop()
@@ -379,6 +384,18 @@ def _licensed(settings: Settings, headless: bool) -> bool:
 
     turkish = ProfileStore(settings.user_profile_path).get().language == "tr"
     return activate(lic, verdict, turkish)
+
+
+def build_reflex(engine, brain, data, keys, claude, monitor, events):
+    """The news reflex: official feeds with no key, plus Alpaca's wire when keys work."""
+    from app.brain.reflex import NewsReflex
+    from app.brain.wires import WireReader
+
+    reader = WireReader(alpaca=AlpacaNews(*keys) if keys else None)
+    reflex = NewsReflex(engine, reader, data, claude, lambda: brain.settings, lambda: engine.language == "tr",
+                        DATA_DIR / "brain" / "reflex.json", monitor, events)
+    engine.reflex = reflex
+    return reflex
 
 
 def build_brain(engine, data, keys, claude, monitor, events, risk, mentor) -> Brain:

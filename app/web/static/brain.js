@@ -45,7 +45,8 @@ const day = (sec) => new Date(sec * 1000).toLocaleDateString(locale(), { day: "n
 
 let brain = null;
 let swarm = null;
-let brainTab = "picks";
+let brainTab = "reflex";
+let reflex = null;
 let openCard = null;
 let view = "home";
 
@@ -65,7 +66,8 @@ function renderBrain() {
   document.querySelectorAll("#brainTabs [data-brain-tab]").forEach((b) =>
     b.classList.toggle("on", b.dataset.brainTab === brainTab));
   const body = $("brainBody");
-  if (brainTab === "news") body.innerHTML = newsTab();
+  if (brainTab === "reflex") body.innerHTML = reflexTab();
+  else if (brainTab === "news") body.innerHTML = newsTab();
   else if (brainTab === "learning") body.innerHTML = learningTab();
   else if (brainTab === "gates") body.innerHTML = gatesTab();
   else body.innerHTML = picksTab();
@@ -262,6 +264,71 @@ function learningTab() {
     <button class="ghost danger-text" data-brain-forget>${esc(t("brain.forget"))}</button>`;
 }
 
+/* ================================================================ reflex */
+
+async function loadReflex() {
+  try {
+    reflex = await api("GET", "/api/reflex");
+    if (view === "brain" && brainTab === "reflex") renderBrain();
+  } catch (err) {
+    reflex = { error: err.message };
+  }
+}
+
+const ACTION_TONE = { bought: "up", sold: "down", waiting: "accent", watch: "accent", skip: "faint", old: "faint", off: "faint" };
+
+function reflexTab() {
+  if (!reflex) return `<div class="fl-card"><p class="note">${esc(t("reflex.loading"))}</p></div>`;
+  if (reflex.error) return `<div class="fl-card danger"><p class="note">${esc(reflex.error)}</p></div>`;
+  const set = reflex.settings || {};
+  const ok = (reflex.sources || []).filter((s) => s.ok).length;
+  const head = `
+    <div class="fl-card glow rx-head">
+      <div class="rx-top">
+        <span class="label accent"><i class="pulse ${set.news_trading ? "on" : ""}"></i>${esc(t(set.news_trading ? "reflex.on" : "reflex.off"))}</span>
+        <label class="gate rx-switch"><input type="checkbox" data-brain-set="news_trading" ${set.news_trading ? "checked" : ""}><span class="switch"></span></label>
+      </div>
+      <p class="rx-lead">${esc(t("reflex.lead"))}</p>
+      <div class="rx-stats">
+        <div><b class="mono">${ok}/${(reflex.sources || []).length}</b><span>${esc(t("reflex.sources"))}</span></div>
+        <div><b class="mono">${reflex.read || 0}</b><span>${esc(t("reflex.read"))}</span></div>
+        <div><b class="mono">${(reflex.news_positions || []).length}/${set.news_max_positions ?? 2}</b><span>${esc(t("reflex.open"))}</span></div>
+        <div><b class="mono">${reflex.ai ? "AI" : "—"}</b><span>${esc(t(reflex.ai ? "reflex.aiOn" : "reflex.aiOff"))}</span></div>
+      </div>
+      <div class="rx-sources">${(reflex.sources || []).map((s) => `
+        <span class="pill ${s.ok ? "up" : s.ok === false ? "down" : "faint"}" title="${esc(s.error || "")}">${esc(s.name)}</span>`).join("")}</div>
+      <div class="seg-row rx-conf">${[0.6, 0.7, 0.8].map((c) => `
+        <button class="seg ${Math.abs((set.news_min_confidence ?? 0.6) - c) < 0.01 ? "active" : ""}" data-reflex-conf="${c}">${esc(t("reflex.conf", { n: Math.round(c * 100) }))}</button>`).join("")}</div>
+      <p class="note faint">${esc(t("reflex.confHint"))}</p>
+    </div>`;
+  const pending = (reflex.pending || []).map((p) => `
+    <div class="fl-card accent-border"><b>${esc(p.symbol)}</b> <span class="note">${esc(t("reflex.waiting"))}</span>
+      <p class="small faint">${esc(p.title)}</p></div>`).join("");
+  const cards = (reflex.decisions || []).map(reflexCard).join("")
+    || `<div class="fl-card"><p class="note">${esc(t("reflex.empty"))}</p></div>`;
+  return head + pending + cards;
+}
+
+function reflexCard(d) {
+  const best = (d.ideas || []).slice(0, 6);
+  const out = (d.outcome || []);
+  const top = out.find((o) => o.action === "bought" || o.action === "sold");
+  return `<article class="fl-card rx-card ${top ? (top.action === "bought" ? "hot" : "danger") : ""}">
+    <div class="rx-meta"><span class="pill">${esc(d.source)}</span><span class="mono faint small">${esc(ago(d.published))}</span>
+      ${d.ai ? `<span class="pill accent">AI</span>` : ""}</div>
+    <a class="rx-title" href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.title)}</a>
+    ${d.event ? `<p class="rx-event">${esc(d.event)}${(d.themes || []).length ? " · " + esc(d.themes.join(", ")) : ""}</p>` : ""}
+    ${(d.steps || []).length > 1 ? `<ol class="rx-steps">${d.steps.slice(1).map((s) => `<li>${esc(s)}</li>`).join("")}</ol>` : ""}
+    ${best.length ? `<div class="rx-ideas">${best.map((i) => `
+      <div class="rx-idea"><b class="mono">${esc(i.symbol)}</b>
+        <span class="${i.effect > 0 ? "up" : "down"}">${i.effect > 0 ? "▲" : "▼"}</span>
+        <span class="rx-bar"><i style="width:${Math.round(i.confidence * 100)}%"></i></span>
+        <span class="mono small">${Math.round(i.confidence * 100)}%</span>
+        <span class="small faint rx-why">${esc(i.why)}</span></div>`).join("")}</div>` : ""}
+    ${out.map((o) => `<p class="rx-out ${ACTION_TONE[o.action] || ""}">${esc(o.why)}</p>`).join("")}
+  </article>`;
+}
+
 function gatesTab() {
   const s = brain.settings;
   const toggle = (key, title, hint) => `
@@ -272,6 +339,7 @@ function gatesTab() {
       <div class="seg-row">${["STRICT", "BALANCED", "OFF"].map((m) => `
         <button class="seg ${s.quality_mode === m ? "active" : ""}" data-brain-mode="${m}">${esc(t(`brain.mode.${m}`))}</button>`).join("")}</div>
       <p class="note faint">${esc(t(`brain.modeHint.${s.quality_mode}`))}</p>
+      ${toggle("news_trading", "reflex.gate", "reflex.gateHint")}
       ${toggle("news_check", "brain.g.news", "brain.g.newsHint")}
       ${toggle("learning", "brain.g.learn", "brain.g.learnHint")}
       ${toggle("ai_check", "brain.g.ai", "brain.g.aiHint")}
@@ -402,7 +470,9 @@ function promotion(p) {
 
 document.addEventListener("click", async (e) => {
   const tab = e.target.closest("[data-brain-tab]");
-  if (tab) { brainTab = tab.dataset.brainTab; renderBrain(); return; }
+  if (tab) { brainTab = tab.dataset.brainTab; renderBrain(); if (brainTab === "reflex") loadReflex(); return; }
+  const conf = e.target.closest("[data-reflex-conf]");
+  if (conf) { await setBrain({ news_min_confidence: Number(conf.dataset.reflexConf) }); loadReflex(); return; }
   const card = e.target.closest("[data-card]");
   if (card && view === "brain") { openCard = openCard === card.dataset.card ? null : card.dataset.card; renderBrain(); return; }
   const mode = e.target.closest("[data-brain-mode]");
@@ -438,12 +508,17 @@ let timer = null;
 window.addEventListener("mt:view", (e) => {
   view = e.detail;
   clearInterval(timer);
-  if (view === "brain") { loadBrain(); timer = setInterval(loadBrain, 15000); }
+  if (view === "brain") {
+    loadBrain(); loadReflex();
+    let n = 0;
+    timer = setInterval(() => { loadReflex(); if (++n % 3 === 0) loadBrain(); }, 5000);
+  }
   if (view === "swarm") { loadSwarm(); timer = setInterval(loadSwarm, 2500); }
 });
 window.addEventListener("mt:lang", () => { if (view === "brain") renderBrain(); if (view === "swarm") renderSwarm(); });
 window.addEventListener("mt:ws", (e) => {
   const type = e.detail.type;
+  if (type === "reflex" && view === "brain") loadReflex();
   if (type === "brain_promotion" || type === "brain_found") {
     window.showAlert?.({ tone: "good", title: e.detail.title || "", body: e.detail.text || "" });
   }
