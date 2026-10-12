@@ -29,13 +29,16 @@ def _mark(step: str, shown: str | None = None) -> None:
 
         startup.message(shown)
 
-# The dashboard window runs without the graphics card. Over an hour or two the
-# GPU process of QtWebEngine can lose its context and leave a grey window; the
-# page here is light enough for software drawing.
-_flags = os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", "")
-if "--disable-gpu" not in _flags:
-    os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (_flags + " --disable-gpu --disable-gpu-compositing"
-                                                 " --disable-gpu-rasterization").strip()
+# The dashboard draws with the graphics card: 60 fps, against 4 to 19 fps in
+# software (measured 2026-10-12; ultra's red edge was the heaviest). Only if the
+# GPU really crashed last time does this copy draw in software (data/gpu.off,
+# written by the window); delete that file to try the GPU again.
+from app.common import startup as _gpu_check  # noqa: E402
+
+if _gpu_check.software_rendering():
+    _flags = os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", "")
+    if "--disable-gpu" not in _flags:
+        os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (_flags + " --disable-gpu --disable-gpu-compositing").strip()
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable

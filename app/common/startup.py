@@ -143,6 +143,27 @@ def close(window=None) -> None:
     _splash = None
 
 
+def _data_dir() -> str:
+    if getattr(sys, "frozen", False):
+        return os.path.join(os.path.dirname(os.path.abspath(sys.executable)), "data")
+    return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
+
+
+def software_rendering() -> bool:
+    """True after the GPU crashed the window (data/gpu.off), or when asked for."""
+    return os.environ.get("MONEYTREE_SOFTWARE_GL") == "1" or os.path.exists(os.path.join(_data_dir(), "gpu.off"))
+
+
+def mark_gpu_broken(why: str) -> None:
+    try:
+        os.makedirs(_data_dir(), exist_ok=True)
+        with open(os.path.join(_data_dir(), "gpu.off"), "w", encoding="utf-8") as f:
+            f.write(f"The window's GPU drawing crashed ({why}). This copy draws in software from the next start.\n"
+                    "Delete this file to use the graphics card again.\n")
+    except OSError:
+        pass
+
+
 def request_focus() -> bool:
     if focus_hook is None:
         return False

@@ -103,6 +103,12 @@ class MainWindow(QMainWindow):
 
     def _page_died(self, status, code) -> None:
         log.warning("the dashboard page stopped (%s, code %s); reloading", status, code)
+        from app.common import startup
+
+        # Twice in one session is not chance: draw in software from the next start.
+        self._deaths = getattr(self, "_deaths", 0) + 1
+        if self._deaths >= 2 and not startup.software_rendering():
+            startup.mark_gpu_broken(f"{status}, code {code}")
         QTimer.singleShot(800, self._reload)
 
     def _load_changed(self, info) -> None:
