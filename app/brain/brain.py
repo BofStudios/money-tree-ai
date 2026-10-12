@@ -58,6 +58,8 @@ class BrainSettings:
     news_trading: bool = True        # the news reflex may buy and sell
     news_max_positions: int = 2      # news trades open at once
     news_min_confidence: float = 0.6 # how sure an idea must be before the bot buys
+    ultra: bool = False              # every core, the world's feeds, a scan every 15 seconds
+    before_ultra: dict = field(default_factory=dict)   # what ultra changed, to put back
     warned: bool = False             # the start-up warning was acknowledged
 
     @staticmethod
@@ -109,6 +111,7 @@ class Brain:
         self._now = now
         self.settings = BrainSettings.load(self.dir / "settings.json")
         self.radar = NewsRadar(now)
+        self.on_ultra = None          # callback(bool): the engine's speed follows ultra
         self.learner = Learner()
         self.shadows = ShadowBook()
         self.swarm = Swarm(self.dir / "swarm.json", now)
@@ -160,6 +163,8 @@ class Brain:
 
     def apply_settings(self, changes: dict) -> BrainSettings:
         with self._lock:
+            if "ultra" in changes and bool(changes["ultra"]) != self.settings.ultra:
+                changes = {**changes, **self._ultra_changes(bool(changes["ultra"]))}
             for k, v in changes.items():
                 if k in BrainSettings.__dataclass_fields__:
                     setattr(self.settings, k, v)
@@ -172,11 +177,32 @@ class Brain:
             s.news_max_positions = int(min(max(int(s.news_max_positions), 0), 5))
             s.news_min_confidence = float(min(max(float(s.news_min_confidence), 0.5), 0.95))
             s.save(self.dir / "settings.json")
+        if "ultra" in changes and self.on_ultra is not None:
+            try:
+                self.on_ultra(self.settings.ultra)
+            except Exception:
+                log.exception("could not apply ultra mode to the engine")
         if "bots" in changes or "self_improve" in changes:
             self._restart_swarm()
         elif "power" in changes:
             self.swarm.set_duty(self._duty())
         return self.settings
+
+    def _ultra_changes(self, on: bool) -> dict:
+        """Ultra: a bot on every CPU core (up to the edition's cap), full power,
+        and room for four news trades. Off puts back what was there before."""
+        s = self.settings
+        if on:
+            import os
+
+            cores = os.cpu_count() or 4
+            return {"before_ultra": {"bots": s.bots, "power": s.power, "news_max_positions": s.news_max_positions,
+                                     "self_improve": s.self_improve},
+                    "bots": min(max(cores, 2), 16), "power": "full", "self_improve": True,
+                    "news_max_positions": max(s.news_max_positions, 4)}
+        back = dict(s.before_ultra or {})
+        return {**{k: v for k, v in back.items() if k in ("bots", "power", "news_max_positions", "self_improve")},
+                "before_ultra": {}}
 
     def _duty(self) -> float:
         return 1.0 if self.settings.power == "full" else 0.15
@@ -699,6 +725,7 @@ class Brain:
                 "plans": self.plans,
                 "ciks": {k: f"{v[0]}|{v[1]}" for k, v in (self.sec.ciks.items() if self.sec else [])},
             }
+            self.dir.mkdir(parents=True, exist_ok=True)
             tmp = self.dir / "brain.tmp"
             tmp.write_text(json.dumps(doc, default=_json_default), encoding="utf-8")
             tmp.replace(self.dir / "brain.json")

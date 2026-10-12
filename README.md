@@ -25,6 +25,33 @@ money is at risk, and because a new Alpaca live account cannot trade until it
 is funded. (Midas signal mode was removed in 4.0: an old config that still says
 `signal` starts on practice money.)
 
+## Desktop 5.0: Ultra mode, and a window that does not go grey
+
+**Ultra mode** (Settings, top). The strongest setting, behind a red warning
+that needs a tick: a strategy bot on every CPU core at full power, 13 more
+world sources (the ECB, Bank of England and Bank of Japan, the SEC, FDA, US
+Trade Representative, EIA and Energy Department, Pentagon contracts, and the
+Apple, Microsoft, Google and OpenAI newsrooms), news checks three times as
+often (Alpaca every 4 seconds, no public feed faster than every 10), a market
+look every 15 seconds, room for four news trades and three times the AI
+thinking. The app takes a red edge and an ULTRA badge. Turning it off puts
+every setting back. Ultra never changes Stop, the arming of real money or the
+risk limits, and faster does not mean more profit.
+
+**Fixed**
+- *Several copies at once.* A slow start made people click again; the copies
+  fought over port 8765 and the window of the losing copy went grey. Now a
+  second launch shows the running window and quits (a Windows mutex per port,
+  `app/common/startup.py`).
+- *Nothing on screen for many seconds.* A splash with the logo and what is
+  loading appears in the first second, before the heavy imports. The 15-second
+  port wait now happens only after an in-app restart.
+- *The AI kept calling a provider with no credit.* A provider that is out of
+  credit, refuses its key or is rate limited is benched for a while and the
+  next working one answers (Settings shows which, and why).
+- *The window going grey after an hour or two* (4.1.1): drawn without the GPU,
+  reloaded when its page crashes, watched every 30 seconds.
+
 ## Desktop 4.1: the news reflex
 
 The bot reads breaking news every 15 seconds and can trade on it within

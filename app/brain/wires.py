@@ -72,6 +72,25 @@ FEEDS = (
     Feed("Business Wire", "https://feed.businesswire.com/rss/home/?rss=G1QFDERJXkJeGVtRWA==", "company", 30),
 )
 
+# Ultra mode adds the world: central banks, US agencies and the big tech
+# newsrooms. All tested 2026-10-12, all official and machine-readable.
+ULTRA_FEEDS = (
+    Feed("ECB", "https://www.ecb.europa.eu/rss/press.html", "fed", 30),
+    Feed("Bank of England", "https://www.bankofengland.co.uk/rss/news", "fed", 30),
+    Feed("Bank of Japan", "https://www.boj.or.jp/en/rss/whatsnew.xml", "fed", 45),
+    Feed("SEC press", "https://www.sec.gov/news/pressreleases.rss", "gov", 45),
+    Feed("FDA", "https://www.fda.gov/about-fda/contact-fda/stay-informed/rss-feeds/press-releases/rss.xml", "gov", 45),
+    Feed("US Trade Representative", "https://ustr.gov/rss.xml", "gov", 45),
+    Feed("US Energy (EIA)", "https://www.eia.gov/rss/todayinenergy.xml", "gov", 60),
+    Feed("US Energy Dept", "https://www.energy.gov/rss.xml", "gov", 60),
+    Feed("Pentagon", "https://www.defense.gov/DesktopModules/ArticleCS/RSS.ashx?ContentType=1&Site=945&max=10",
+         "gov", 45),
+    Feed("Apple newsroom", "https://www.apple.com/newsroom/rss-feed.rss", "company", 45, ("AAPL",)),
+    Feed("Microsoft news", "https://news.microsoft.com/feed/", "company", 45, ("MSFT",)),
+    Feed("Google", "https://blog.google/rss/", "company", 60, ("GOOGL",)),
+    Feed("OpenAI", "https://openai.com/news/rss.xml", "company", 60),
+)
+
 # "(NASDAQ: MU)", "(NYSE: ETN)", "Nasdaq: NVDA", "(NYSE American: XYZ)", "(OTCQB: ...)" is ignored.
 _TICKER = re.compile(
     r"\b(?:NASDAQ|Nasdaq|NYSE|NYSE American|NYSE Arca|Nasdaq GS|Nasdaq GM|Nasdaq CM|CBOE|Cboe)\s*:\s*"
@@ -177,6 +196,8 @@ class WireReader:
         self.backlog = backlog                       # older than start minus this: never reported
         self.alpaca_every = alpaca_every
         self.state: dict[str, SourceState] = {f.name: SourceState(f.name) for f in self.feeds}
+        self.base_feeds = list(self.feeds)
+        self.ultra = False
         if alpaca is not None and getattr(alpaca, "available", False):
             self.state["Alpaca news"] = SourceState("Alpaca news")
         self._alpaca_since: float | None = None
@@ -186,6 +207,26 @@ class WireReader:
         r = self._http.get(url, headers=headers, timeout=TIMEOUT)
         return r.status_code, r.content if r.status_code == 200 else b"", r.headers.get("ETag")
 
+    def set_ultra(self, on: bool) -> None:
+        """Ultra reads the world feeds too, and every source three times as often
+        (never more than once every 10 seconds: these are public servers)."""
+        if on == self.ultra:
+            return
+        self.ultra = on
+        if on:
+            self.feeds = self.base_feeds + [f for f in ULTRA_FEEDS if f.name not in {b.name for b in self.base_feeds}]
+            for f in self.feeds:
+                self.state.setdefault(f.name, SourceState(f.name))
+                self._next[f.name] = 0
+        else:
+            names = {f.name for f in self.base_feeds}
+            self.feeds = list(self.base_feeds)
+            for k in [k for k in self.state if k not in names and k != "Alpaca news"]:
+                del self.state[k]
+
+    def _every(self, feed: Feed) -> float:
+        return max(10.0, feed.every / 3) if self.ultra else feed.every
+
     def poll(self) -> list[Headline]:
         """Every source that is due. Returns new headlines, oldest first."""
         now = self._now()
@@ -193,7 +234,7 @@ class WireReader:
         for feed in self.feeds:
             if now < self._next.get(feed.name, 0):
                 continue
-            self._next[feed.name] = now + feed.every
+            self._next[feed.name] = now + self._every(feed)
             st = self.state[feed.name]
             try:
                 code, body, etag = self._get(feed.url, self._etag.get(feed.name))
@@ -211,7 +252,7 @@ class WireReader:
                 st.ok, st.last_read, st.error = False, now, str(exc)[:120]
                 self._next[feed.name] = now + max(feed.every, 120)    # back off
         if "Alpaca news" in self.state and now >= self._next.get("Alpaca news", 0):
-            self._next["Alpaca news"] = now + self.alpaca_every
+            self._next["Alpaca news"] = now + (4.0 if self.ultra else self.alpaca_every)
             st = self.state["Alpaca news"]
             try:
                 since = self._alpaca_since or (self._started - self.backlog)

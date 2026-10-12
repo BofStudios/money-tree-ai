@@ -4,7 +4,7 @@ import logging
 import secrets
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 
 from app.catalysts.manager import CatalystManager, parse_date
 from app.catalysts.news import NewsFeed
@@ -371,6 +371,16 @@ def build_router(
         }
 
     # ----------------------------------------------------------------- actions
+
+    @router.post("/focus")
+    def focus(request: Request) -> dict:
+        """A second launch of the app asks this copy to show its window. Only
+        from this PC, and it can do nothing else."""
+        if (request.client.host if request.client else "") not in ("127.0.0.1", "::1", "localhost"):
+            raise HTTPException(status_code=403, detail="only from this PC")
+        from app.common import startup
+
+        return {"ok": startup.request_focus()}
 
     @router.post("/ask", dependencies=guarded)
     def ask(question: str = Body(..., embed=True)) -> dict:

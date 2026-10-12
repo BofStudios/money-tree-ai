@@ -57,6 +57,7 @@ class MainWindow(QMainWindow):
 
     # Emitted from other threads (web server, engine); Qt delivers them on the window's.
     restart_requested = Signal()
+    focus_requested = Signal()
     notify_requested = Signal(str, str)
 
     def __init__(
@@ -73,7 +74,7 @@ class MainWindow(QMainWindow):
 
         money = {"alpaca_live": "REAL MONEY", "alpaca_paper": "Alpaca paper",
                  "simulation": "simulation"}.get(engine.executor.broker, engine.mode)
-        self.setWindowTitle(f"{APP_NAME} — {money}")
+        self.setWindowTitle(f"{APP_NAME} — {money}" + (" — ULTRA" if getattr(engine, "ultra", False) else ""))
         self.resize(1480, 960)
         self.setWindowIcon(_app_icon())
 
@@ -95,6 +96,7 @@ class MainWindow(QMainWindow):
 
         self._build_tray()
         self.restart_requested.connect(self._restart_now)
+        self.focus_requested.connect(self._show_window)
         self.notify_requested.connect(self._notify)
         if events is not None:
             events.subscribe(self._on_event)

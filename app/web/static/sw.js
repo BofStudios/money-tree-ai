@@ -10,11 +10,11 @@
  *            a stale cache.
  */
 
-const CACHE = "mt-shell-v4";
+const CACHE = "mt-shell-v5";
 const SHELL = [
   "/", "/index.html", "/dashboard.css", "/research.css", "/live.css",
   "/chart.js", "/research.js", "/home.js", "/home.css", "/i18n.js", "/logo.png",
-  "/live.js", "/money.js", "/brain.js", "/brain.css", "/theme.css", "/mark.svg",
+  "/live.js", "/money.js", "/brain.js", "/brain.css", "/theme.css", "/mark.svg", "/ultra.js",
   "/vendor/lightweight-charts.js",
 ];
 

@@ -14,7 +14,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
 LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost"}
 SETTABLE = {"quality_mode", "news_check", "learning", "ai_check", "self_improve", "discover", "bots", "power", "warned",
-            "news_trading", "news_max_positions", "news_min_confidence"}
+            "news_trading", "news_max_positions", "news_min_confidence", "ultra"}
 
 
 def build_brain_router(engine, token: str) -> APIRouter:

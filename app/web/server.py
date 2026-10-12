@@ -100,7 +100,12 @@ class WebServer:
     def start(self) -> None:
         # After an in-app restart the previous copy may still be letting go of
         # the port; give it a moment instead of failing to bind.
-        _wait_for_port(self.host, self.port, timeout=15.0)
+        # Only a restart has an old copy to wait for: the one-copy lock
+        # (app/common/startup.py) rules out a second running copy.
+        from app.common.restart import relaunched
+
+        if relaunched():
+            _wait_for_port(self.host, self.port, timeout=15.0)
         self._thread = threading.Thread(target=self._server.run, name="web-server", daemon=True)
         self._thread.start()
         log.info("dashboard serving on %s (and on your LAN IP for phones)", self.local_url)

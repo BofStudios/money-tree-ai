@@ -159,9 +159,14 @@ class NewsReflex:
                 self.tick()
             except Exception:
                 log.exception("news reflex tick failed")
-            self._stop.wait(5.0)
+            self._stop.wait(2.0 if self._ultra() else 5.0)
+
+    def _ultra(self) -> bool:
+        return bool(getattr(self.settings_fn(), "ultra", False))
 
     def tick(self) -> None:
+        if hasattr(self.reader, "set_ultra"):
+            self.reader.set_ultra(self._ultra())
         fresh = self.reader.poll()
         self.last_poll = self._now()
         for h in fresh:
@@ -254,7 +259,7 @@ class NewsReflex:
             return None
         now = self._now()
         self._ai_calls = [t for t in self._ai_calls if now - t < 600]
-        if len(self._ai_calls) >= AI_BUDGET:
+        if len(self._ai_calls) >= (AI_BUDGET * 3 if self._ultra() else AI_BUDGET):
             return None
         self._ai_calls.append(now)
         turkish = self.turkish_fn()
@@ -349,7 +354,8 @@ class NewsReflex:
             return
         for idea in buys:
             with self._lock:
-                self.pending.append(Pending(idea, d, h.published, now + CONFIRM_WINDOW))
+                self.pending.append(Pending(idea, d, h.published,
+                                            now + (CONFIRM_WINDOW / 2 if self._ultra() else CONFIRM_WINDOW)))
             d.outcome.append({"symbol": idea.symbol, "action": "watch",
                               "why": self.t(f"{idea.symbol}: {idea.confidence:.0%} sure. The bot waits for the price to agree.",
                                             f"{idea.symbol}: %{idea.confidence * 100:.0f} emin. Bot fiyatın onaylamasını bekler.")})
@@ -408,7 +414,7 @@ class NewsReflex:
             self._finish(p, "skip", self.t(f"{sym}: {move:.1f}% since the news. The market does not agree.",
                                            f"{sym}: haberden beri %{move:.1f}. Piyasa katılmıyor."))
             return True
-        if move < MIN_MOVE:
+        if move < (MIN_MOVE * 0.67 if self._ultra() else MIN_MOVE):
             return False
         reason = f"news: {(p.decision.event or p.decision.title)[:70]}"
         result = self.engine.news_buy(sym, reason, conf_size(p.idea.confidence), p.idea.hours)
@@ -458,6 +464,7 @@ class NewsReflex:
                 "last_poll": self.last_poll,
                 "ai": bool(self.ai is not None and getattr(self.ai, "available", False)),
                 "news_positions": self.engine.news_positions(),
+                "ultra": self._ultra(),
             }
 
     def _save(self) -> None:

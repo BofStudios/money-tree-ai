@@ -18,6 +18,7 @@ HTTP so the project does not grow three more dependencies.
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 
 import httpx
@@ -40,6 +41,26 @@ DEFAULT_MODELS = {
 }
 
 FREE = ("ollama", "gemini", "groq")
+
+
+class Benched:
+    """A provider that cannot answer for a while: no credit, a refused key,
+    a rate limit. available() says False until the time is up, so callers
+    fall back to the next provider instead of failing the same way again."""
+
+    dead_until: float = 0.0
+    dead_why: str = ""
+
+    def bench(self, seconds: float, why: str) -> None:
+        first = time.time() >= self.dead_until
+        self.dead_until = time.time() + seconds
+        self.dead_why = why
+        if first:
+            log.warning("%s: %s; trying other providers for %d minutes", getattr(self, "name", "ai"), why, seconds // 60)
+
+    @property
+    def benched(self) -> bool:
+        return time.time() < self.dead_until
 
 
 @dataclass
@@ -106,7 +127,7 @@ class OllamaProvider:
 # --------------------------------------------------------------------- gemini
 
 
-class GeminiProvider:
+class GeminiProvider(Benched):
     """Google's free tier. Get a key at aistudio.google.com — no card needed."""
 
     name = "gemini"
@@ -118,7 +139,7 @@ class GeminiProvider:
         self.model = model or DEFAULT_MODELS["gemini"]
 
     def available(self) -> bool:
-        return bool(self.api_key)
+        return bool(self.api_key) and not self.benched
 
     def chat(self, system: str, messages: list[dict], max_tokens: int) -> Reply | None:
         # Gemini calls the assistant "model" and keeps the system prompt apart.
@@ -141,7 +162,10 @@ class GeminiProvider:
                 timeout=TIMEOUT,
             )
             if r.status_code == 429:
-                log.warning("gemini: free-tier rate limit hit, skipping this one")
+                self.bench(120, "free-tier rate limit")
+                return None
+            if r.status_code in (400, 401, 403) and "key" in r.text.lower():
+                self.bench(3600, "the API key was refused")
                 return None
             r.raise_for_status()
             candidates = r.json().get("candidates") or []
@@ -158,7 +182,7 @@ class GeminiProvider:
 # ----------------------------------------------------------------------- groq
 
 
-class GroqProvider:
+class GroqProvider(Benched):
     """Groq's free tier — an OpenAI-shaped API. Key at console.groq.com."""
 
     name = "groq"
@@ -170,7 +194,7 @@ class GroqProvider:
         self.model = model or DEFAULT_MODELS["groq"]
 
     def available(self) -> bool:
-        return bool(self.api_key)
+        return bool(self.api_key) and not self.benched
 
     def chat(self, system: str, messages: list[dict], max_tokens: int) -> Reply | None:
         try:
@@ -185,7 +209,10 @@ class GroqProvider:
                 timeout=TIMEOUT,
             )
             if r.status_code == 429:
-                log.warning("groq: free-tier rate limit hit, skipping this one")
+                self.bench(90, "free-tier rate limit")
+                return None
+            if r.status_code in (401, 403):
+                self.bench(3600, "the API key was refused")
                 return None
             r.raise_for_status()
             choices = r.json().get("choices") or []
@@ -199,7 +226,7 @@ class GroqProvider:
 # ------------------------------------------------------------------ anthropic
 
 
-class AnthropicProvider:
+class AnthropicProvider(Benched):
     """Claude. The only paid option here, and the strongest."""
 
     name = "anthropic"
@@ -218,7 +245,7 @@ class AnthropicProvider:
                 log.exception("could not start the Anthropic client")
 
     def available(self) -> bool:
-        return self._client is not None
+        return self._client is not None and not self.benched
 
     def chat(self, system: str, messages: list[dict], max_tokens: int) -> Reply | None:
         if not self._client:
@@ -237,10 +264,20 @@ class AnthropicProvider:
                 messages=messages,
             )
         except anthropic.AuthenticationError:
-            log.warning("anthropic: the API key was rejected")
+            self.bench(3600, "the API key was refused")
             return None
         except anthropic.RateLimitError:
-            log.warning("anthropic: rate limited, skipping this one")
+            self.bench(120, "rate limited")
+            return None
+        except anthropic.BadRequestError as exc:
+            text = str(exc).lower()
+            if "credit balance" in text or "billing" in text:
+                self.bench(1800, "the account has no credit left")
+            else:
+                log.warning("anthropic: request refused: %s", str(exc)[:160])
+            return None
+        except anthropic.PermissionDeniedError:
+            self.bench(3600, "the key has no permission")
             return None
         except Exception:
             log.exception("anthropic call failed")

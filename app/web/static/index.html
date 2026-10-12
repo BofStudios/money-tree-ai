@@ -44,6 +44,7 @@
 
 <!-- Typed confirmation before real money; drawn by money.js. -->
 <div class="onboard" id="confirmReal" hidden role="dialog" aria-modal="true"></div>
+<div class="onboard" id="ultraModal" hidden role="dialog" aria-modal="true"></div>
 
 <!-- Shown while the app restarts on new keys or another money mode. -->
 <div class="boot restart-overlay" id="restartOverlay" hidden>
@@ -105,6 +106,7 @@
         <span class="top-mode" id="modeChip">—</span>
         <!-- The bot's one switch. Stop wins at once; the server refuses every
              later order. Always on screen, on every tab. -->
+        <button class="ultra-badge" id="ultraBadge" hidden title="Ultra">ULTRA</button>
         <button class="halt-btn" id="haltBtn" data-state="on" aria-live="polite">
           <i class="halt-led"></i><span id="haltLabel">STOP</span>
         </button>
@@ -481,6 +483,22 @@
       <section class="view" data-view="settings">
         <div class="block-head standalone"><h2 data-i18n="settings.title"></h2></div>
 
+        <!-- Ultra mode: the whole computer, the world's news, faster looks (ultra.js). -->
+        <section class="block ultra-block" id="sUltraBlock">
+          <div class="ultra-card">
+            <div class="ultra-card-head">
+              <span class="ultra-mark">ULTRA</span>
+              <div><b data-i18n="ultra.title">Ultra mode</b><small id="ultraState"></small></div>
+            </div>
+            <p data-i18n="ultra.body"></p>
+            <ul class="ultra-list">
+              <li data-i18n="ultra.f1"></li><li data-i18n="ultra.f2"></li>
+              <li data-i18n="ultra.f3"></li><li data-i18n="ultra.f4"></li>
+            </ul>
+            <button class="ultra-btn" id="ultraToggle"></button>
+          </div>
+        </section>
+
         <!-- Which account the bot trades, and the keys for it; drawn by money.js. -->
         <section class="block money-block" id="sMoneyBlock">
           <div class="block-head"><h2 data-i18n="sm.title">Money &amp; keys</h2></div>
@@ -622,6 +640,7 @@
 <script type="module" src="/home.js"></script>
 <script type="module" src="/live.js"></script>
 <script type="module" src="/money.js"></script>
+<script type="module" src="/ultra.js"></script>
 <script type="module" src="/brain.js"></script>
 <script>
   // Service workers only run in a secure context: https, or localhost. Over

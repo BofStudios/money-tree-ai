@@ -7,12 +7,27 @@ if __name__ == "__main__":
     # copy of it: hand those straight to multiprocessing, before the heavy
     # imports below, so a bot loads only what it needs.
     multiprocessing.freeze_support()
+    # One copy only, and the logo on screen before the slow imports below.
+    from app.common import startup as _startup
+    _startup.early()
 
 import argparse
 import logging
 import os
 import socket
 import sys
+import time
+
+_T0 = time.perf_counter()
+
+
+def _mark(step: str, shown: str | None = None) -> None:
+    """How long start-up takes, step by step (logs/bot.log), and what the splash says."""
+    logging.getLogger("app.startup").info("startup %-22s %5.2fs", step, time.perf_counter() - _T0)
+    if shown:
+        from app.common import startup
+
+        startup.message(shown)
 
 # The dashboard window runs without the graphics card. Over an hour or two the
 # GPU process of QtWebEngine can lose its context and leave a grey window; the
@@ -180,6 +195,7 @@ def main() -> None:
 
     setup_logging(LOG_DIR)
     _taskbar_identity()
+    _mark("imports done", "Reading your settings")
     settings = load_settings()
     for change in edition.clamp_risk(settings.app.risk):
         log.info("%s edition limit: %s", edition.NAME, change)
@@ -210,7 +226,9 @@ def main() -> None:
         rsi_oversold=strategy_config.rsi_oversold,
     )
 
+    _mark("settings", "Connecting to the broker")
     brokerage = build_executor(settings, events)
+    _mark("broker checked", "Building the engine")
     executor, notice = brokerage.executor, brokerage.notice
     keys = data_keys(settings, brokerage)
     data = build_data_source(keys)
@@ -243,7 +261,9 @@ def main() -> None:
     news = NewsFeed(*(keys or ("", "")))
     engine.news = news
     engine.explainer = claude
+    _mark("engine built", "Waking the research desk")
     brain = build_brain(engine, data, keys, claude, monitor, events, risk, mentor)
+    _mark("brain built", "Starting the dashboard")
 
     # Company research runs off its own free provider and its own daily candles,
     # so it works before any brokerage key is saved.
@@ -287,6 +307,7 @@ def main() -> None:
     )
     web = WebServer(api, settings.app.web.host, settings.app.web.port)
     web.start()
+    _mark("web serving", "Starting the bots")
 
     suffix = f"?token={token}" if token else ""
     phone_url = f"http://{lan_ip()}:{settings.app.web.port}/{suffix}"
@@ -296,6 +317,7 @@ def main() -> None:
     brain.start()
     reflex = build_reflex(engine, brain, data, keys, claude, monitor, events)
     reflex.start()
+    _mark("threads started", "Opening the window")
 
     if args.headless:
         if not brain.settings.warned:
@@ -327,8 +349,10 @@ def main() -> None:
     from app.gui.main_window import _app_icon
     qt_app.setWindowIcon(_app_icon())
 
+    from app.common import startup
     from app.gui.warning import power_warning
     if not brain.settings.warned and not relaunched():
+        startup.close()
         choice = power_warning(brain.settings.bots, chosen.language == "tr")
         if choice is None:
             reflex.stop()
@@ -341,8 +365,11 @@ def main() -> None:
         brain.apply_settings({"bots": bots, "power": power, "warned": remember})
 
     window = MainWindow(engine, f"{web.local_url}/{suffix}", phone_url, events)
+    startup.focus_hook = window.focus_requested.emit
+    _mark("window shown")
     restarter.on_request(window.restart_requested.emit)
     window.show()
+    startup.close(window)
 
     exit_code = qt_app.exec()
     reflex.stop()
@@ -388,7 +415,10 @@ def _licensed(settings: Settings, headless: bool) -> bool:
         print("This copy is not activated. Open the app once with its window to enter the licence key.",
               file=sys.stderr)
         return False
+    from app.common import startup
     from app.gui.license import activate
+
+    startup.close()
 
     turkish = ProfileStore(settings.user_profile_path).get().language == "tr"
     return activate(lic, verdict, turkish)
@@ -419,6 +449,9 @@ def build_brain(engine, data, keys, claude, monitor, events, risk, mentor) -> Br
     brain.timeframe_fn = lambda: engine.timeframe
     brain.turkish_fn = lambda: engine.language == "tr"
     brain.risk_fn = lambda: (risk.config.min_stop_pct, risk.config.max_stop_pct)
+    brain.on_ultra = engine.set_ultra
+    if brain.settings.ultra:
+        engine.set_ultra(True)
 
     def promoted(p) -> None:
         w = BrainWords(engine.language == "tr")

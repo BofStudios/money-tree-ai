@@ -22,7 +22,7 @@ from app.config import FROZEN, PROJECT_ROOT
 
 log = logging.getLogger(__name__)
 
-RELAUNCHED = "MONEYTREE_RELAUNCHED"
+from app.common.startup import RELAUNCHED  # noqa: E402  (one name for both)
 
 
 class Restarter:

@@ -345,6 +345,15 @@ class PortfolioEngine:
             price = position.current_price or position.entry_price
             return "sold" if self._exit(position, price, reason, w) else "the sale failed"
 
+    def set_ultra(self, on: bool) -> None:
+        """Ultra looks every 15 seconds instead of the configured interval."""
+        if not hasattr(self, "_normal_interval"):
+            self._normal_interval = self.config.scan_interval_seconds
+        self.ultra = on
+        self.config.scan_interval_seconds = 15 if on else self._normal_interval
+        self.scan_now()
+        self.events.publish("status", self.status())
+
     def status_positions(self) -> list[dict]:
         with self._lock:
             return [{"symbol": s} for s in self._positions]
@@ -473,6 +482,8 @@ class PortfolioEngine:
             "halted": self._halted,
             "halted_at": self._halted_at.isoformat() if self._halted_at else None,
             "news_deadlines": dict(self._news_deadline),
+            "ultra": bool(getattr(self, "ultra", False)),
+            "scan_interval": self.config.scan_interval_seconds,
             "market": market.to_dict(),
             "balance": balance.to_dict(),
             "equity": round(balance.total, 2),
