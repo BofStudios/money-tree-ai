@@ -21,6 +21,7 @@ import time
 RELAUNCHED = "MONEYTREE_RELAUNCHED"
 
 _mutex = None
+MIGRATED: list[str] = []   # what home.migrate() copied on this start (logged by main)
 _app = None
 _splash = None
 focus_hook = None          # set by the window: show and raise it
@@ -83,6 +84,14 @@ def early(argv: list[str] | None = None) -> None:
         else:
             _ask_running_copy_to_show(port)
             sys.exit(0)
+    # Only the copy holding the lock may set up the shared home.
+    global MIGRATED
+    try:
+        from app.common import home
+
+        MIGRATED = home.migrate()
+    except Exception as exc:                          # never block start-up on it
+        MIGRATED = [f"failed: {exc}"]
     if "--headless" not in argv:
         _show_splash()
 
@@ -144,9 +153,9 @@ def close(window=None) -> None:
 
 
 def _data_dir() -> str:
-    if getattr(sys, "frozen", False):
-        return os.path.join(os.path.dirname(os.path.abspath(sys.executable)), "data")
-    return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
+    from app.common import home
+
+    return str(home.root() / "data")
 
 
 def software_rendering() -> bool:

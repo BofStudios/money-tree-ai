@@ -5,7 +5,7 @@ import logging
 from PySide6.QtCore import QPointF, QUrl, Qt, Signal
 from PySide6.QtGui import QAction, QColor, QDesktopServices, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtCore import QTimer
-from PySide6.QtWebEngineCore import QWebEnginePage
+from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import QMainWindow, QMenu, QMessageBox, QSystemTrayIcon
 
@@ -21,8 +21,11 @@ class _DashboardPage(QWebEnginePage):
     """The dashboard stays in the window; every other site opens in the
     system browser (Alpaca's funding pages, news articles, docs)."""
 
-    def __init__(self, home: QUrl, parent=None) -> None:
-        super().__init__(parent)
+    def __init__(self, home: QUrl, profile: QWebEngineProfile | None = None, parent=None) -> None:
+        if profile is not None:
+            super().__init__(profile, parent)
+        else:
+            super().__init__(parent)
         self._home = home
 
     def acceptNavigationRequest(self, url: QUrl, nav_type, is_main_frame: bool) -> bool:
@@ -80,7 +83,11 @@ class MainWindow(QMainWindow):
 
         home = QUrl(dashboard_url)
         self.view = QWebEngineView()
-        self.view.setPage(_DashboardPage(home, self.view))
+        # Owned by the application, so it outlives the page at exit.
+        from PySide6.QtWidgets import QApplication
+
+        self.profile = _profile(QApplication.instance())
+        self.view.setPage(_DashboardPage(home, self.profile, self.view))
         self.view.load(home)
         self.setCentralWidget(self.view)
         self._home = home
@@ -93,6 +100,7 @@ class MainWindow(QMainWindow):
         self._watchdog.timeout.connect(self._ping)
         self._watchdog.start()
         self._awaiting = False
+        self._missed = 0
 
         self._build_tray()
         self.restart_requested.connect(self._restart_now)
@@ -121,23 +129,32 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(3000, self._reload)
 
     def _ping(self) -> None:
-        """Every 30 seconds ask the page a question. No answer in 10 seconds
-        means it is frozen: reload it."""
-        if self._awaiting or not self.isVisible():
+        """Every 30 seconds ask the page a question. Two answers missed in a row
+        (20 seconds each) mean it is frozen: reload it. A minimised or hidden
+        window is never pinged: Windows may pause its page, which is not a hang."""
+        if self._awaiting or not self.isVisible() or self.isMinimized():
+            self._missed = 0
             return
         self._awaiting = True
 
         def answered(_result) -> None:
             self._awaiting = False
+            self._missed = 0
 
         def check() -> None:
-            if self._awaiting:
-                self._awaiting = False
-                log.warning("the dashboard page did not answer; reloading")
+            if not self._awaiting:
+                return
+            self._awaiting = False
+            if self.isMinimized() or not self.isVisible():
+                return
+            self._missed += 1
+            if self._missed >= 2:
+                self._missed = 0
+                log.warning("the dashboard page did not answer twice; reloading")
                 self._reload()
 
         self.view.page().runJavaScript("1", answered)
-        QTimer.singleShot(10_000, check)
+        QTimer.singleShot(20_000, check)
 
     def _reload(self) -> None:
         self._reloads += 1
@@ -245,6 +262,24 @@ class MainWindow(QMainWindow):
             "The bot keeps trading in the background. Right-click the tray icon to quit.",
             msecs=4000,
         )
+
+
+def _profile(parent) -> QWebEngineProfile:
+    """A named profile kept in the data home. Qt's default profile is
+    off-the-record: the page forgot everything it stored (the open tab, the
+    chosen chart, hints already seen) every time the app closed."""
+    from app.config import HOME
+
+    profile = QWebEngineProfile("MoneyTree", parent)
+    try:
+        store = HOME / "web"
+        store.mkdir(parents=True, exist_ok=True)
+        profile.setPersistentStoragePath(str(store / "storage"))
+        profile.setCachePath(str(store / "cache"))
+        profile.setPersistentCookiesPolicy(QWebEngineProfile.PersistentCookiesPolicy.AllowPersistentCookies)
+    except Exception:
+        log.warning("the window's storage could not be kept; it forgets the open tab at exit", exc_info=True)
+    return profile
 
 
 def _app_icon() -> QIcon:

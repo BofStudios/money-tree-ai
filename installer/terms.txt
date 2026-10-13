@@ -1,0 +1,76 @@
+MONEY TREE AI - TERMS OF USE
+============================
+
+By installing or using Money Tree AI you agree to these terms.
+
+1. Not advice. Money Tree AI is software. BofStudios does not give
+   investment, financial, tax or legal advice. Nothing in the app, in the AI's
+   answers, in the guide or on our pages is a recommendation to buy or sell
+   anything.
+
+2. Risk. Trading stocks can lose some or all of the money you trade with.
+   Past results, also the app's own tests and its "level", do not promise
+   future results. Use money you can afford to lose. Test with practice money
+   first.
+
+3. Your decisions. You choose the broker account, the money mode, the limits
+   and whether to arm real money. You are responsible for every trade on your
+   account and for following the laws and tax rules of your country.
+
+4. As is. The software is provided "as is", without warranty of any kind.
+   Software can have errors, and brokers, market data, news feeds and AI
+   services can fail, be late or be wrong. To the extent the law allows,
+   BofStudios is not liable for trading losses, lost profits or any other
+   damage from using or not being able to use the software.
+
+5. Licence key. One licence key is for one person. Do not share or resell
+   your key. The app checks the key online at most once a day.
+
+6. Third parties. Alpaca, AI providers and data sources are independent
+   companies with their own terms. Money Tree AI is not made, endorsed or
+   sponsored by them.
+
+7. Open source. Money Tree AI's own source code is published under the MIT
+   licence below. The program also includes third-party open-source parts
+   under their own licences; see THIRD-PARTY-NOTICES.txt in the program folder.
+
+
+MONEY TREE AI - KULLANIM ŞARTLARI
+=================================
+
+Money Tree AI'ı kurarak ya da kullanarak bu şartları kabul edersin.
+
+1. Tavsiye değildir. Money Tree AI bir yazılımdır. BofStudios yatırım, finans,
+   vergi ya da hukuk tavsiyesi vermez. Uygulamadaki, yapay zekânın
+   cevaplarındaki, kılavuzdaki ya da sayfalarımızdaki hiçbir şey bir şeyi alma
+   ya da satma önerisi değildir.
+
+2. Risk. Hisse işlemi, işlem yaptığın paranın bir kısmını ya da tamamını
+   kaybettirebilir. Geçmiş sonuçlar, uygulamanın kendi testleri ve "seviyesi"
+   dahil, gelecek sonuç vaat etmez. Kaybetmeyi göze alabileceğin parayı kullan.
+   Önce deneme parasıyla dene.
+
+3. Kararlar senin. Aracı kurum hesabını, para modunu, sınırları ve gerçek
+   parayı kurup kurmayacağını sen seçersin. Hesabındaki her işlemden ve
+   ülkenin yasalarına ve vergi kurallarına uymaktan sen sorumlusun.
+
+4. Olduğu gibi. Yazılım "olduğu gibi", hiçbir garanti olmadan sunulur.
+   Yazılımda hata olabilir; aracı kurumlar, piyasa verisi, haber akışları ve
+   yapay zekâ hizmetleri çalışmayabilir, gecikebilir ya da yanlış olabilir.
+   Yasaların izin verdiği ölçüde BofStudios, yazılımı kullanmaktan ya da
+   kullanamamaktan doğan işlem zararlarından, kaçan kârlardan ya da diğer
+   zararlardan sorumlu değildir.
+
+5. Lisans anahtarı. Bir lisans anahtarı bir kişi içindir. Anahtarını paylaşma
+   ya da satma. Uygulama anahtarı en fazla günde bir kez internetten kontrol
+   eder.
+
+6. Üçüncü taraflar. Alpaca, yapay zekâ sağlayıcıları ve veri kaynakları kendi
+   şartları olan bağımsız şirketlerdir. Money Tree AI onlar tarafından
+   yapılmamış, onaylanmamış ya da desteklenmemiştir.
+
+7. Açık kaynak. Money Tree AI'ın kendi kaynak kodu aşağıdaki MIT lisansıyla
+   yayımlanır. Program ayrıca kendi lisansları olan üçüncü taraf açık kaynak
+   parçalar içerir; program klasöründeki THIRD-PARTY-NOTICES.txt dosyasına bak.
+
+

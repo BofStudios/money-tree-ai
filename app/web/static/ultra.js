@@ -42,7 +42,7 @@ function apply(value) {
   if (state) state.textContent = t(on ? "ultra.stateOn" : "ultra.stateOff");
 }
 
-function warn() {
+function warn(after) {
   const box = $("ultraModal");
   box.hidden = false;
   box.innerHTML = `
@@ -64,7 +64,7 @@ function warn() {
   $("ultraCancel").onclick = () => { box.hidden = true; };
   $("ultraGo").onclick = async () => {
     $("ultraGo").disabled = true;
-    try { await setUltra(true); box.hidden = true; } catch (err) { $("ultraError").textContent = err.message; }
+    try { await setUltra(true); box.hidden = true; after?.(); } catch (err) { $("ultraError").textContent = err.message; }
   };
 }
 
@@ -76,7 +76,7 @@ document.addEventListener("click", async (e) => {
       warn();
     }
   }
-  if (e.target.closest("#ultraBadge")) window.showView?.("settings");
+  if (e.target.closest("#ultraBadge")) window.showView?.("modes");
 });
 
 window.addEventListener("mt:status", (e) => {
@@ -84,4 +84,6 @@ window.addEventListener("mt:status", (e) => {
   if (typeof s.ultra === "boolean" && s.ultra !== on) apply(s.ultra);
 });
 window.addEventListener("mt:lang", () => apply(on));
+// The Modes tab's Ultra card opens the same warning.
+window.mtUltra = { warn };
 apply(false);

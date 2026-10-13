@@ -18,6 +18,8 @@ def notice_for(event: dict, words: Words) -> tuple[str, str] | None:
             return words.notice_bought(position["symbol"], float(position["qty"]), float(position["entry_price"]))
         if kind == "trade_closed":
             return words.notice_sold(event["symbol"], float(event["pnl"]), event.get("exit_reason") or "")
+        if kind == "not_armed":
+            return words.notice_not_armed()
         if kind == "approval_needed":
             proposal = event["proposal"]
             return words.notice_approval(proposal["symbol"], float(proposal["qty"]), float(proposal["price"]))

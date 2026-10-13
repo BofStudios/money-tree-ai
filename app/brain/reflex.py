@@ -20,6 +20,10 @@ Old news (published before the reader started, or more than 15 minutes ago)
 is read and shown, never traded.
 
 Every decision, and why, is kept for the Reflex screen.
+
+It learns from itself (app/brain/news_memory.py): every idea weighed while the
+market is open is graded later against the real price, and each kind of news
+is then trusted more or less. The AI also sees that record before it judges.
 """
 from __future__ import annotations
 
@@ -36,6 +40,8 @@ import requests
 
 from app.brain import ripples
 from app.brain import text as textmod
+from app.brain.news_memory import MIN_CASES, kind_of
+from app.brain.news_memory import label as kind_label
 from app.brain.wires import Headline, WireReader, _clean
 
 log = logging.getLogger(__name__)
@@ -118,7 +124,7 @@ def move_since(bars, published: float) -> tuple[float, float, float] | None:
 
 class NewsReflex:
     def __init__(self, engine, reader: WireReader, data, ai, settings_fn, turkish_fn, path: Path | None = None,
-                 monitor=None, events=None, now=time.time, fetch_page=None) -> None:
+                 monitor=None, events=None, now=time.time, fetch_page=None, memory=None) -> None:
         self.engine = engine
         self.reader = reader
         self.data = data
@@ -139,6 +145,8 @@ class NewsReflex:
         self.last_poll: float | None = None
         self._ai_calls: list[float] = []
         self._titles: dict[str, float] = {}
+        self.read_total = 0                     # every run, not only this one
+        self.memory = memory                    # NewsMemory: what past news did to prices
         self._load()
 
     # ------------------------------------------------------------ lifecycle
@@ -171,11 +179,17 @@ class NewsReflex:
         self.last_poll = self._now()
         for h in fresh:
             self.read += 1
+            self.read_total += 1
             try:
                 self.handle(h)
             except Exception:
                 log.exception("could not handle %s", h.title[:80])
         self._confirm_pending()
+        if self.memory is not None:
+            try:
+                self.memory.grade()
+            except Exception:
+                log.exception("could not grade past news")
 
     # ----------------------------------------------------------------- think
 
@@ -238,7 +252,7 @@ class NewsReflex:
 
         if not ideas and not important:
             return None    # about a company, but nothing good or bad in it
-        verdict = self._think(h, body, ideas, subjects, important)
+        verdict = self._think(h, body, ideas, subjects, important, themes)
         if verdict is not None:
             d.ai = True
             d.event = verdict.get("event", "")
@@ -247,13 +261,44 @@ class NewsReflex:
         else:
             d.event = d.themes[0] if d.themes else self.t("Company news", "Şirket haberi")
             # without the AI, second-order links are shown but never traded
+        kinds = {sym: self._kind(h, idea, subjects, themes) for sym, idea in ideas.items()}
+        self._recall(d, ideas, kinds)
         d.ideas = [i.to_dict() for i in sorted(ideas.values(), key=lambda i: -i.confidence)]
 
-        self._act(h, d, ideas, now)
+        self._act(h, d, ideas, now, kinds)
         self._record(d)
         return d
 
-    def _think(self, h: Headline, body: str, ideas: dict[str, Idea], subjects: list[str], important: bool) -> dict | None:
+    # ---------------------------------------------------------------- memory
+
+    @staticmethod
+    def _kind(h: Headline, idea: Idea, subjects: list[str], themes: list) -> str:
+        """What kind of news this idea comes from, for the track record."""
+        if idea.by not in ("headline", "ai"):
+            return "theme:" + idea.by
+        if idea.symbol in subjects:
+            return kind_of(h.title)
+        return "theme:" + themes[0].key if themes else kind_of(h.title)
+
+    def _recall(self, d: Decision, ideas: dict[str, Idea], kinds: dict[str, str]) -> None:
+        """Trust each buy idea as much as this kind of news earned before."""
+        if self.memory is None:
+            return
+        for sym, idea in ideas.items():
+            if idea.effect <= 0:
+                continue
+            new, st = self.memory.adjust(kinds[sym], idea.confidence)
+            if st["n"] < MIN_CASES or abs(new - idea.confidence) < 0.005:
+                continue
+            d.steps.append(self.t(
+                f"Memory: {kind_label(kinds[sym])}: {st['n']} past cases, {st['hit']:.0%} went the expected way, "
+                f"average {st['avg']:+.2f}%. {sym}: {idea.confidence:.0%} → {new:.0%} sure.",
+                f"Hafıza: {kind_label(kinds[sym], True)}: {st['n']} eski olay, %{st['hit'] * 100:.0f} beklenen yöne gitti, "
+                f"ortalama %{st['avg']:+.2f}. {sym}: %{idea.confidence * 100:.0f} → %{new * 100:.0f} emin."))
+            idea.confidence = round(new, 3)
+
+    def _think(self, h: Headline, body: str, ideas: dict[str, Idea], subjects: list[str], important: bool,
+               themes: list | None = None) -> dict | None:
         ai = self.ai
         if ai is None or not getattr(ai, "available", False) or not (ideas or important):
             return None
@@ -285,6 +330,11 @@ class NewsReflex:
         prompt = (f"Source: {h.source}\nPublished: {time.strftime('%Y-%m-%d %H:%M UTC', time.gmtime(h.published))}\n"
                   f"Headline (data): \"{h.title[:300]}\"\nText (data): \"{body[:2500]}\"\n"
                   f"Companies named: {', '.join(subjects) or 'none'}\nCandidates from the ripple map:\n{cands}")
+        if self.memory is not None:
+            record = self.memory.brief([kind_of(h.title)] + ["theme:" + th.key for th in (themes or [])])
+            if record:
+                prompt += ("\nThe bot's own measured record with this kind of news (data, use it to calibrate "
+                           "your confidence):\n" + record)
         try:
             reply = ai.research(system, prompt, 1400) or ""
         except Exception:
@@ -324,8 +374,14 @@ class NewsReflex:
 
     # ------------------------------------------------------------------ act
 
-    def _act(self, h: Headline, d: Decision, ideas: dict[str, Idea], now: float) -> None:
+    def _act(self, h: Headline, d: Decision, ideas: dict[str, Idea], now: float,
+             kinds: dict[str, str] | None = None) -> None:
         s = self.settings_fn()
+        if self.memory is not None and now - h.published <= FRESH and self.engine.market_open():
+            for sym, idea in ideas.items():
+                if idea.confidence >= 0.45:
+                    self.memory.note(sym, (kinds or {}).get(sym) or kind_of(h.title), idea.effect,
+                                     idea.confidence, h.published, h.source)
         if now - h.published > FRESH:
             d.outcome.append({"symbol": "", "action": "old",
                               "why": self.t("The news is older than 15 minutes. The bot does not trade on it.",
@@ -419,6 +475,8 @@ class NewsReflex:
         reason = f"news: {(p.decision.event or p.decision.title)[:70]}"
         result = self.engine.news_buy(sym, reason, conf_size(p.idea.confidence), p.idea.hours)
         if result == "bought":
+            if self.memory is not None:
+                self.memory.mark_bought(sym, p.published)
             self._finish(p, "bought", self.t(f"Done. The bot bought {sym}. Price +{move:.1f}% since the news. "
                                              f"Time limit: {p.idea.hours:.0f} hours.",
                                              f"Bitti. Bot {sym} aldı. Haberden beri fiyat +%{move:.1f}. "
@@ -465,7 +523,15 @@ class NewsReflex:
                 "ai": bool(self.ai is not None and getattr(self.ai, "available", False)),
                 "news_positions": self.engine.news_positions(),
                 "ultra": self._ultra(),
+                "read_total": self.read_total,
+                "memory": self._memory_view(),
             }
+
+    def _memory_view(self) -> dict | None:
+        if self.memory is None:
+            return None
+        turkish = self.turkish_fn()
+        return {**self.memory.totals(), "lessons": self.memory.lessons(turkish)}
 
     def _save(self) -> None:
         if self.path is None:
@@ -474,7 +540,10 @@ class NewsReflex:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             tmp = self.path.with_suffix(".tmp")
             with self._lock:
-                tmp.write_text(json.dumps([d.to_dict() for d in self.decisions[:60]]), encoding="utf-8")
+                recent = sorted(self._titles.items(), key=lambda kv: kv[1])[-1500:]
+                tmp.write_text(json.dumps({"decisions": [d.to_dict() for d in self.decisions[:60]],
+                                           "titles": dict(recent), "read_total": self.read_total}),
+                               encoding="utf-8")
             tmp.replace(self.path)
         except Exception:
             log.exception("could not save the reflex log")
@@ -483,8 +552,16 @@ class NewsReflex:
         if self.path is None:
             return
         try:
-            rows = json.loads(self.path.read_text(encoding="utf-8"))
+            doc = json.loads(self.path.read_text(encoding="utf-8"))
+            # 4.x-5.x kept only the list of decisions.
+            rows = doc.get("decisions", []) if isinstance(doc, dict) else doc
             self.decisions = [Decision(**r) for r in rows if isinstance(r, dict)]
+            if isinstance(doc, dict):
+                self._titles = {str(k): float(v) for k, v in (doc.get("titles") or {}).items()}
+                self.read_total = int(doc.get("read_total") or 0)
+            # Headlines already judged are not judged again after a restart.
+            for dec in self.decisions:
+                self._titles.setdefault(re.sub(r"[^a-z0-9]+", " ", dec.title.lower()).strip(), dec.at)
         except FileNotFoundError:
             pass
         except Exception:
@@ -505,7 +582,7 @@ def _json_in(reply: str) -> dict | None:
 def _page_text(url: str) -> str:
     """The readable text of an official page (Fed statement, executive order)."""
     try:
-        r = requests.get(url, timeout=10, headers={"User-Agent": "BofStudios MoneyTree-Desktop/4.1"})
+        r = requests.get(url, timeout=10, headers={"User-Agent": "BofStudios MoneyTree-Desktop/6.0"})
         if r.status_code != 200:
             return ""
         html = re.sub(r"(?is)<(script|style|nav|header|footer)[^>]*>.*?</\1>", " ", r.text)

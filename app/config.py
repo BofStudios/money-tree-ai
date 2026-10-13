@@ -8,19 +8,26 @@ import yaml
 from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.common import home as _home
+
 APP_NAME = "Money Tree AI"
 
 FROZEN = getattr(sys, "frozen", False)
 
-# Two different roots once packaged as an exe:
-#   PROJECT_ROOT — the folder beside the exe, holding editable config/, .env, data/
+# Three roots once packaged as an exe:
+#   PROJECT_ROOT — the folder of the exe (the repository when run from source)
 #   BUNDLE_ROOT  — PyInstaller's unpacked payload, holding static/ and assets/
-PROJECT_ROOT = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent.parent
+#   HOME         — keys, settings, learning and logs, shared by every version
+#                  (app/common/home.py); the repository when run from source
+PROJECT_ROOT = _home.install_dir()
 BUNDLE_ROOT = Path(getattr(sys, "_MEIPASS", PROJECT_ROOT))
+HOME = _home.root()
 
-CONFIG_DIR = PROJECT_ROOT / "config"
-DATA_DIR = PROJECT_ROOT / "data"
-LOG_DIR = PROJECT_ROOT / "logs"
+CONFIG_DIR = HOME / "config"
+EXAMPLE_CONFIG = PROJECT_ROOT / "config" / "config.example.yaml"
+DATA_DIR = HOME / "data"
+LOG_DIR = HOME / "logs"
+ENV_FILE = HOME / ".env"
 ASSETS = BUNDLE_ROOT / "assets"
 
 ExecutionMode = Literal["paper", "live"]
@@ -33,7 +40,8 @@ def write_secret(key: str, value: str) -> None:
     by hand. Only ever touches the single matching line (or appends one) — never
     rewrites the whole file, so comments and unrelated entries survive.
     """
-    path = PROJECT_ROOT / ".env"
+    path = ENV_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
     lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
 
     prefix = f"{key}="
@@ -49,7 +57,7 @@ def write_secret(key: str, value: str) -> None:
 
 class Secrets(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=PROJECT_ROOT / ".env", env_file_encoding="utf-8", extra="ignore"
+        env_file=ENV_FILE, env_file_encoding="utf-8", extra="ignore"
     )
 
     # Alpaca — only needed for paper/live execution. Signal mode works without it.
@@ -270,11 +278,11 @@ KEYSTORE_PATH = DATA_DIR / "keys.dat"
 def load_settings(config_path: Path | None = None, keystore_path: Path | None = None) -> Settings:
     path = config_path or (CONFIG_DIR / "config.yaml")
     if not path.exists():
-        path = CONFIG_DIR / "config.example.yaml"
+        path = EXAMPLE_CONFIG if EXAMPLE_CONFIG.exists() else CONFIG_DIR / "config.example.yaml"
 
-    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    DATA_DIR.mkdir(exist_ok=True)
-    LOG_DIR.mkdir(exist_ok=True)
+    raw = (yaml.safe_load(path.read_text(encoding="utf-8")) or {}) if path.exists() else {}
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
     secrets = Secrets()
     apply_keystore(secrets, keystore_path or KEYSTORE_PATH)
     return Settings(app=AppConfig(**raw), secrets=secrets)
@@ -297,7 +305,8 @@ def set_config_value(key: str, value: str, config_path: Path | None = None) -> N
 
     path = config_path or (CONFIG_DIR / "config.yaml")
     if not path.exists():
-        example = CONFIG_DIR / "config.example.yaml"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        example = EXAMPLE_CONFIG if EXAMPLE_CONFIG.exists() else CONFIG_DIR / "config.example.yaml"
         path.write_text(example.read_text(encoding="utf-8") if example.exists() else "", encoding="utf-8")
     text = path.read_text(encoding="utf-8")
     # Up to a comment or the end of the line: "mode: paper   # note" keeps its note.

@@ -96,6 +96,12 @@ class PaperExecutor(Executor):
             cash = self._cash
         return Balance(total=cash + market_value, available=cash, currency=self.currency)
 
+    def restore_result(self, realised: float) -> None:
+        """Add what earlier runs made or lost, so practice money does not go back
+        to the starting balance every time the app opens."""
+        with self._lock:
+            self._cash += realised
+
     def adopt_position(self, position: Position) -> None:
         with self._lock:
             self._positions[position.symbol] = position

@@ -25,6 +25,50 @@ money is at risk, and because a new Alpaca live account cannot trade until it
 is funded. (Midas signal mode was removed in 4.0: an old config that still says
 `signal` starts on practice money.)
 
+## Desktop 6.0 "Evolve": memory, self-improvement, Modes
+
+**Memory.** Nothing starts over any more. Keys, settings and everything the
+bot learns now live in one data home per Windows user,
+`%LOCALAPPDATA%\BofStudios\Money Tree AI` (`app/common/home.py`), which every
+version uses; the first start of an exe copies (never moves) the old
+beside-the-exe data into it. Closing and opening the app keeps: practice
+money's result, the day's realised loss (so a restart cannot reset the daily
+loss limit), safety pauses, watchlist changes, each strategy bot's best finds
+and lifetime counts, the training candles (the swarm starts at once), what was
+read and when, the headlines already judged, the Live feed, the AI panel and
+the open tab. Arming real money is the one thing never remembered.
+
+**It improves while it runs.** The news reflex keeps a track record
+(`app/brain/news_memory.py`): every idea it weighs while the market is open is
+checked against the real price two trading hours and one trading day later.
+Each kind of news (analyst upgrades, results, contracts, tariff themes ...) is
+then trusted more or less, at most 30% either way, and the AI sees the record
+before it judges new news. With the swarm's evolution, which now continues
+across restarts, and the learner, this is shown in **Brain → Memory**: a
+level, what it knows, what news did to prices, and how it grew.
+
+**Modes tab.** Every way the bot runs, as big choices: money (practice or real,
+with Arm), speed (Eco, Normal, Ultra: Ultra now also watches 16 more large
+stocks), trading style (Careful, Balanced, Bold), who decides (Full auto, Ask
+me first, Ideas only) and the smart features. Setup moved into Settings
+("Getting started").
+
+**Is it trading?** A card on Home and Modes, and a pill in the header, says at
+once whether the bot trades or only watches and why, with the button that
+fixes it, and counts today's buys that did not happen by reason. For days the
+owner's copy only watched because real money was not armed after each start;
+now that shows in plain words, with a Windows notice and a Telegram message
+with an Arm button. Arming still needs the owner's own action every start.
+
+**Security and terms.** The dashboard always has a password now (made once and
+kept in the data home when `.env` sets none): before, an empty token let
+anyone on the Wi-Fi, or a web page in another browser, drive the bot. Requests
+under a foreign host name are refused (DNS rebinding). A headline could inject
+markup into the trade history; escaped. Fonts are local (no Google request).
+A first-start risk acknowledgement, terms of use in the installer, the user
+guide (`/guide.html`, English and Turkish), `THIRD-PARTY-NOTICES.txt` and the
+TradingView attribution on the chart.
+
 ## Desktop 5.0: Ultra mode, and a window that does not go grey
 
 **Ultra mode** (Settings, top). The strongest setting, behind a red warning

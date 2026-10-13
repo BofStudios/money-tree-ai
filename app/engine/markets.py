@@ -13,6 +13,12 @@ MARKETS: dict[str, list[str]] = {
 }
 
 
+# Ultra looks at these too: large, liquid US stocks and funds that move on news,
+# so the bot sees many more chances to act. Bought only through the same gates.
+ULTRA_EXTRA: list[str] = ["AMD", "AVGO", "MU", "TSM", "QCOM", "ORCL", "CRM", "NFLX", "PLTR", "COST",
+                          "JPM", "LLY", "XOM", "UNH", "QQQ", "IWM"]
+
+
 def watchlist_for(market: str | None) -> list[str] | None:
     """The market's list, or None when nothing was chosen (keep the config's)."""
     symbols = MARKETS.get(market or "")

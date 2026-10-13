@@ -525,6 +525,15 @@ class TelegramNotifier:
                 f"Target `{fmt.money(position['take_profit'])}`\n"
                 f"_{event.get('reason', '')}_"
             )
+        elif kind == "not_armed":
+            # A reminder only: arming still needs the owner's tap on "Yes, arm it".
+            self.broadcast_sync(
+                "*Money Tree is only watching.*\n\nReal money is not armed, so the bot will not buy. Arm it?",
+                InlineKeyboardMarkup([[
+                    InlineKeyboardButton("Yes, arm it", callback_data="arm:yes"),
+                    InlineKeyboardButton("Not now", callback_data="arm:no"),
+                ]]),
+            )
         elif kind == "trade_closed" and self.config.push_fills:
             self.broadcast_sync(fmt.trade_closed_message(event))
         elif kind == "catalyst" and event.get("event") == "window_open":

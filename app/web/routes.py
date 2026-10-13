@@ -599,6 +599,7 @@ def build_router(
             symbols = watchlist_for(profile.market)
             if symbols:
                 engine.set_watchlist(symbols)
+                engine.apply_saved_watchlist()
         if "small_account" in changes:
             engine.set_small_account(profile.small_account)
         if "language" in changes:

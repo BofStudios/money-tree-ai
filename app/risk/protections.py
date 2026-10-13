@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 import logging
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
-from app.common.models import ClosedTrade
+from app.common.models import ClosedTrade, Side
 from app.config import ProtectionsConfig
 
 log = logging.getLogger(__name__)
@@ -46,12 +48,15 @@ class Protections:
     trades, most of them losers. Locks turn that churn off for a while.
     """
 
-    def __init__(self, config: ProtectionsConfig) -> None:
+    def __init__(self, config: ProtectionsConfig, state_path: Path | None = None) -> None:
         self.config = config
         self._lock = threading.Lock()
         self._locks: list[Lock] = []
         self._closed: list[ClosedTrade] = []
         self._equity_peak: float | None = None
+        # Remembered, so closing and opening the app never lifts a pause early.
+        self._state_path = state_path
+        self._load()
 
     # ------------------------------------------------------------------ query
 
@@ -120,11 +125,56 @@ class Protections:
             )
             triggered.append(MAX_DRAWDOWN)
 
+        self._save()
         return triggered
 
     def clear(self) -> None:
         with self._lock:
             self._locks.clear()
+        self._save()
+
+    # ---------------------------------------------------------------- memory
+
+    def _save(self) -> None:
+        if self._state_path is None:
+            return
+        now = _now()
+        with self._lock:
+            doc = {
+                "locks": [{"until": l.until.isoformat(), "reason": l.reason, "symbol": l.symbol}
+                          for l in self._locks if l.active(now)],
+                "closed": [_trade_dict(t) for t in self._closed[-60:]],
+                "equity_peak": self._equity_peak,
+            }
+        try:
+            self._state_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self._state_path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(doc), encoding="utf-8")
+            tmp.replace(self._state_path)
+        except OSError:
+            log.exception("could not save the protection locks")
+
+    def _load(self) -> None:
+        if self._state_path is None:
+            return
+        try:
+            doc = json.loads(self._state_path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return
+        except (OSError, ValueError):
+            log.warning("protection locks unreadable; starting without them")
+            return
+        now = _now()
+        try:
+            for row in doc.get("locks", []):
+                lock = Lock(datetime.fromisoformat(row["until"]), str(row["reason"]), row.get("symbol"))
+                if lock.active(now):
+                    self._locks.append(lock)
+            self._closed = [_trade_from(row) for row in doc.get("closed", [])]
+            peak = doc.get("equity_peak")
+            self._equity_peak = float(peak) if peak else None
+        except (KeyError, TypeError, ValueError):
+            log.warning("parts of the protection locks are unreadable; starting those fresh")
 
     # -------------------------------------------------------------- internals
 
@@ -134,9 +184,11 @@ class Protections:
             for existing in self._locks:
                 if existing.reason == lock.reason and existing.symbol == lock.symbol:
                     existing.until = max(existing.until, lock.until)
-                    return
-            self._locks.append(lock)
-        log.info("protection lock: %s (%s)", lock.reason, lock.symbol or "all symbols")
+                    break
+            else:
+                self._locks.append(lock)
+                log.info("protection lock: %s (%s)", lock.reason, lock.symbol or "all symbols")
+        self._save()
 
     def _stoploss_guard_tripped(self, now: datetime) -> bool:
         window = now - timedelta(minutes=self.config.stoploss_guard_lookback_minutes)
@@ -159,3 +211,15 @@ class Protections:
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _trade_dict(t: ClosedTrade) -> dict:
+    return {"symbol": t.symbol, "side": t.side.value, "qty": t.qty, "entry_price": t.entry_price,
+            "exit_price": t.exit_price, "opened_at": t.opened_at.isoformat(),
+            "closed_at": t.closed_at.isoformat(), "pnl": t.pnl, "exit_reason": t.exit_reason}
+
+
+def _trade_from(row: dict) -> ClosedTrade:
+    return ClosedTrade(str(row["symbol"]), Side(row["side"]), float(row["qty"]), float(row["entry_price"]),
+                       float(row["exit_price"]), datetime.fromisoformat(row["opened_at"]),
+                       datetime.fromisoformat(row["closed_at"]), float(row["pnl"]), str(row["exit_reason"]))

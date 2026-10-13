@@ -15,6 +15,7 @@ from app.mentor.ai import AIMentor
 from app.mentor.narrator import Narrator
 from app.storage.repository import Repository
 from app.web.brain_routes import build_brain_router
+from app.web.mode_routes import build_mode_router
 from app.web.money_routes import build_money_router
 from app.web.routes import build_router
 from app.web.ws import WebSocketHub
@@ -59,6 +60,21 @@ def create_app(
         build_money_router(engine, repo, settings, keystore, restarter, token, config_path, key_problems)
     )
     api.include_router(build_brain_router(engine, token))
+    api.include_router(build_mode_router(engine, token))
+
+    @api.middleware("http")
+    async def _only_by_address(request, call_next):
+        """Answer only to this PC and the home network, by address.
+
+        A web page on some other site can make a browser on this PC talk to
+        127.0.0.1 under its own domain name (DNS rebinding). Such a request
+        carries that domain as Host and is refused here.
+        """
+        if not _host_allowed(request.headers.get("host", "")):
+            from fastapi.responses import PlainTextResponse
+
+            return PlainTextResponse("forbidden host", status_code=403)
+        return await call_next(request)
 
     @api.middleware("http")
     async def _revalidate_static(request, call_next):
@@ -75,6 +91,23 @@ def create_app(
 
     api.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
     return api
+
+
+def _host_allowed(host: str) -> bool:
+    import ipaddress
+
+    name = host.strip().lower()
+    if name.startswith("["):                       # [::1]:8765
+        name = name[1:].split("]", 1)[0]
+    elif name.count(":") == 1:
+        name = name.split(":", 1)[0]
+    if name in ("localhost", "testserver", ""):
+        return name != ""
+    try:
+        ipaddress.ip_address(name)
+        return True
+    except ValueError:
+        return False
 
 
 class WebServer:

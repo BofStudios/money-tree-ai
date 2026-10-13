@@ -283,13 +283,19 @@ function drawOnboarding() {
   $("onboardBar").style.width = `${Math.max(0, (step + 1) / (STEPS.length + 1)) * 100}%`;
 
   if (step === -1) {
+    const accepted = !!(profile && profile.risk_accepted);
     body.innerHTML = `
       <h2>${esc(t("ob.hello"))}</h2>
       <p class="onboard-lead">${esc(t("ob.helloBody"))}</p>
+      ${accepted ? "" : `
+      <label class="ob-risk"><input type="checkbox" id="obRisk">
+        <span>${esc(t("ob.risk"))} <a href="/guide.html#legal" target="_blank" rel="noopener">${esc(t("modes.guide"))}</a></span></label>`}
       <div class="onboard-actions">
-        <button class="primary" data-ob="start">${esc(t("ob.start"))}</button>
-        <button class="ghost" data-ob="later">${esc(t("ob.later"))}</button>
+        <button class="primary" data-ob="start" ${accepted ? "" : "disabled"}>${esc(t("ob.start"))}</button>
+        <button class="ghost" data-ob="later" ${accepted ? "" : "disabled"}>${esc(t("ob.later"))}</button>
       </div>`;
+    const box = $("obRisk");
+    if (box) box.onchange = () => body.querySelectorAll("[data-ob]").forEach((b) => { b.disabled = !box.checked; });
     return;
   }
 
@@ -343,6 +349,7 @@ $("onboard").addEventListener("click", async (e) => {
   const action = e.target.closest("[data-ob]")?.dataset.ob;
   if (!action) return;
 
+  if ($("obRisk")?.checked && !(profile && profile.risk_accepted)) await saveProfile({ risk_accepted: true });
   if (action === "start") { step = 0; drawOnboarding(); }
   else if (action === "back") { step = Math.max(-1, step - 1); drawOnboarding(); }
   else if (action === "later") {

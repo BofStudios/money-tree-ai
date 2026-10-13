@@ -18,3 +18,7 @@ build/
 
 # Mentor memory lives with the other data
 mentor_memory.json
+
+# The window's web storage (desktop 6.0), beside data/ in a source run
+/web/
+THIRD-PARTY-NOTICES.txt

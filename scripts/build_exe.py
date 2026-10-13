@@ -7,9 +7,11 @@ The result lands in dist/. It is a one-folder build on purpose: a one-file build
 has to unpack Qt's WebEngine runtime to a temp directory on every launch, which
 makes startup slow and sometimes trips antivirus.
 
-config/, .env and data/ stay outside the bundle so you can edit settings without
-rebuilding — the exe reads them from beside itself. None of this machine's
-keys, settings or data are ever copied in.
+Keys, settings and learning live in the data home (app/common/home.py:
+%LOCALAPPDATA%\BofStudios\Money Tree AI), never in the build. None of this
+machine's keys, settings or data are ever copied in; refuse_secrets() stops
+the build if any are found. The build also carries the user guide, the terms
+of use and THIRD-PARTY-NOTICES.txt.
 """
 from __future__ import annotations
 
@@ -108,15 +110,25 @@ def build_exe() -> None:
     for example in (ROOT / "config").glob("*example*"):
         shutil.copy2(example, config_out / example.name)
     shutil.copy2(ROOT / "README.md", target / "README.md")
+    # The guide, readable without the app running (its logo sits beside it).
+    guide = (ROOT / "app" / "web" / "static" / "guide.html").read_text(encoding="utf-8")
+    (target / "Money Tree AI Guide.html").write_text(guide.replace('src="/logo.png"', 'src="guide-logo.png"'),
+                                                    encoding="utf-8")
+    shutil.copy2(ROOT / "app" / "web" / "static" / "logo.png", target / "guide-logo.png")
+    subprocess.run([sys.executable, str(ROOT / "scripts" / "notices.py"), str(target / "THIRD-PARTY-NOTICES.txt")],
+                   check=True)
+    shutil.copy2(ROOT / "installer" / "terms.txt", target / "TERMS.txt")
     refuse_secrets(target)
 
     print(f"\ndone -> {target / (NAME + '.exe')}")
-    print("Keys go in the app: Settings -> Money & keys (or a .env next to the exe).")
+    print(r"Keys go in the app: Settings -> Money & keys. Data home: %LOCALAPPDATA%\BofStudios\Money Tree AI")
 
 
 # Anything that would carry this machine's keys, licence or history to a buyer.
 PRIVATE = (".env", "keys.dat", "license.json", "config.yaml", "trading.db",
-           "mentor_memory.json", "user_profile.json")
+           "mentor_memory.json", "user_profile.json", "dashboard.token", "journal.json",
+           "risk_day.json", "engine_state.json", "protections.json", "news_memory.json",
+           "history.npz", "live_feed.json", "mentor_feed.json", ".home")
 
 
 def refuse_secrets(target: Path) -> None:
@@ -137,8 +149,12 @@ def build_installer() -> None:
         raise SystemExit(1)
     # Launching the exe to try it writes data/ and logs/ beside it; never pack those.
     refuse_secrets(DIST / NAME)
+    # The licence page: the terms of use, then the MIT licence of the source.
+    page = DIST / "license-page.txt"
+    page.write_text((ROOT / "installer" / "terms.txt").read_text(encoding="utf-8")
+                    + (ROOT / "LICENSE").read_text(encoding="utf-8"), encoding="utf-8-sig")
     subprocess.run(
-        [str(iscc), f"/DAppVersion={__version__}", f"/DSourceDir={DIST / NAME}", str(ISS)],
+        [str(iscc), f"/DAppVersion={__version__}", f"/DSourceDir={DIST / NAME}", f"/DLicensePage={page}", str(ISS)],
         check=True,
     )
     print(f"\ninstaller -> {DIST / f'MoneyTreeAI-Setup-{__version__}.exe'}")

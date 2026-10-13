@@ -67,6 +67,14 @@ class Repository:
             for r in rows
         ]
 
+    def realised_pnl(self, mode: str, broker: str) -> float:
+        """The money made and lost by one executor's finished trades."""
+        with self._session_factory() as session:
+            rows = session.scalars(
+                select(TradeRow.pnl).where(TradeRow.mode == mode, TradeRow.broker == broker)
+            ).all()
+        return float(sum(rows))
+
     def trade_stats(self, mode: str) -> dict:
         with self._session_factory() as session:
             rows = session.scalars(select(TradeRow).where(TradeRow.mode == mode)).all()

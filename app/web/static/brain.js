@@ -70,6 +70,7 @@ function renderBrain() {
   else if (brainTab === "news") body.innerHTML = newsTab();
   else if (brainTab === "learning") body.innerHTML = learningTab();
   else if (brainTab === "gates") body.innerHTML = gatesTab();
+  else if (brainTab === "memory") { body.innerHTML = `<div id="memView" class="mem-view"></div>`; window.mtRenderMemory?.(); }
   else body.innerHTML = picksTab();
 }
 
@@ -480,6 +481,13 @@ function promotion(p) {
 }
 
 /* =============================================================== wiring */
+
+// The level strip on Home opens Brain → Memory.
+window.mtOpenBrainTab = (tab) => {
+  brainTab = tab;
+  window.showView?.("brain");
+  renderBrain();
+};
 
 document.addEventListener("click", async (e) => {
   const tab = e.target.closest("[data-brain-tab]");

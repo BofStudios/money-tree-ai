@@ -29,7 +29,7 @@ import requests
 
 log = logging.getLogger(__name__)
 
-USER_AGENT = "BofStudios MoneyTree-Desktop/4.1"
+USER_AGENT = "BofStudios MoneyTree-Desktop/6.0"
 TIMEOUT = 12
 
 

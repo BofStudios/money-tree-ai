@@ -60,6 +60,8 @@ DEFAULTS = {
     "market": "unknown",
     # Fractional shares, so a few dollars can still buy something.
     "small_account": True,
+    # Ticked once at the first start: not advice, money can be lost, the owner decides.
+    "risk_accepted": False,
 }
 
 MULTI = ("focus", "attention")
@@ -83,6 +85,7 @@ class UserProfile:
     autonomy: str = "unknown"
     market: str = "unknown"
     small_account: bool = True
+    risk_accepted: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)

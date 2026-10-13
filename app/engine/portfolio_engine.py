@@ -103,7 +103,9 @@ class PortfolioEngine:
         self.events = events
         self.mentor = mentor
         self.challenges = challenges
-        self.protections = Protections(config.protections)
+        self.protections = Protections(
+            config.protections, state_path.parent / "protections.json" if state_path else None
+        )
         self.clock = MarketClock()
         self.monitor = monitor or Monitor(events)
 
@@ -123,6 +125,9 @@ class PortfolioEngine:
         # data, learning and the swarm. Optional — without it the engine
         # trades exactly as before.
         self.brain = None
+        # Lifetime counters and the growth line (app/common/journal.py), wired by main().
+        self.journal = None
+        self.reflex = None
         self._default_strategy = strategy
         self._risk_originals = (risk.config.atr_multiple, risk.config.reward_risk)
         self._held_back: dict[str, object] = {}     # symbol -> candle its signal was held back on
@@ -149,9 +154,15 @@ class PortfolioEngine:
         self._force_look = False
         self._closed_reviewed = False
 
-        # Stop/Start from the owner. Saved to disk so it survives a restart.
+        # Stop/Start from the owner. Saved to disk so it survives a restart,
+        # with the owner's own watchlist changes and why buys did not happen today.
         self._state_path = state_path
         self._news_deadline: dict[str, float] = {}   # symbol -> epoch when a news trade must end
+        self._watch_added: list[str] = []
+        self._watch_removed: list[str] = []
+        self._save_lock = threading.Lock()
+        self._blocked: dict[str, dict] = {}          # why a buy did not happen -> count, last time, symbol
+        self._blocked_day = ""
         self._halted, self._halted_at = self._load_halt()
 
         self._lock = threading.RLock()
@@ -246,11 +257,19 @@ class PortfolioEngine:
     def _load_halt(self) -> tuple[bool, datetime | None]:
         if self._state_path is None:
             return False, None
-        try:
-            saved = json.loads(self._state_path.read_text(encoding="utf-8"))
-        except FileNotFoundError:
-            return False, None
-        except (OSError, ValueError):
+        saved = None
+        for attempt in range(4):
+            try:
+                saved = json.loads(self._state_path.read_text(encoding="utf-8"))
+                break
+            except FileNotFoundError:
+                return False, None
+            except PermissionError:
+                # Windows: the file is being replaced by a save this very moment.
+                time.sleep(0.05)
+            except (OSError, ValueError):
+                break
+        if saved is None:
             # Unreadable: be careful and stay stopped. Start clears it.
             log.warning("engine state unreadable; starting stopped")
             return True, None
@@ -260,20 +279,47 @@ class PortfolioEngine:
         except ValueError:
             when = None
         self._news_deadline = {str(k): float(v) for k, v in (saved.get("news_deadlines") or {}).items()}
+        self._watch_added = [str(x) for x in saved.get("watch_added") or []]
+        self._watch_removed = [str(x) for x in saved.get("watch_removed") or []]
+        if saved.get("blocked_day") == _ny_day():
+            self._blocked_day = _ny_day()
+            self._blocked = {str(k): dict(v) for k, v in (saved.get("blocked") or {}).items() if isinstance(v, dict)}
         return bool(saved.get("halted")), when
+
+    def save_state(self) -> None:
+        """Every minute (the keeper), for today's counts of buys that did not happen."""
+        self._save_halt()
 
     def _save_halt(self) -> None:
         if self._state_path is None:
             return
+        with self._save_lock:
+            self._write_state()
+
+    def _write_state(self) -> None:
         try:
             self._state_path.parent.mkdir(parents=True, exist_ok=True)
             tmp = self._state_path.with_suffix(".tmp")
-            tmp.write_text(json.dumps({
-                "halted": self._halted,
-                "halted_at": self._halted_at.isoformat() if self._halted_at else None,
-                "news_deadlines": self._news_deadline,
-            }), encoding="utf-8")
-            tmp.replace(self._state_path)
+            with self._lock:
+                doc = {
+                    "halted": self._halted,
+                    "halted_at": self._halted_at.isoformat() if self._halted_at else None,
+                    "news_deadlines": dict(self._news_deadline),
+                    "watch_added": list(self._watch_added),
+                    "watch_removed": list(self._watch_removed),
+                    "blocked_day": self._blocked_day,
+                    "blocked": {k: dict(v) for k, v in self._blocked.items()},
+                }
+            tmp.write_text(json.dumps(doc), encoding="utf-8")
+            for attempt in range(5):
+                try:
+                    tmp.replace(self._state_path)
+                    break
+                except PermissionError:
+                    # Windows: someone is reading the file this very moment.
+                    if attempt == 4:
+                        raise
+                    time.sleep(0.05)
         except OSError:
             log.exception("could not save the Stop state")
 
@@ -281,7 +327,27 @@ class PortfolioEngine:
 
     def arm(self) -> None:
         self.risk.arm()
+        if self.journal is not None and self.risk.is_live:
+            self.journal.event("arm", "Real money armed")
         self.events.publish("status", self.status())
+
+    # ------------------------------------------------- why no trade happened
+
+    def note_block(self, why: str, symbol: str = "", detail: str = "") -> None:
+        """Count a buy that did not happen, by reason, for today's readiness card."""
+        day = _ny_day()
+        with self._lock:
+            if self._blocked_day != day:
+                self._blocked_day, self._blocked = day, {}
+            row = self._blocked.setdefault(why, {"count": 0, "last_at": 0.0, "symbol": "", "detail": ""})
+            row["count"] += 1
+            row["last_at"] = time.time()
+            row["symbol"] = symbol
+            row["detail"] = (detail or "")[:160]
+
+    def blocked_today(self) -> dict[str, dict]:
+        with self._lock:
+            return {k: dict(v) for k, v in self._blocked.items()} if self._blocked_day == _ny_day() else {}
 
     def disarm(self, reason: str = "manual") -> None:
         self.risk.disarm(reason)
@@ -346,11 +412,16 @@ class PortfolioEngine:
             return "sold" if self._exit(position, price, reason, w) else "the sale failed"
 
     def set_ultra(self, on: bool) -> None:
-        """Ultra looks every 15 seconds instead of the configured interval."""
+        """Ultra looks every 15 seconds instead of the configured interval, and
+        at sixteen more large stocks and funds (markets.ULTRA_EXTRA)."""
+        from app.engine.markets import ULTRA_EXTRA
+
         if not hasattr(self, "_normal_interval"):
             self._normal_interval = self.config.scan_interval_seconds
         self.ultra = on
         self.config.scan_interval_seconds = 15 if on else self._normal_interval
+        with self._lock:
+            self._extra = list(ULTRA_EXTRA) if on else []
         self.scan_now()
         self.events.publish("status", self.status())
 
@@ -401,6 +472,11 @@ class PortfolioEngine:
             if symbol in self.symbols:
                 return False
             self.symbols.append(symbol)
+            if symbol not in self._watch_added:
+                self._watch_added.append(symbol)
+            if symbol in self._watch_removed:
+                self._watch_removed.remove(symbol)
+        self._save_halt()
         self.mentor.note(f"Done. The bot added {symbol} to the watchlist.")
         self._wake.set()
         return True
@@ -413,8 +489,23 @@ class PortfolioEngine:
             self.symbols.remove(symbol)
             self._history.pop(symbol, None)
             self._snapshots.pop(symbol, None)
+            if symbol in self._watch_added:
+                self._watch_added.remove(symbol)
+            elif symbol not in self._watch_removed:
+                self._watch_removed.append(symbol)
+        self._save_halt()
         self.mentor.note(f"Done. The bot removed {symbol} from the watchlist.")
         return True
+
+    def apply_saved_watchlist(self) -> None:
+        """The owner's own additions and removals, on top of the market's list."""
+        with self._lock:
+            for symbol in self._watch_added:
+                if symbol not in self.symbols:
+                    self.symbols.append(symbol)
+            kept = [s for s in self.symbols if s not in self._watch_removed]
+            if kept:
+                self.symbols = kept
 
     def set_watchlist(self, symbols: list[str]) -> list[str]:
         """Swap the whole list, e.g. when the owner picks another market.
@@ -704,6 +795,8 @@ class PortfolioEngine:
                     text = BrainWords(self.language == "tr").learned_rule(rule)
                     self.monitor.info("learn", text)
                     self.events.publish("brain_learned", {"text": text})
+                    if self.journal is not None:
+                        self.journal.event("rule", text)
             except Exception:
                 log.exception("the brain's after-scan step failed")
 
@@ -715,6 +808,9 @@ class PortfolioEngine:
 
         self._scan_count += 1
         self._last_scan_at = datetime.now(timezone.utc)
+        if self.journal is not None:
+            self.journal.add("looks")
+            self.journal.add("symbols_checked", len(looked))
 
         for stale in self.proposals.expire():
             self.events.publish("proposal_expired", {"proposal": stale.to_dict()})
@@ -976,6 +1072,7 @@ class PortfolioEngine:
         if position is None and locked:
             self.mentor.rejected(symbol, f"buy on '{signal.reason}'", locked)
             self.monitor.info(activity.INFO, w.not_placed(symbol, locked))
+            self.note_block("paused", symbol, locked)
             return False
 
         research = None
@@ -983,6 +1080,7 @@ class PortfolioEngine:
         if position is None and signal.action is Action.BUY and self.brain is not None and not news:
             research = self._research_gate(symbol, snapshot, w)
             if research is False:
+                self.note_block("research", symbol)
                 return False
 
         balance, max_positions, position_pct = self._effective_limits()
@@ -1001,6 +1099,7 @@ class PortfolioEngine:
             self.monitor.info(
                 activity.INFO, w.cap_reached(symbol, open_count, committed - open_count, max_positions)
             )
+            self.note_block("cap", symbol)
             return False
 
         order, rejection = self.risk.validate(
@@ -1016,6 +1115,7 @@ class PortfolioEngine:
                     "rejected",
                     {"symbol": symbol, "reason": signal.reason, "rejection": rejection},
                 )
+                self.note_block(_block_key(rejection), symbol, rejection)
             return False
 
         self.mentor.considering(symbol, signal.reason, snapshot)
@@ -1036,9 +1136,11 @@ class PortfolioEngine:
                 f"the ${self.config.risk.min_order_value:.0f} minimum order"
             self.mentor.rejected(symbol, "buy", f"the position would be under {unit}")
             self.monitor.info(activity.INFO, w.too_small(symbol))
+            self.note_block("too_small", symbol)
             return False
 
         if research is not None and not self._ai_gate(symbol, research, intent, w):
+            self.note_block("ai", symbol)
             return False
         if research is not None:
             self._research[symbol] = research
@@ -1075,6 +1177,10 @@ class PortfolioEngine:
         self._register_position(opened, intent.reason)
         self._brain_bought(opened)
         self.mentor.opened(opened, True)
+        if self.journal is not None:
+            self.journal.add("buys")
+            self.journal.event("buy", f"Bought {opened.qty:g} {opened.symbol} at {opened.entry_price:,.2f}",
+                               intent.reason)
         self.events.publish(
             "trade_opened", {"position": opened.to_dict(), "reason": intent.reason}
         )
@@ -1188,6 +1294,9 @@ class PortfolioEngine:
             self._broker_stops.discard(trade.symbol)
 
         self.repo.save_closed_trade(trade, self.mode, self.executor.name, entry_reason)
+        if self.journal is not None:
+            self.journal.add("trades_closed")
+            self.journal.event("sell", f"Sold {trade.symbol}: {trade.pnl:+,.2f}", trade.exit_reason)
         if self.brain is not None:
             try:
                 for rule in self.brain.closed(trade.symbol, trade.entry_price, trade.exit_price):
@@ -1380,7 +1489,8 @@ class PortfolioEngine:
         found in the news. Call under the lock."""
         held = [s for s in self._positions if s not in self.symbols]
         found = self.brain.discovered_symbols() if self.brain is not None else []
-        return list(dict.fromkeys(list(self.symbols) + held + found))
+        extra = [s for s in getattr(self, "_extra", []) if s not in self._watch_removed]
+        return list(dict.fromkeys(list(self.symbols) + held + found + extra))
 
     # ------------------------------------------------------------ the brain
 
@@ -1489,6 +1599,26 @@ class PortfolioEngine:
         # Approvals hold a slot: approving them all must never exceed the cap.
         # Suggestions do not — manual mode never turns them into positions.
         return len(self.proposals.pending("approval"))
+
+
+def _ny_day() -> str:
+    from zoneinfo import ZoneInfo
+
+    return datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+
+
+def _block_key(rejection: str) -> str:
+    """The risk manager's reason as a short key for the readiness card."""
+    text = (rejection or "").lower()
+    if "not armed" in text:
+        return "not_armed"
+    if "daily loss" in text:
+        return "daily_loss"
+    if "maximum open" in text:
+        return "cap"
+    if "insufficient" in text or "below exchange" in text:
+        return "cash"
+    return "rules"
 
 
 def _closed_delay(market) -> float:

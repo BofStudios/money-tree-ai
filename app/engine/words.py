@@ -267,6 +267,13 @@ class Words:
 
     # --------------------------------------------------------- stop / start
 
+    def reopened(self) -> str:
+        return self._("The app opened again. The steps above are from the last run.",
+                      "Uygulama yeniden açıldı. Yukarıdaki adımlar önceki çalışmadan.")
+
+    def unfinished_step(self) -> str:
+        return self._("not finished: the app closed", "bitmedi: uygulama kapandı")
+
     def halted(self) -> str:
         return self._("STOPPED. The bot does not buy. The bot does not sell on a signal.",
                       "DURDU. Bot alım yapmaz. Bot sinyalle satış yapmaz.")
@@ -301,6 +308,11 @@ class Words:
                       "Tamam. Bot başladı. Tekrar işlem yapabilir. Durdurmak için \"dur\" yaz.")
 
     # ------------------------------------------------ desktop notifications
+
+    def notice_not_armed(self) -> tuple[str, str]:
+        return (self._("Money Tree is only watching", "Money Tree sadece izliyor"),
+                self._("Real money is not armed, so the bot does not buy. Open the app and press Arm real money.",
+                       "Gerçek para kurulu değil, bot almaz. Uygulamayı aç ve Gerçek parayı kur'a bas."))
 
     def notice_bought(self, symbol: str, qty: float, price: float) -> tuple[str, str]:
         return (self._(f"Bought {symbol}", f"{symbol} alındı"),

@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Money Tree AI Guide</title>
+<meta name="description" content="How to install, set up and use Money Tree AI, the desktop stock-trading bot for Alpaca.">
+<style>
+  :root {
+    --bg: #050403; --surface: #110e07; --line: rgba(255, 214, 10, 0.18); --text: #fffdf2; --text-2: #c9c2a8;
+    --text-3: #8a8268; --accent: #ffd60a; --good: #32d583; --bad: #ff5a4e;
+    --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    --mono: "Cascadia Mono", Consolas, "SF Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 var(--sans); }
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background: radial-gradient(900px 500px at 85% -10%, rgba(255, 214, 10, 0.12), transparent 60%);
+  }
+  header.top {
+    position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 14px; padding: 12px 16px;
+    background: rgba(5, 4, 3, 0.94); border-bottom: 1px solid var(--line);
+  }
+  header.top img { width: 30px; height: 30px; }
+  header.top b { color: var(--accent); font-size: 16px; }
+  header.top .sp { flex: 1; }
+  .lang button {
+    font: 600 13px/1 var(--sans); padding: 8px 12px; border-radius: 999px; cursor: pointer;
+    background: transparent; color: var(--text-2); border: 1px solid var(--line);
+  }
+  .lang button.on { background: var(--accent); color: #120d00; border-color: var(--accent); }
+  main { max-width: 860px; margin: 0 auto; padding: 28px 16px 80px; }
+  h1 { font-size: clamp(30px, 6vw, 44px); line-height: 1.1; margin: 10px 0 8px; letter-spacing: -0.02em; }
+  h1 em { color: var(--accent); font-style: normal; }
+  .lead { color: var(--text-2); font-size: 18px; margin: 0 0 22px; }
+  h2 {
+    margin: 46px 0 12px; font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent);
+    display: flex; align-items: center; gap: 10px;
+  }
+  h2::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  h3 { margin: 26px 0 6px; font-size: 18px; }
+  p, li { color: var(--text-2); }
+  strong { color: var(--text); }
+  a { color: var(--accent); }
+  code, .path { font-family: var(--mono); font-size: 14px; background: rgba(255, 214, 10, 0.08); padding: 1px 6px; border-radius: 6px; color: var(--text); word-break: break-all; }
+  ol, ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; margin: 14px 0; }
+  .warn { border-color: rgba(255, 90, 78, 0.45); background: rgba(255, 90, 78, 0.07); }
+  .warn strong { color: var(--bad); }
+  .tip { border-color: rgba(50, 213, 131, 0.35); background: rgba(50, 213, 131, 0.06); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+  .grid .card { margin: 0; }
+  .grid .card b { display: block; color: var(--accent); margin-bottom: 4px; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 15px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--text); font-weight: 600; }
+  td { color: var(--text-2); }
+  nav.toc { columns: 2; column-gap: 28px; font-size: 15px; }
+  nav.toc a { display: block; text-decoration: none; padding: 3px 0; color: var(--text-2); }
+  nav.toc a:hover { color: var(--accent); }
+  footer { margin-top: 60px; color: var(--text-3); font-size: 13.5px; border-top: 1px solid var(--line); padding-top: 18px; }
+  [data-lang] { display: none; }
+  body.en [data-lang="en"], body.tr [data-lang="tr"] { display: block; }
+  @media (max-width: 600px) { nav.toc { columns: 1; } }
+  @media print {
+    header.top { display: none; } body::before { display: none; }
+    html, body { background: #fff; color: #111; } p, li, td { color: #222; } h2, a, .grid .card b { color: #7a5a00; }
+    .card { background: #fff; }
+  }
+</style>
+</head>
+<body class="en">
+<header class="top">
+  <img src="/logo.png" alt="">
+  <b>Money Tree AI</b>
+  <span class="sp"></span>
+  <div class="lang"><button data-set="en" class="on">English</button> <button data-set="tr">Türkçe</button></div>
+</header>
+
+<main>
+<!-- ================================================================ ENGLISH -->
+<div data-lang="en">
+  <h1>Money Tree AI <em>User guide</em></h1>
+  <p class="lead">A desktop bot that watches US stocks, reads the news, learns from its own results and trades through your own Alpaca account, inside the limits you set.</p>
+
+  <div class="card warn"><strong>Read this first.</strong> Money Tree AI is software, not financial advice. Trading stocks can lose money, also more than you expect. Past results, including the bot's own tests, do not promise future results. Start with practice money. Only use money you can afford to lose. You are responsible for every trade the bot makes on your account.</div>
+
+  <nav class="toc">
+    <a href="#install">1. Install</a><a href="#first">2. First start</a><a href="#alpaca">3. Connect Alpaca</a>
+    <a href="#ai">4. Connect a free AI</a><a href="#real">5. Practice and real money</a><a href="#arm">6. Arm, Stop and Start</a>
+    <a href="#modes">7. Modes</a><a href="#tabs">8. The screens</a><a href="#news">9. How it trades on news</a>
+    <a href="#learn">10. How it gets better</a><a href="#memory">11. Memory and your data</a><a href="#safety">12. Safety limits</a>
+    <a href="#phone">13. Phone access</a><a href="#license">14. Licence</a><a href="#trouble">15. Problems and fixes</a>
+    <a href="#privacy">16. Privacy</a><a href="#legal">17. Terms</a>
+  </nav>
+
+  <h2 id="install">1. Install</h2>
+  <ol>
+    <li>Run <code>MoneyTreeAI-Setup.exe</code>. Windows 10 or 11, 64-bit. About 1 GB free space and 8 GB of memory are enough.</li>
+    <li>If Windows SmartScreen shows "Windows protected your PC", click <strong>More info</strong>, then <strong>Run anyway</strong>. This shows for new programs that are not yet widely downloaded.</li>
+    <li>Open <strong>Money Tree AI</strong> from the Start menu or the desktop. The logo shows at once; the window opens after 5 to 15 seconds.</li>
+    <li>Only one copy runs at a time. If you click the icon again, the open window comes to the front.</li>
+  </ol>
+
+  <h2 id="first">2. First start</h2>
+  <p>The app asks a few questions: your language, how long you hold trades, which market, and who decides on a buy. Each answer changes what the bot does. You can change all of them later in <strong>Modes</strong> and <strong>Settings</strong>.</p>
+  <p>It then asks how much of your computer the strategy bots may use. <strong>Full</strong> is fastest. <strong>Light</strong> keeps the computer cool.</p>
+
+  <h2 id="alpaca">3. Connect Alpaca</h2>
+  <p>The bot trades only through <a href="https://alpaca.markets" target="_blank" rel="noopener">Alpaca</a>, a US broker with an API and no commission on US stocks. Many countries can open an account; check that Alpaca accepts yours.</p>
+  <ol>
+    <li>Make an Alpaca account. Its <strong>paper</strong> (practice) account is free and ready at once.</li>
+    <li>In Alpaca, open <strong>API Keys</strong> and make a key pair. Copy the key and the secret.</li>
+    <li>In Money Tree AI open <strong>Settings → Money &amp; keys</strong>, paste them, and press Save. The app checks them with Alpaca first.</li>
+  </ol>
+  <div class="card tip">Keys are stored encrypted on this PC for your Windows user only. The screen never shows them again, only the last four characters. Without keys the app still runs on simulated money with free public prices.</div>
+
+  <h2 id="ai">4. Connect a free AI</h2>
+  <p>An AI explains trades, answers questions in the chat and judges breaking news. Without it the bot still trades on its rules, but news trading only acts on clear first-order news.</p>
+  <ol>
+    <li>Make a free key at <a href="https://console.groq.com" target="_blank" rel="noopener">console.groq.com</a> (or Google Gemini).</li>
+    <li>Open <strong>Settings → AI</strong>, choose <strong>Use free Groq</strong>, paste the key.</li>
+  </ol>
+  <p>If one AI is busy or out of credit, the app uses another one you connected.</p>
+
+  <h2 id="real">5. Practice and real money</h2>
+  <table>
+    <tr><th>Mode</th><th>What happens</th></tr>
+    <tr><td>Simulation</td><td>No keys: real prices, money exists only on this PC.</td></tr>
+    <tr><td>Practice (paper)</td><td>Alpaca paper account: real prices, real order flow, practice money.</td></tr>
+    <tr><td>Real money</td><td>Your Alpaca live account. Needs live keys, a typed confirmation, and arming.</td></tr>
+  </table>
+  <p>Run on practice money first and look at the results in <strong>Home</strong>. To switch, open <strong>Modes → Money</strong> or <strong>Settings → Money &amp; keys</strong>. The app restarts on the other account.</p>
+  <p>Money moves in and out only in Alpaca's own app or website. Money Tree AI never asks for bank details and never moves money.</p>
+
+  <h2 id="arm">6. Arm, Stop and Start</h2>
+  <div class="grid">
+    <div class="card"><b>Arm</b>With real money the bot only watches until you press <strong>Arm real money</strong>. It disarms itself at the daily loss limit, when you press Disarm, and when the app closes. After each start of the app, arm it again.</div>
+    <div class="card"><b>STOP</b>The red button at the top right. From that moment the bot buys nothing and sells nothing on a signal. Stop-loss and take-profit stay active. Stop is remembered after a restart.</div>
+    <div class="card"><b>Start</b>Press it to let the bot trade again. You can also type <code>stop</code> or <code>start</code> in the chat.</div>
+  </div>
+  <p>The <strong>Is it trading?</strong> card on Home tells you at once if the bot only watches and why (for example "real money is not armed"), with the button that fixes it. It also counts today's buys that did not happen, by reason.</p>
+
+  <h2 id="modes">7. Modes</h2>
+  <p>The <strong>Modes</strong> tab has every way the bot can run. None of them change your risk limits.</p>
+  <table>
+    <tr><th>Choice</th><th>Options</th></tr>
+    <tr><td>Speed</td><td><strong>Eco</strong>: bots rest, quiet PC. <strong>Normal</strong>: full speed, a look every minute. <strong>Ultra</strong>: every CPU core, more news feeds, a look every 15 seconds and 16 more large stocks. Ultra shows a warning first; it uses the whole computer.</td></tr>
+    <tr><td>Trading style</td><td><strong>Careful</strong>: only strong companies and very sure news. <strong>Balanced</strong>: the default. <strong>Bold</strong>: more chances, more trades.</td></tr>
+    <tr><td>Who decides</td><td><strong>Full auto</strong>: the bot trades by itself. <strong>Ask me first</strong>: each buy waits for your OK. <strong>Ideas only</strong>: it only suggests.</td></tr>
+    <tr><td>Smart features</td><td>News trading, self-improvement, finding new stocks, the AI double-check, learning from results, the news check.</td></tr>
+  </table>
+
+  <h2 id="tabs">8. The screens</h2>
+  <ul>
+    <li><strong>Home</strong>: your money, whether it is trading, what it holds, today's result.</li>
+    <li><strong>Live</strong>: every step the bot takes, as it happens.</li>
+    <li><strong>Brain</strong>: news decisions (Reflex), company checks (Picks), the news radar, what it learned, and <strong>Memory</strong>.</li>
+    <li><strong>Swarm</strong>: the strategy bots and the strategy the account trades with.</li>
+    <li><strong>Research</strong>, <strong>Chart</strong>, <strong>Market</strong>, <strong>News</strong>, <strong>Catalysts</strong>, <strong>Activity</strong>: look up any stock and follow events.</li>
+    <li><strong>Settings</strong>: getting started, keys, AI, language, where your data lives.</li>
+    <li>The <strong>AI panel</strong> on the left: ask anything, for example "why no trades?".</li>
+  </ul>
+
+  <h2 id="news">9. How it trades on news</h2>
+  <ol>
+    <li><strong>Read.</strong> Official sources (central banks, the White House, the SEC, company newsrooms, press wires) and Alpaca's news wire, every few seconds.</li>
+    <li><strong>Ripple.</strong> Who the news is about, and who else it affects (suppliers, customers, power, policy).</li>
+    <li><strong>Think.</strong> The AI works through the event and rates each stock: up or down, how sure, for how long.</li>
+    <li><strong>Confirm.</strong> The price must agree within minutes: a small rise, but not a move that is already over. Penny stocks and thin stocks are skipped.</li>
+    <li><strong>Act.</strong> The buy passes the same gates as every trade, with a time limit. Bad news on a stock it holds can sell it.</li>
+  </ol>
+
+  <h2 id="learn">10. How it gets better while you use it</h2>
+  <ul>
+    <li><strong>Strategy bots</strong> breed and test thousands of strategies on months of real prices. A new one replaces the current one only if it wins on prices no bot trained on. Each bot keeps its best finds between runs.</li>
+    <li><strong>Learning from results</strong>: every buy signal is followed to the end. Setups that lose are made smaller or blocked.</li>
+    <li><strong>News memory</strong>: every news idea is checked against the real price a trading day later. Kinds of news that worked are trusted more, kinds that did not are trusted less (at most 30% either way), and the AI sees this record before it judges new news.</li>
+    <li>You can see all of it in <strong>Brain → Memory</strong>, with the bot's level and how it grew.</li>
+  </ul>
+
+  <h2 id="memory">11. Memory and your data</h2>
+  <p>Keys, settings and everything the bot learned are kept in one folder: <span class="path">%LOCALAPPDATA%\BofStudios\Money Tree AI</span>. Every new version uses this folder, so an update never starts the bot over. Closing and opening the app keeps everything too, except arming.</p>
+  <ul>
+    <li><strong>Back up</strong>: close the app (tray icon → Quit) and copy that folder.</li>
+    <li><strong>New PC</strong>: copy the folder to the same place on the new PC. Enter your Alpaca and AI keys again: they are encrypted for one Windows user and cannot be read on another PC.</li>
+    <li><strong>Start over</strong>: Brain → What it learned → Forget, or delete the folder while the app is closed.</li>
+  </ul>
+
+  <h2 id="safety">12. Safety limits</h2>
+  <table>
+    <tr><th>Limit</th><th>What it does</th></tr>
+    <tr><td>Risk per trade</td><td>The money lost if a stop-loss fills is a fixed small part of the account (at most 1% in the sold edition).</td></tr>
+    <tr><td>Daily loss limit</td><td>When the day's losses reach it (at most 3%), real money disarms for the day. A restart does not reset it.</td></tr>
+    <tr><td>Positions</td><td>At most 5 stocks at once, at most 25% of the account in one stock.</td></tr>
+    <tr><td>Stop-loss and target</td><td>Every buy has both. Whole-share buys keep them at Alpaca, so they work even when your PC is off.</td></tr>
+    <tr><td>Pauses</td><td>A cooldown after each trade, a pause after several stop-outs, and a pause on a large drawdown.</td></tr>
+  </table>
+  <p>You can make these limits smaller in <code>config\config.yaml</code> in the data folder, never larger than the edition allows.</p>
+
+  <h2 id="phone">13. Phone access</h2>
+  <p>On the same Wi-Fi, open the tray icon menu → <strong>Copy phone link</strong> and open it on your phone. The link holds a private password, so other people on the network cannot control the bot. Do not share the link.</p>
+
+  <h2 id="license">14. Licence</h2>
+  <ul>
+    <li>At the first start, enter the licence key from your purchase e-mail.</li>
+    <li>To move to another PC: <strong>Settings → Licence → Deactivate</strong>, then activate on the new PC.</li>
+    <li>One licence is for one person. The app checks the licence online now and then.</li>
+  </ul>
+
+  <h2 id="trouble">15. Problems and fixes</h2>
+  <table>
+    <tr><th>Problem</th><th>Fix</th></tr>
+    <tr><td>It never buys</td><td>Look at <strong>Is it trading?</strong> on Home. Most often: real money is not armed, Stop is on, "Ideas only" is chosen, the market is closed, or there is no free cash.</td></tr>
+    <tr><td>"The market is closed"</td><td>US stocks trade 9:30 to 16:00 New York time, Monday to Friday, except holidays.</td></tr>
+    <tr><td>Alpaca refuses the keys</td><td>Paper keys start with PK, live keys with AK. Copy them again; a secret shows only once, so you may need a new pair.</td></tr>
+    <tr><td>The AI does not answer</td><td>Free AI keys have rate limits. Wait a minute, or add a second provider in Settings.</td></tr>
+    <tr><td>The window is grey or slow</td><td>It reloads itself. If it happens twice, the next start draws without the graphics card. Update your graphics driver.</td></tr>
+    <tr><td>The PC is loud or hot</td><td>Modes → Speed → Eco.</td></tr>
+    <tr><td>Where are the logs?</td><td><span class="path">%LOCALAPPDATA%\BofStudios\Money Tree AI\logs</span>. Keys are removed from the logs.</td></tr>
+  </table>
+
+  <h2 id="privacy">16. Privacy</h2>
+  <p>The app has no account with us and sends nothing to us. It talks only to: Alpaca (prices, news, your orders), the AI you connect (headlines and short facts about a trade, never your keys), public news feeds and government sites, SEC EDGAR, Wikipedia page views, Yahoo Finance (prices without Alpaca keys) and the licence server. Each of these services has its own privacy policy.</p>
+
+  <h2 id="legal">17. Terms</h2>
+  <div class="card warn">
+    <p><strong>No advice.</strong> Money Tree AI and BofStudios do not give investment, financial, tax or legal advice. Nothing in the app, the AI's answers or this guide is a recommendation to buy or sell anything.</p>
+    <p><strong>Your decisions.</strong> You choose the account, the mode, the limits and whether to arm real money. You are responsible for all trades on your account and for following the laws of your country.</p>
+    <p><strong>Risk.</strong> Trading can lose some or all of the money you trade with. Software can have errors; brokers, data and AI services can fail or be late. The software is provided "as is", without warranty of any kind, and to the extent the law allows, BofStudios is not liable for trading losses or other damages from its use.</p>
+    <p><strong>Third parties.</strong> Alpaca, AI providers and data sources are independent companies with their own terms. Money Tree AI is not made by, endorsed by or connected with them.</p>
+  </div>
+
+  <footer>Money Tree AI by BofStudios. Open-source parts and their licences are listed in <code>THIRD-PARTY-NOTICES.txt</code> in the program folder.</footer>
+</div>
+
+<!-- ================================================================ TÜRKÇE -->
+<div data-lang="tr">
+  <h1>Money Tree AI <em>Kullanım kılavuzu</em></h1>
+  <p class="lead">ABD hisselerini izleyen, haberleri okuyan, kendi sonuçlarından öğrenen ve senin belirlediğin sınırlar içinde kendi Alpaca hesabın üzerinden işlem yapan bir masaüstü botu.</p>
+
+  <div class="card warn"><strong>Önce bunu oku.</strong> Money Tree AI bir yazılımdır, yatırım tavsiyesi değildir. Hisse işlemi para kaybettirebilir, beklediğinden fazlasını da. Geçmiş sonuçlar, botun kendi testleri dahil, gelecek sonuç vaat etmez. Deneme parasıyla başla. Sadece kaybetmeyi göze alabileceğin parayı kullan. Botun hesabında yaptığı her işlemden sen sorumlusun.</div>
+
+  <nav class="toc">
+    <a href="#tr-install">1. Kurulum</a><a href="#tr-first">2. İlk açılış</a><a href="#tr-alpaca">3. Alpaca bağlantısı</a>
+    <a href="#tr-ai">4. Ücretsiz yapay zekâ</a><a href="#tr-real">5. Deneme ve gerçek para</a><a href="#tr-arm">6. Kur, Durdur, Başlat</a>
+    <a href="#tr-modes">7. Modlar</a><a href="#tr-tabs">8. Ekranlar</a><a href="#tr-news">9. Haberle işlem</a>
+    <a href="#tr-learn">10. Nasıl gelişir</a><a href="#tr-memory">11. Hafıza ve verilerin</a><a href="#tr-safety">12. Güvenlik sınırları</a>
+    <a href="#tr-phone">13. Telefondan erişim</a><a href="#tr-license">14. Lisans</a><a href="#tr-trouble">15. Sorunlar ve çözümler</a>
+    <a href="#tr-privacy">16. Gizlilik</a><a href="#tr-legal">17. Şartlar</a>
+  </nav>
+
+  <h2 id="tr-install">1. Kurulum</h2>
+  <ol>
+    <li><code>MoneyTreeAI-Setup.exe</code> dosyasını çalıştır. Windows 10 ya da 11, 64 bit. Yaklaşık 1 GB boş alan ve 8 GB bellek yeterli.</li>
+    <li>Windows SmartScreen "Windows bilgisayarınızı korudu" derse <strong>Ek bilgi</strong>, sonra <strong>Yine de çalıştır</strong>'a tıkla. Bu, henüz çok indirilmemiş yeni programlarda çıkar.</li>
+    <li><strong>Money Tree AI</strong>'ı Başlat menüsünden ya da masaüstünden aç. Logo hemen görünür; pencere 5–15 saniyede açılır.</li>
+    <li>Aynı anda tek kopya çalışır. Simgeye tekrar tıklarsan açık pencere öne gelir.</li>
+  </ol>
+
+  <h2 id="tr-first">2. İlk açılış</h2>
+  <p>Uygulama birkaç soru sorar: dil, işlemleri ne kadar tutacağın, hangi piyasa ve alıma kimin karar vereceği. Her cevap botun ne yaptığını değiştirir. Hepsini sonra <strong>Modlar</strong> ve <strong>Ayarlar</strong>'dan değiştirebilirsin.</p>
+  <p>Sonra strateji botlarının bilgisayarın ne kadarını kullanacağını sorar. <strong>Tam</strong> en hızlısıdır. <strong>Hafif</strong> bilgisayarı serin tutar.</p>
+
+  <h2 id="tr-alpaca">3. Alpaca bağlantısı</h2>
+  <p>Bot sadece <a href="https://alpaca.markets" target="_blank" rel="noopener">Alpaca</a> üzerinden işlem yapar: API'si olan, ABD hisselerinde komisyon almayan bir ABD aracı kurumu. Birçok ülkeden hesap açılabilir; ülkeni kabul ettiğini kontrol et.</p>
+  <ol>
+    <li>Alpaca hesabı aç. <strong>Paper</strong> (deneme) hesabı ücretsizdir ve hemen hazırdır.</li>
+    <li>Alpaca'da <strong>API Keys</strong> kısmını açıp bir anahtar çifti oluştur. Anahtarı ve gizli anahtarı kopyala.</li>
+    <li>Money Tree AI'da <strong>Ayarlar → Para ve anahtarlar</strong>'ı aç, yapıştır ve Kaydet'e bas. Uygulama önce Alpaca ile kontrol eder.</li>
+  </ol>
+  <div class="card tip">Anahtarlar bu bilgisayarda, sadece senin Windows kullanıcın için şifreli saklanır. Ekran onları bir daha göstermez, sadece son dört karakteri. Anahtar olmadan uygulama ücretsiz açık fiyatlarla simüle parayla çalışır.</div>
+
+  <h2 id="tr-ai">4. Ücretsiz yapay zekâ</h2>
+  <p>Yapay zekâ işlemleri açıklar, sohbette soruları cevaplar ve son dakika haberleri değerlendirir. Olmadan da bot kurallarıyla işlem yapar, ama haberle işlem sadece açık, birinci derece haberlerde hareket eder.</p>
+  <ol>
+    <li><a href="https://console.groq.com" target="_blank" rel="noopener">console.groq.com</a> adresinden ücretsiz anahtar al (ya da Google Gemini).</li>
+    <li><strong>Ayarlar → Yapay zekâ</strong>'yı aç, <strong>Ücretsiz Groq kullan</strong>'ı seç, anahtarı yapıştır.</li>
+  </ol>
+  <p>Bir yapay zekâ meşgulse ya da kredisi bittiyse uygulama bağladığın diğerini kullanır.</p>
+
+  <h2 id="tr-real">5. Deneme ve gerçek para</h2>
+  <table>
+    <tr><th>Mod</th><th>Ne olur</th></tr>
+    <tr><td>Simülasyon</td><td>Anahtar yok: gerçek fiyatlar, para sadece bu bilgisayarda.</td></tr>
+    <tr><td>Deneme (paper)</td><td>Alpaca deneme hesabı: gerçek fiyatlar, gerçek emir akışı, deneme parası.</td></tr>
+    <tr><td>Gerçek para</td><td>Alpaca canlı hesabın. Canlı anahtar, yazarak onay ve kurmak gerekir.</td></tr>
+  </table>
+  <p>Önce deneme parasıyla çalıştır ve sonuçlara <strong>Ana Sayfa</strong>'dan bak. Geçmek için <strong>Modlar → Para</strong> ya da <strong>Ayarlar → Para ve anahtarlar</strong>'ı aç. Uygulama diğer hesapla yeniden başlar.</p>
+  <p>Para sadece Alpaca'nın kendi uygulamasında ya da sitesinde girer ve çıkar. Money Tree AI asla banka bilgisi istemez ve asla para taşımaz.</p>
+
+  <h2 id="tr-arm">6. Kur, Durdur, Başlat</h2>
+  <div class="grid">
+    <div class="card"><b>Kur</b>Gerçek parada bot, sen <strong>Gerçek parayı kur</strong>'a basana kadar sadece izler. Günlük zarar sınırında, Kapat'a bastığında ve uygulama kapanınca kendini kapatır. Uygulama her açıldığında yeniden kur.</div>
+    <div class="card"><b>STOP</b>Sağ üstteki kırmızı tuş. O andan itibaren bot hiçbir şey almaz ve sinyalle satmaz. Zarar durdur ve kâr al aktif kalır. Yeniden başlatmadan sonra da hatırlanır.</div>
+    <div class="card"><b>Başlat</b>Botun tekrar işlem yapması için bas. Sohbete <code>dur</code> ya da <code>başlat</code> da yazabilirsin.</div>
+  </div>
+  <p>Ana Sayfa'daki <strong>İşlem yapıyor mu?</strong> kartı, bot sadece izliyorsa bunu ve sebebini (örneğin "gerçek para kurulu değil") hemen söyler ve düzelten tuşu gösterir. Bugün olmayan alımları da sebebine göre sayar.</p>
+
+  <h2 id="tr-modes">7. Modlar</h2>
+  <p><strong>Modlar</strong> sekmesinde botun çalışabileceği her şekil var. Hiçbiri risk sınırlarını değiştirmez.</p>
+  <table>
+    <tr><th>Seçim</th><th>Seçenekler</th></tr>
+    <tr><td>Hız</td><td><strong>Eko</strong>: botlar dinlenir, sessiz bilgisayar. <strong>Normal</strong>: tam hız, dakikada bir bakış. <strong>Ultra</strong>: tüm işlemci çekirdekleri, daha çok haber kaynağı, 15 saniyede bir bakış ve 16 büyük hisse daha. Ultra önce uyarı gösterir; tüm bilgisayarı kullanır.</td></tr>
+    <tr><td>İşlem tarzı</td><td><strong>Dikkatli</strong>: sadece güçlü şirketler ve çok emin haberler. <strong>Dengeli</strong>: varsayılan. <strong>Cesur</strong>: daha çok fırsat, daha çok işlem.</td></tr>
+    <tr><td>Kim karar verir</td><td><strong>Tam otomatik</strong>: bot kendi işlem yapar. <strong>Önce bana sor</strong>: her alım onayını bekler. <strong>Sadece fikir</strong>: sadece önerir.</td></tr>
+    <tr><td>Akıllı özellikler</td><td>Haberle işlem, kendini geliştirme, yeni hisse bulma, yapay zekâ kontrolü, sonuçlardan öğrenme, haber kontrolü.</td></tr>
+  </table>
+
+  <h2 id="tr-tabs">8. Ekranlar</h2>
+  <ul>
+    <li><strong>Ana Sayfa</strong>: paran, işlem yapıp yapmadığı, elindekiler, günün sonucu.</li>
+    <li><strong>Canlı</strong>: botun attığı her adım, anında.</li>
+    <li><strong>Beyin</strong>: haber kararları (Refleks), şirket kontrolleri, haber radarı, öğrendikleri ve <strong>Hafıza</strong>.</li>
+    <li><strong>Sürü</strong>: strateji botları ve hesabın kullandığı strateji.</li>
+    <li><strong>Araştırma</strong>, <strong>Grafik</strong>, <strong>Piyasa</strong>, <strong>Haberler</strong>, <strong>Katalizörler</strong>, <strong>Etkinlik</strong>: herhangi bir hisseye bak ve olayları takip et.</li>
+    <li><strong>Ayarlar</strong>: başlarken, anahtarlar, yapay zekâ, dil, verilerin nerede.</li>
+    <li>Soldaki <strong>yapay zekâ paneli</strong>: istediğini sor, örneğin "neden işlem yok?".</li>
+  </ul>
+
+  <h2 id="tr-news">9. Haberle nasıl işlem yapar</h2>
+  <ol>
+    <li><strong>Okur.</strong> Resmî kaynaklar (merkez bankaları, Beyaz Saray, SEC, şirket haber odaları, basın ajansları) ve Alpaca'nın haber akışı, birkaç saniyede bir.</li>
+    <li><strong>Dalga.</strong> Haber kimin hakkında ve başka kimleri etkiler (tedarikçiler, müşteriler, enerji, politika).</li>
+    <li><strong>Düşünür.</strong> Yapay zekâ olayı adım adım inceler ve her hisseyi puanlar: yukarı ya da aşağı, ne kadar emin, ne kadar süre.</li>
+    <li><strong>Onaylar.</strong> Fiyat dakikalar içinde katılmalı: küçük bir yükseliş, ama bitmiş bir hareket değil. Küçük ve az işlem gören hisseler atlanır.</li>
+    <li><strong>Hareket eder.</strong> Alım, her işlemle aynı kapılardan süre sınırıyla geçer. Elindeki hisseye kötü haber gelirse satabilir.</li>
+  </ol>
+
+  <h2 id="tr-learn">10. Kullandıkça nasıl gelişir</h2>
+  <ul>
+    <li><strong>Strateji botları</strong> aylarca gerçek fiyat üzerinde binlerce strateji üretir ve dener. Yenisi, sadece hiçbir botun eğitilmediği fiyatlarda kazanırsa mevcut olanın yerine geçer. Her bot en iyi bulduklarını çalışmalar arasında saklar.</li>
+    <li><strong>Sonuçlardan öğrenme</strong>: her alım sinyali sonuna kadar izlenir. Kaybettiren kurulumlar küçültülür ya da engellenir.</li>
+    <li><strong>Haber hafızası</strong>: her haber fikri bir işlem günü sonra gerçek fiyatla karşılaştırılır. İşe yarayan haber türlerine daha çok, yaramayanlara daha az güvenilir (her iki yöne en fazla %30) ve yapay zekâ yeni haberi değerlendirmeden önce bu kaydı görür.</li>
+    <li>Hepsini <strong>Beyin → Hafıza</strong>'da botun seviyesi ve nasıl geliştiğiyle birlikte görebilirsin.</li>
+  </ul>
+
+  <h2 id="tr-memory">11. Hafıza ve verilerin</h2>
+  <p>Anahtarlar, ayarlar ve botun öğrendiği her şey tek klasörde durur: <span class="path">%LOCALAPPDATA%\BofStudios\Money Tree AI</span>. Her yeni sürüm bu klasörü kullanır, yani güncelleme botu asla sıfırdan başlatmaz. Uygulamayı kapatıp açmak da kurmak dışında her şeyi korur.</p>
+  <ul>
+    <li><strong>Yedek</strong>: uygulamayı kapat (tepsi simgesi → Çık) ve klasörü kopyala.</li>
+    <li><strong>Yeni bilgisayar</strong>: klasörü yeni bilgisayarda aynı yere kopyala. Alpaca ve yapay zekâ anahtarlarını tekrar gir: tek bir Windows kullanıcısı için şifrelidirler, başka bilgisayarda okunamazlar.</li>
+    <li><strong>Sıfırdan başla</strong>: Beyin → Öğrendikleri → Unut, ya da uygulama kapalıyken klasörü sil.</li>
+  </ul>
+
+  <h2 id="tr-safety">12. Güvenlik sınırları</h2>
+  <table>
+    <tr><th>Sınır</th><th>Ne yapar</th></tr>
+    <tr><td>İşlem başına risk</td><td>Zarar durdur dolarsa kaybedilen para hesabın sabit küçük bir parçasıdır (satılan sürümde en fazla %1).</td></tr>
+    <tr><td>Günlük zarar sınırı</td><td>Günün zararı buna ulaşınca (en fazla %3) gerçek para o gün için kapanır. Yeniden başlatmak bunu sıfırlamaz.</td></tr>
+    <tr><td>Pozisyonlar</td><td>Aynı anda en fazla 5 hisse, tek hissede hesabın en fazla %25'i.</td></tr>
+    <tr><td>Zarar durdur ve hedef</td><td>Her alımda ikisi de var. Tam hisse alımlarında Alpaca'da durur, bilgisayarın kapalıyken de çalışır.</td></tr>
+    <tr><td>Molalar</td><td>Her işlemden sonra bekleme, art arda zarar durdurmadan sonra mola ve büyük düşüşte mola.</td></tr>
+  </table>
+  <p>Bu sınırları veri klasöründeki <code>config\config.yaml</code> içinde küçültebilirsin, sürümün izin verdiğinden büyütemezsin.</p>
+
+  <h2 id="tr-phone">13. Telefondan erişim</h2>
+  <p>Aynı Wi-Fi'da, tepsi simgesi menüsü → <strong>Telefon bağlantısını kopyala</strong>'yı seç ve telefonunda aç. Bağlantı özel bir şifre taşır, böylece ağdaki başkaları botu kontrol edemez. Bağlantıyı paylaşma.</p>
+
+  <h2 id="tr-license">14. Lisans</h2>
+  <ul>
+    <li>İlk açılışta satın alma e-postandaki lisans anahtarını gir.</li>
+    <li>Başka bilgisayara geçmek için: <strong>Ayarlar → Lisans → Devre dışı bırak</strong>, sonra yeni bilgisayarda etkinleştir.</li>
+    <li>Bir lisans bir kişi içindir. Uygulama lisansı ara sıra çevrim içi kontrol eder.</li>
+  </ul>
+
+  <h2 id="tr-trouble">15. Sorunlar ve çözümler</h2>
+  <table>
+    <tr><th>Sorun</th><th>Çözüm</th></tr>
+    <tr><td>Hiç almıyor</td><td>Ana Sayfa'daki <strong>İşlem yapıyor mu?</strong> kartına bak. En sık sebepler: gerçek para kurulu değil, STOP açık, "Sadece fikir" seçili, piyasa kapalı ya da boş nakit yok.</td></tr>
+    <tr><td>"Piyasa kapalı"</td><td>ABD hisseleri hafta içi New York saatiyle 9:30–16:00 arası işlem görür (Türkiye saatiyle genelde 16:30–23:00), tatiller hariç.</td></tr>
+    <tr><td>Alpaca anahtarları reddediyor</td><td>Deneme anahtarları PK, canlı anahtarlar AK ile başlar. Tekrar kopyala; gizli anahtar bir kez görünür, yeni çift gerekebilir.</td></tr>
+    <tr><td>Yapay zekâ cevap vermiyor</td><td>Ücretsiz anahtarların hız sınırı var. Bir dakika bekle ya da Ayarlar'dan ikinci bir sağlayıcı ekle.</td></tr>
+    <tr><td>Pencere gri ya da yavaş</td><td>Kendini yeniler. İki kez olursa sonraki açılış ekran kartı olmadan çizer. Ekran kartı sürücünü güncelle.</td></tr>
+    <tr><td>Bilgisayar ses yapıyor ya da ısınıyor</td><td>Modlar → Hız → Eko.</td></tr>
+    <tr><td>Kayıtlar nerede?</td><td><span class="path">%LOCALAPPDATA%\BofStudios\Money Tree AI\logs</span>. Anahtarlar kayıtlardan silinir.</td></tr>
+  </table>
+
+  <h2 id="tr-privacy">16. Gizlilik</h2>
+  <p>Uygulamanın bizde hesabı yoktur ve bize hiçbir şey göndermez. Sadece şunlarla konuşur: Alpaca (fiyatlar, haberler, emirlerin), bağladığın yapay zekâ (başlıklar ve bir işlem hakkında kısa bilgiler, asla anahtarların değil), açık haber kaynakları ve devlet siteleri, SEC EDGAR, Wikipedia sayfa görüntülemeleri, Yahoo Finance (Alpaca anahtarı yokken fiyatlar) ve lisans sunucusu. Bu hizmetlerin her birinin kendi gizlilik politikası vardır.</p>
+
+  <h2 id="tr-legal">17. Şartlar</h2>
+  <div class="card warn">
+    <p><strong>Tavsiye değildir.</strong> Money Tree AI ve BofStudios yatırım, finans, vergi ya da hukuk tavsiyesi vermez. Uygulamadaki, yapay zekânın cevaplarındaki ya da bu kılavuzdaki hiçbir şey bir şeyi alma ya da satma önerisi değildir.</p>
+    <p><strong>Kararlar senin.</strong> Hesabı, modu, sınırları ve gerçek parayı kurup kurmayacağını sen seçersin. Hesabındaki tüm işlemlerden ve ülkenin yasalarına uymaktan sen sorumlusun.</p>
+    <p><strong>Risk.</strong> İşlem yapmak, işlem yaptığın paranın bir kısmını ya da tamamını kaybettirebilir. Yazılımda hata olabilir; aracı kurumlar, veri ve yapay zekâ hizmetleri çalışmayabilir ya da gecikebilir. Yazılım "olduğu gibi", hiçbir garanti olmadan sunulur ve yasaların izin verdiği ölçüde BofStudios, kullanımından doğan işlem zararlarından ya da diğer zararlardan sorumlu değildir.</p>
+    <p><strong>Üçüncü taraflar.</strong> Alpaca, yapay zekâ sağlayıcıları ve veri kaynakları kendi şartları olan bağımsız şirketlerdir. Money Tree AI onlar tarafından yapılmamıştır, onaylanmamıştır ve onlarla bağlantılı değildir.</p>
+  </div>
+
+  <footer>Money Tree AI, BofStudios. Açık kaynak parçalar ve lisansları program klasöründeki <code>THIRD-PARTY-NOTICES.txt</code> dosyasında listelenir.</footer>
+</div>
+</main>
+
+<script>
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem("mt_guide_lang"); } catch (e) { /* none */ }
+    var lang = saved || ((navigator.language || "").toLowerCase().indexOf("tr") === 0 ? "tr" : "en");
+    function set(l) {
+      document.body.className = l;
+      document.documentElement.lang = l;
+      document.querySelectorAll("[data-set]").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-set") === l); });
+      try { localStorage.setItem("mt_guide_lang", l); } catch (e) { /* none */ }
+    }
+    document.querySelectorAll("[data-set]").forEach(function (b) {
+      b.addEventListener("click", function () { set(b.getAttribute("data-set")); });
+    });
+    set(lang);
+  })();
+</script>
+</body>
+</html>

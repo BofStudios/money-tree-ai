@@ -12,6 +12,10 @@ stretch — the same bar as the phone. One real trader; ten competing minds.
 
 Every bot also paper-trades its current best on the live candles each scan,
 so the leaderboard shows how each would be doing right now, not just in the past.
+
+Nothing of this starts over when the app closes: each bot keeps a hall of fame
+(its best strategies so far), which seeds its population on the next start,
+plus its lifetime counts and its paper trades (swarm.json, saved every minute).
 """
 from __future__ import annotations
 
@@ -42,6 +46,7 @@ TRAIN, VALID = 0.6, 0.8   # train on [0, 60%), validate on [60, 80%), confirm on
 POPULATION, PARENTS, IMMIGRANTS = 32, 10, 4
 REPORT_EVERY = 2.0
 MIN_TRADES = 12
+HALL = 6          # strategies each bot remembers between runs
 
 # The ten bots: a name, the family each one specialises in (None = all three), and how boldly it mutates.
 BOTS = [
@@ -86,7 +91,7 @@ def _lower_priority() -> None:
 
 def island_main(index: int, family: str | None, strength: float, arrays: list[dict],
                 min_stop: float, max_stop: float, seed: int, champion: dict | None,
-                out: "mp.Queue", stop: "mp.Event", duty: "mp.Value") -> None:
+                out: "mp.Queue", stop: "mp.Event", duty: "mp.Value", elite: list | None = None) -> None:
     """One bot, in its own process: breed, replay on the training stretch, report."""
     _lower_priority()
     rng = random.Random(seed)
@@ -103,8 +108,14 @@ def island_main(index: int, family: str | None, strength: float, arrays: list[di
     seeds = [DEFAULT.clamped()]
     if champion:
         seeds.append(Genome.from_dict(champion))
-    for g in seeds:
-        if family is None or g.family == family:
+    # What this bot found in earlier runs: it goes on from there, not from zero.
+    for d in elite or []:
+        try:
+            seeds.append(Genome.from_dict(d))
+        except Exception:
+            continue
+    for g in dict.fromkeys(seeds):
+        if (family is None or g.family == family) and len(pop) < POPULATION:
             pop.append(trial(g))
     while len(pop) < POPULATION:
         pop.append(trial(random_genome(rng, family)))
@@ -166,6 +177,21 @@ class Bot:
     open: dict = field(default_factory=dict)       # symbol -> {"entry", "stop", "target", "at"}
     closed_r: list = field(default_factory=list)    # recent R results
     live_trades: int = 0
+    # Kept between runs: the best strategies found so far, and earlier runs' counts.
+    hall: list = field(default_factory=list)        # [(fitness, genome dict)], best first
+    base_tested: int = 0
+    base_generations: int = 0
+
+    def remember(self, genome: Genome, fit: float | None) -> None:
+        d = genome.to_dict()
+        rows = [(f, g) for f, g in self.hall if g != d]
+        rows.append((float(fit if fit is not None else -9.0), d))
+        rows.sort(key=lambda r: -r[0])
+        self.hall = rows[:HALL]
+
+    def memory(self) -> dict:
+        return {"hall": [[f, g] for f, g in self.hall], "tested": self.tested, "generations": self.generations,
+                "open": self.open, "closed_r": self.closed_r[-200:], "live_trades": self.live_trades}
 
     def to_dict(self) -> dict:
         r = self.closed_r
@@ -177,6 +203,7 @@ class Bot:
             "confirm": self.confirm.to_dict() if self.confirm else None,
             "live": {"open": [{"symbol": k, **v} for k, v in self.open.items()], "trades": self.live_trades,
                      "sum_r": round(sum(r), 3), "wins": sum(1 for x in r if x > 0)},
+            "remembered": len(self.hall),
         }
 
 
@@ -228,6 +255,7 @@ class Swarm:
         self.started_at: float | None = None
         self.mode = "off"     # off / waiting / full / light
         self.on_promotion = None   # callback(Promotion)
+        self._memory: dict[str, dict] = {}   # bot name -> what it kept from earlier runs
         self._load()
 
     # ------------------------------------------------------------- lifecycle
@@ -268,13 +296,18 @@ class Swarm:
             self._stop = ctx.Event()
             self._duty = ctx.Value("d", duty)
             arrays = [s.to_arrays() for s in self._data]
+            for b in self.bots:          # a restart with new data keeps what each bot learned
+                self._memory[b.name] = b.memory()
             self.bots = []
             base_seed = int(self._now()) & 0xFFFFFF
             for i, (name, family, strength) in enumerate(BOTS[:count]):
-                self.bots.append(Bot(i, name, family, strength))
+                bot = Bot(i, name, family, strength)
+                self._recall(bot)
+                self.bots.append(bot)
+                elite = [g for _, g in bot.hall]
                 p = ctx.Process(target=island_main, name=f"MoneyTree-{name}", daemon=True, args=(
                     i, family, strength, arrays, self._min_stop, self._max_stop, base_seed + i * 7919,
-                    self.champion.to_dict(), self._queue, self._stop, self._duty))
+                    self.champion.to_dict(), self._queue, self._stop, self._duty, elite))
                 p.start()
                 self._procs.append(p)
             self.started_at = self._now()
@@ -298,6 +331,40 @@ class Swarm:
         self._procs = []
         if self.mode in ("full", "light"):
             self.mode = "off"
+        if self.bots:
+            self._save()
+
+    def _recall(self, bot: Bot) -> None:
+        m = self._memory.get(bot.name) or {}
+        try:
+            bot.hall = [(float(f), dict(g)) for f, g in m.get("hall", [])][:HALL]
+            bot.base_tested = bot.tested = int(m.get("tested", 0))
+            bot.base_generations = bot.generations = int(m.get("generations", 0))
+            bot.open = {str(k): dict(v) for k, v in (m.get("open") or {}).items()}
+            bot.closed_r = [float(x) for x in m.get("closed_r", [])][-200:]
+            bot.live_trades = int(m.get("live_trades", 0))
+        except (TypeError, ValueError):
+            bot.hall, bot.open, bot.closed_r = [], {}, []
+
+    def lifetime(self) -> dict:
+        """Totals over every run, for the Memory card. Without the lock on
+        purpose: the arena holds it for seconds while it judges a bot, and
+        these are plain counters, read from copies."""
+        bots, memory, history = list(self.bots), dict(self._memory), list(self.history)
+        names = {b.name for b in bots}
+        tested = sum(b.tested for b in bots) + sum(
+            int(m.get("tested", 0)) for n, m in memory.items() if n not in names)
+        generations = sum(b.generations for b in bots) + sum(
+            int(m.get("generations", 0)) for n, m in memory.items() if n not in names)
+        remembered = sum(len(b.hall) for b in bots) + sum(
+            len(m.get("hall", [])) for n, m in memory.items() if n not in names)
+        return {"tested": tested, "generations": generations, "remembered": remembered,
+                "promotions": len([p for p in history if not p.rollback]), "version": self.version}
+
+    def save_progress(self) -> None:
+        """Every minute (the Keeper): what each bot learned so far."""
+        if self.bots:
+            self._save()
 
     # ---------------------------------------------------------------- arena
 
@@ -317,8 +384,11 @@ class Swarm:
             if msg["index"] >= len(self.bots):
                 return None
             b = self.bots[msg["index"]]
-            b.tested, b.generations, b.rate = msg["tested"], msg["generations"], msg["rate"]
+            b.tested = b.base_tested + msg["tested"]
+            b.generations = b.base_generations + msg["generations"]
+            b.rate = msg["rate"]
             b.best, b.train, b.fitness = Genome.from_dict(msg["best"]), msg["train"], msg["fitness"]
+            b.remember(b.best, b.fitness)
             if b.best == b.checked_genome or not self._data:
                 return None
             b.checked_genome = b.best
@@ -425,11 +495,17 @@ class Swarm:
 
     def _save(self) -> None:
         try:
+            with self._lock:
+                memory = dict(self._memory)
+                for b in self.bots:
+                    memory[b.name] = b.memory()
+                self._memory = memory
+                doc = {"champion": self.champion.to_dict(), "version": self.version,
+                       "last_promotion": self._last_promotion,
+                       "history": [p.to_dict() for p in self.history], "bots": memory}
             self._path.parent.mkdir(parents=True, exist_ok=True)
             tmp = self._path.with_suffix(".tmp")
-            tmp.write_text(json.dumps({"champion": self.champion.to_dict(), "version": self.version,
-                                       "last_promotion": self._last_promotion,
-                                       "history": [p.to_dict() for p in self.history]}), encoding="utf-8")
+            tmp.write_text(json.dumps(doc), encoding="utf-8")
             tmp.replace(self._path)
         except Exception:
             log.exception("could not save the swarm")
@@ -441,6 +517,7 @@ class Swarm:
             self.version = int(d.get("version", 1))
             self._last_promotion = float(d.get("last_promotion", 0.0))
             self.history = [Promotion.from_dict(x) for x in d.get("history", [])]
+            self._memory = {str(k): v for k, v in (d.get("bots") or {}).items() if isinstance(v, dict)}
         except FileNotFoundError:
             pass
         except Exception:

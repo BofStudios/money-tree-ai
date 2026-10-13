@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import logging
 import threading
 from datetime import date, datetime, timezone
+from pathlib import Path
 from typing import Callable
 
 from app.config import RiskConfig
@@ -38,6 +40,9 @@ class RiskManager:
 
     Live trading always starts disarmed. Nothing persists the armed state, so
     a crash or restart can never leave the bot trading real money unattended.
+
+    The day's realised loss is remembered (state_path), so closing and opening
+    the app can never reset the daily loss limit.
     """
 
     def __init__(
@@ -45,6 +50,7 @@ class RiskManager:
         config: RiskConfig,
         mode: str = "paper",
         clock: Callable[[], date] | None = None,
+        state_path: Path | None = None,
     ) -> None:
         self.config = config
         self.mode = mode
@@ -56,6 +62,8 @@ class RiskManager:
         self._daily_start_equity: float | None = None
         self._daily_realized_pnl = 0.0
         self._disarm_reason: str | None = None
+        self._state_path = state_path
+        self._load_counters()
 
     @property
     def armed(self) -> bool:
@@ -267,6 +275,7 @@ class RiskManager:
         self._roll_day_if_needed(equity)
         with self._lock:
             self._daily_realized_pnl += trade.pnl
+        self._save_counters()
         if self.daily_loss_breached(equity):
             self.disarm("daily loss limit reached")
 
@@ -310,14 +319,51 @@ class RiskManager:
 
     def _roll_day_if_needed(self, equity: float) -> None:
         today = self._clock()
+        changed = False
         with self._lock:
             if self._daily_start_equity is None:
                 self._daily_start_equity = equity
+                changed = True
             if today != self._day:
                 self._day = today
                 self._daily_realized_pnl = 0.0
                 self._daily_start_equity = equity
+                changed = True
                 log.info("daily risk counters reset for %s", today)
+        if changed:
+            self._save_counters()
+
+    # ------------------------------------------------- the day's counters
+
+    def _load_counters(self) -> None:
+        """Today's realised result and start equity from the last run of today."""
+        if self._state_path is None:
+            return
+        try:
+            saved = json.loads(self._state_path.read_text(encoding="utf-8"))
+            if saved.get("day") != self._day.isoformat():
+                return
+            self._daily_realized_pnl = float(saved.get("daily_realized_pnl") or 0.0)
+            start = saved.get("daily_start_equity")
+            self._daily_start_equity = float(start) if start else None
+        except FileNotFoundError:
+            return
+        except (OSError, ValueError, TypeError):
+            log.warning("the day's risk counters are unreadable; counting today from zero")
+
+    def _save_counters(self) -> None:
+        if self._state_path is None:
+            return
+        with self._lock:
+            doc = {"day": self._day.isoformat(), "daily_start_equity": self._daily_start_equity,
+                   "daily_realized_pnl": self._daily_realized_pnl}
+        try:
+            self._state_path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self._state_path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(doc), encoding="utf-8")
+            tmp.replace(self._state_path)
+        except OSError:
+            log.exception("could not save the day's risk counters")
 
 
 def _utc_today() -> date:

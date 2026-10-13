@@ -154,7 +154,7 @@ const t = { text2: css("--text-2"), line: css("--line-soft"), up: css("--up"), d
 
 const chart = LightweightCharts.createChart($("chart"), {
   autoSize: true,
-  layout: { background: { color: "transparent" }, textColor: t.text2, fontSize: 11, attributionLogo: false },
+  layout: { background: { color: "transparent" }, textColor: t.text2, fontSize: 11, attributionLogo: true },
   grid: { vertLines: { color: t.line }, horzLines: { color: t.line } },
   rightPriceScale: { borderVisible: false },
   timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false },
@@ -205,7 +205,11 @@ const sparkSeries = spark.addAreaSeries({
 /* ==================================================================== nav */
 
 function showView(name) {
+  // Setup became part of Settings in 6.0.
+  if (name === "setup") name = "settings";
+  if (!document.querySelector(`.view[data-view="${name}"]`)) name = "home";
   activeView = name;
+  try { localStorage.setItem("mt_view", name); } catch { /* storage off: the app opens on Home */ }
   document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
   document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.dataset.view === name));
   window.scrollTo({ top: 0, behavior: "instant" });
@@ -218,7 +222,7 @@ function showView(name) {
     bar.scrollLeft = tab.offsetLeft - (bar.clientWidth - tab.offsetWidth) / 2;
   }
   if (name === "chart" && selected) loadChart(selected).catch(() => {});
-  if (name === "setup") loadSetup().catch(() => {});
+  if (name === "settings") loadSetup().catch(() => {});
   if (name === "catalysts") loadCatalysts().catch(() => {});
   if (name === "news") loadNews().catch(() => {});
   // The modules (live, money) load their own data when their view opens.
@@ -229,6 +233,14 @@ $("nav").onclick = (e) => {
   const tab = e.target.closest(".tab");
   if (tab) showView(tab.dataset.tab);
 };
+
+// Open where the owner left off. After "load": the modules that fill the
+// views listen for mt:view only once they have run.
+window.addEventListener("load", () => {
+  let saved = null;
+  try { saved = localStorage.getItem("mt_view"); } catch { /* none */ }
+  if (saved && saved !== "home" && document.querySelector(`.view[data-view="${saved}"]`)) showView(saved);
+});
 
 /* The rail is always on screen on desktop; on a phone it slides up as a sheet. */
 function openAI(open) {
@@ -464,9 +476,9 @@ function renderCatalysts(data) {
       <div class="cat-main">
         <div class="cat-title">${escapeHtml(c.title)}</div>
         <div class="cat-meta">
-          <span>${c.symbol}</span>
-          <span>${c.event_date}</span>
-          <span>${c.date_confidence}</span>
+          <span>${escapeHtml(c.symbol)}</span>
+          <span>${escapeHtml(c.event_date)}</span>
+          <span>${escapeHtml(c.date_confidence)}</span>
           <span>${CONVICTION[c.conviction] || ""}</span>
           <span>${c.exit_rule === "before" ? "sell into it" : "hold through"}</span>
         </div>
@@ -655,7 +667,7 @@ function renderPositions(s) {
     return `<div class="item">
       <span class="ticker">${p.symbol.slice(0, 2)}</span>
       <div class="item-main">
-        <div class="item-title">${p.symbol} ${badge}</div>
+        <div class="item-title">${escapeHtml(p.symbol)} ${badge}</div>
         <div class="item-sub">${p.qty} @ ${money(p.entry_price)} → ${money(p.current_price)}${
           p.stop_loss ? ` · stop ${money(p.stop_loss)}` : ""}</div>
       </div>
@@ -663,7 +675,7 @@ function renderPositions(s) {
         <b class="${c}">${signed(p.unrealized_pnl)}</b>
         <span class="${c}">${pct(p.unrealized_pnl_pct)}</span>
       </div>
-      <button class="small" data-close="${p.symbol}">Close</button>
+      <button class="small" data-close="${escapeHtml(p.symbol)}">Close</button>
     </div>`;
   }).join("");
 }
@@ -674,15 +686,15 @@ function renderWatchlist(s) {
   $("watchRows").innerHTML = rows.map((r) => {
     if (!r.ready) {
       return `<div class="item"><span class="ticker">${r.symbol.slice(0, 2)}</span>
-        <div class="item-main"><div class="item-title">${r.symbol}</div>
+        <div class="item-main"><div class="item-title">${escapeHtml(r.symbol)}</div>
         <div class="item-sub">loading…</div></div></div>`;
     }
     const c = r.change_pct >= 0 ? "up" : "down";
     const pos = r.position ? ` · holding ${r.position.qty}` : "";
-    return `<div class="item tappable" data-symbol="${r.symbol}">
+    return `<div class="item tappable" data-symbol="${escapeHtml(r.symbol)}">
       <span class="ticker">${r.symbol.slice(0, 2)}</span>
       <div class="item-main">
-        <div class="item-title">${r.symbol}</div>
+        <div class="item-title">${escapeHtml(r.symbol)}</div>
         <div class="item-sub">${r.trend} · RSI ${money(r.rsi, 0)} · gap ${pct(r.spread_pct)}${pos}</div>
       </div>
       <div class="item-value">
@@ -731,8 +743,8 @@ function renderTrades(payload) {
     const c = tr.pnl >= 0 ? "up" : "down";
     return `<div class="item">
       <div class="item-main">
-        <div class="item-title">${tr.symbol}</div>
-        <div class="item-sub">${stamp(tr.closed_at)} · ${tr.exit_reason}</div>
+        <div class="item-title">${escapeHtml(tr.symbol)}</div>
+        <div class="item-sub">${stamp(tr.closed_at)} · ${escapeHtml(tr.exit_reason)}</div>
       </div>
       <div class="item-value">
         <b class="${c}">${signed(tr.pnl)}</b>
@@ -750,12 +762,12 @@ function renderSetup(data) {
     const code = c.code
       ? `<div class="code"><button class="small" data-copy="${encodeURIComponent(c.code)}">Copy</button>${c.code}</div>` : "";
     const link = c.action ? `<a class="step-link" href="${c.action}" target="_blank" rel="noopener">${c.action_label} ↗</a>` : "";
-    const detail = c.detail ? `<div class="step-detail">${c.detail}</div>` : "";
+    const detail = c.detail ? `<div class="step-detail">${escapeHtml(c.detail)}</div>` : "";
     return `<li class="step ${c.done ? "done" : ""}">
       <div class="step-num">${c.done ? "✓" : i + 1}</div>
       <div class="step-body">
-        <div class="step-title">${c.title}</div>
-        <div class="step-text">${c.body}</div>
+        <div class="step-title">${escapeHtml(c.title)}</div>
+        <div class="step-text">${escapeHtml(c.body)}</div>
         ${detail}${code}${link}
       </div>
     </li>`;

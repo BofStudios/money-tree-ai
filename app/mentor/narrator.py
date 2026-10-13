@@ -66,6 +66,40 @@ class Narrator:
         with self._lock:
             return [line.to_dict() for line in list(self._lines)[-limit:]]
 
+    def save(self, path) -> None:
+        """The newest lines, so the AI panel keeps its story after a restart."""
+        import json
+
+        with self._lock:
+            rows = [{"t": l.timestamp.isoformat(), "level": l.level, "text": l.text, "symbol": l.symbol}
+                    for l in list(self._lines)[-150:]]
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(rows), encoding="utf-8")
+            tmp.replace(path)
+        except OSError:
+            pass
+
+    def restore(self, path) -> int:
+        import json
+
+        try:
+            rows = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return 0
+        lines = []
+        for r in rows if isinstance(rows, list) else []:
+            try:
+                lines.append(MentorLine(datetime.fromisoformat(r["t"]), str(r["level"]), str(r["text"]), r.get("symbol")))
+            except (KeyError, TypeError, ValueError):
+                continue
+        with self._lock:
+            old = list(self._lines)
+            self._lines.clear()
+            self._lines.extend(lines + old)
+        return len(lines)
+
     @property
     def _chatty(self) -> bool:
         return self.config.verbosity == "chatty"

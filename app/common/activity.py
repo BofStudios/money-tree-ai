@@ -11,6 +11,8 @@ forwards it, and /api/steps serves the whole list to a page that just opened.
 from __future__ import annotations
 
 import itertools
+import json
+import logging
 import threading
 import time
 from collections import deque
@@ -19,6 +21,8 @@ from dataclasses import asdict, dataclass, field
 from typing import Iterator
 
 from app.common.events import EventBus
+
+log = logging.getLogger(__name__)
 
 # What kind of work a step is; the page picks a bullet colour from it.
 CLOCK, ACCOUNT, POSITIONS, BARS, ANALYSE, NEWS = "clock", "account", "positions", "bars", "analyse", "news"
@@ -58,6 +62,43 @@ class Monitor:
     def snapshot(self) -> list[dict]:
         with self._lock:
             return [s.to_dict() for s in self._steps]
+
+    # ------------------------------------------------------------- memory
+
+    def save(self, path) -> None:
+        """The newest steps, so the Live tab is not empty after a restart."""
+        with self._lock:
+            rows = [s.to_dict() for s in list(self._steps)[-150:]]
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(rows), encoding="utf-8")
+            tmp.replace(path)
+        except OSError:
+            log.exception("could not save the Live feed")
+
+    def restore(self, path, unfinished: str = "not finished: the app closed") -> int:
+        """Put the last run's steps back (before anything new). A step that was
+        still running when the app closed is shown as not finished."""
+        try:
+            rows = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return 0
+        steps: list[Step] = []
+        for row in rows if isinstance(rows, list) else []:
+            try:
+                step = Step(**{k: row[k] for k in Step.__dataclass_fields__ if k in row})
+            except (TypeError, KeyError):
+                continue
+            step.id = next(self._ids)
+            if step.state == RUNNING:
+                step.state, step.ended_at, step.detail = FAILED, step.started_at, unfinished
+            steps.append(step)
+        with self._lock:
+            old = list(self._steps)
+            self._steps.clear()
+            self._steps.extend(steps + old)
+        return len(steps)
 
     def begin(self, kind: str, title: str) -> "StepHandle":
         step = Step(next(self._ids), kind, title, RUNNING, _now_ms())

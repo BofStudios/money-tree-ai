@@ -8,6 +8,11 @@ engine's scan only ever asks it questions that need no network.
 Four gates every buy passes: the five checks, the daily trend, the news,
 and what past signals of the same kind returned. Then, optionally, the AI's
 veto. Each can hold a buy back or make it smaller; none can start one.
+
+All of it is remembered between runs (brain.json, history.npz): what was read
+and when, so a restart does not read everything again, and the months of
+candles the bots train on, so the swarm starts at once instead of after a
+download.
 """
 from __future__ import annotations
 
@@ -116,6 +121,7 @@ class Brain:
         self.shadows = ShadowBook()
         self.swarm = Swarm(self.dir / "swarm.json", now)
         self._lock = threading.RLock()
+        self._swarm_lock = threading.Lock()      # one swarm restart at a time
         self.filings: dict[str, q.Filings] = {}
         self._missed: dict[str, float] = {}
         self.events: dict[str, dict] = {}
@@ -153,6 +159,21 @@ class Brain:
         self._thread = threading.Thread(target=self._loop, name="brain-worker", daemon=True)
         self._thread.start()
 
+    def _resume_swarm(self) -> None:
+        """Yesterday's or today's training candles from disk: the bots start now."""
+        if not self.settings.self_improve or self.settings.bots <= 0:
+            return
+        cached = self._load_history()
+        if not cached:
+            return
+        key, at, series = cached
+        if self._now() - at > 2 * DAY:
+            return
+        lo, hi = self.risk_fn()
+        self.swarm.set_data(series, lo, hi)
+        self._history_key, self._history_at = key, at
+        self._restart_swarm()
+
     def stop(self) -> None:
         self._stop.set()
         self._wake.set()
@@ -183,7 +204,9 @@ class Brain:
             except Exception:
                 log.exception("could not apply ultra mode to the engine")
         if "bots" in changes or "self_improve" in changes:
-            self._restart_swarm()
+            # Stopping and starting ten processes takes seconds: never in the
+            # request that asked for it, so the switch answers at once.
+            threading.Thread(target=self._restart_swarm, name="swarm-restart", daemon=True).start()
         elif "power" in changes:
             self.swarm.set_duty(self._duty())
         return self.settings
@@ -208,13 +231,20 @@ class Brain:
         return 1.0 if self.settings.power == "full" else 0.15
 
     def _restart_swarm(self) -> None:
-        s = self.settings
-        count = s.bots if s.self_improve else 0
-        self.swarm.start(count, self._duty())
+        with self._swarm_lock:
+            s = self.settings
+            count = s.bots if s.self_improve else 0
+            self.swarm.start(count, self._duty())
 
     # ============================================================== worker
 
     def _loop(self) -> None:
+        # Here, not in start(): re-checking the strategy on months of candles
+        # and starting ten processes takes a while, and the window must not wait.
+        try:
+            self._resume_swarm()
+        except Exception:
+            log.exception("could not start the bots from the saved candles")
         while not self._stop.is_set():
             try:
                 self.refresh()
@@ -423,6 +453,7 @@ class Brain:
         if handle:
             handle.done(w.history_done(len(series), sum(s.size for s in series)))
         self._history_key, self._history_at = key, self._now()
+        self._save_history(key, self._history_at, series)
         lo, hi = self.risk_fn()
         rollback = self.swarm.set_data(series, lo, hi)
         if rollback and self.on_promotion:
@@ -724,6 +755,12 @@ class Brain:
                 "discovered": self.discovered,
                 "plans": self.plans,
                 "ciks": {k: f"{v[0]}|{v[1]}" for k, v in (self.sec.ciks.items() if self.sec else [])},
+                # When each thing was last read, so a restart does not read it all again.
+                "timers": {"daily_at": self._daily_at, "attention_at": self._attention_at,
+                           "missed": self._missed, "rejected": self._rejected,
+                           "last_discover": self._last_discover, "rates": self.rates, "rates_at": self._rates_at},
+                "daily": {sym: {k: [round(float(x), 4) for x in v] for k, v in d.items()}
+                          for sym, d in list(self.daily.items())[:60]},
             }
             self.dir.mkdir(parents=True, exist_ok=True)
             tmp = self.dir / "brain.tmp"
@@ -746,6 +783,18 @@ class Brain:
             self.attention = doc.get("attention", {})
             self.discovered = doc.get("discovered", {})
             self.plans = doc.get("plans", {})
+            timers = doc.get("timers") or {}
+            self._daily_at = {str(k): float(v) for k, v in (timers.get("daily_at") or {}).items()}
+            self._attention_at = {str(k): float(v) for k, v in (timers.get("attention_at") or {}).items()}
+            self._missed = {str(k): float(v) for k, v in (timers.get("missed") or {}).items()}
+            self._rejected = {str(k): float(v) for k, v in (timers.get("rejected") or {}).items()}
+            self._last_discover = float(timers.get("last_discover") or 0.0)
+            self.rates = {str(k): float(v) for k, v in (timers.get("rates") or {}).items()}
+            self._rates_at = float(timers.get("rates_at") or 0.0)
+            for sym, d in (doc.get("daily") or {}).items():
+                self.daily[sym] = {k: np.asarray(v, dtype=float) for k, v in d.items()}
+            # A daily chart without its candles is fetched again.
+            self._daily_at = {k: v for k, v in self._daily_at.items() if k in self.daily}
             if self.sec:
                 for k, v in doc.get("ciks", {}).items():
                     cik, _, name = v.partition("|")
@@ -753,6 +802,35 @@ class Brain:
                         self.sec.ciks.setdefault(k, (int(cik), name))
         except Exception:
             log.warning("parts of the saved brain could not be read; starting those fresh")
+
+
+    # ------------------------------------------------- training candles
+
+    def _save_history(self, key: str, at: float, series: list) -> None:
+        try:
+            arrays = {"meta": np.array([json.dumps({"key": key, "at": at, "symbols": [x.symbol for x in series]})])}
+            for i, x in enumerate(series):
+                for name in ("open", "high", "low", "close", "volume"):
+                    arrays[f"{i}_{name}"] = getattr(x, name)
+            tmp = self.dir / "history.tmp.npz"
+            np.savez_compressed(tmp, **arrays)
+            tmp.replace(self.dir / "history.npz")
+        except Exception:
+            log.exception("could not save the training candles")
+
+    def _load_history(self):
+        path = self.dir / "history.npz"
+        if not path.exists():
+            return None
+        try:
+            with np.load(path, allow_pickle=False) as z:
+                meta = json.loads(str(z["meta"][0]))
+                series = [Series(sym, z[f"{i}_open"], z[f"{i}_high"], z[f"{i}_low"], z[f"{i}_close"], z[f"{i}_volume"])
+                          for i, sym in enumerate(meta["symbols"])]
+            return str(meta["key"]), float(meta["at"]), series
+        except Exception:
+            log.warning("the saved training candles are unreadable; they are fetched again")
+            return None
 
 
 # ================================================================ helpers

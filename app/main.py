@@ -35,10 +35,15 @@ def _mark(step: str, shown: str | None = None) -> None:
 # written by the window); delete that file to try the GPU again.
 from app.common import startup as _gpu_check  # noqa: E402
 
-if _gpu_check.software_rendering():
-    _flags = os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", "")
-    if "--disable-gpu" not in _flags:
-        os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = (_flags + " --disable-gpu --disable-gpu-compositing").strip()
+_flags = os.environ.get("QTWEBENGINE_CHROMIUM_FLAGS", "")
+if _gpu_check.software_rendering() and "--disable-gpu" not in _flags:
+    _flags += " --disable-gpu --disable-gpu-compositing"
+# A covered or minimised window must not freeze the page: Chromium's background
+# throttling made the watchdog think it hung, and it reloaded the dashboard.
+for _flag in ("--disable-renderer-backgrounding", "--disable-backgrounding-occluded-windows"):
+    if _flag not in _flags:
+        _flags += " " + _flag
+os.environ["QTWEBENGINE_CHROMIUM_FLAGS"] = _flags.strip()
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
@@ -51,6 +56,7 @@ from app.challenge.manager import ChallengeManager
 from app.common import activity
 from app.common.activity import Monitor
 from app.common.events import EventBus
+from app.common.journal import Journal, Keeper
 from app.common.keystore import KeyStore
 from app.common.logging_config import setup_logging
 from app.common.restart import Restarter, relaunch, relaunched
@@ -176,6 +182,28 @@ def build_data_source(keys: tuple[str, str] | None) -> MarketDataSource:
     return YahooData()
 
 
+def local_token(path: Path) -> str:
+    """The dashboard's password when .env sets none: random, made once, kept in
+    the data home. Without it anyone on the same Wi-Fi (or a web page open in
+    another browser on this PC) could drive the bot. The window and the phone
+    link carry it; nobody has to type it."""
+    import secrets as _secrets
+
+    try:
+        saved = path.read_text(encoding="utf-8").strip()
+        if len(saved) >= 24:
+            return saved
+    except OSError:
+        pass
+    token = _secrets.token_urlsafe(32)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(token, encoding="utf-8")
+    except OSError:
+        log.warning("could not save the dashboard password; a new one is made at the next start")
+    return token
+
+
 def lan_ip() -> str:
     probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
@@ -199,6 +227,12 @@ def main() -> None:
     setup_logging(LOG_DIR)
     _taskbar_identity()
     _mark("imports done", "Reading your settings")
+    from app.common import startup as _boot
+    from app.config import HOME
+
+    log.info("data home: %s", HOME)
+    if _boot.MIGRATED:
+        log.info("copied %d files from the old folder into the data home", len(_boot.MIGRATED))
     settings = load_settings()
     for change in edition.clamp_risk(settings.app.risk):
         log.info("%s edition limit: %s", edition.NAME, change)
@@ -213,9 +247,14 @@ def main() -> None:
 
     events = EventBus()
     monitor = Monitor(events)
+    # What the bot has done over its whole life; saved every minute by the keeper.
+    journal = Journal(DATA_DIR / "journal.json")
+    journal.started()
+    keeper = Keeper()
     keystore = KeyStore(KEYSTORE_PATH)
     restarter = Restarter()
     mentor = Narrator(settings.app.mentor, events)
+    mentor.restore(DATA_DIR / "mentor_feed.json")
     claude = AIMentor(
         settings.app.mentor, settings.secrets.mentor_keys, settings.mentor_memory_path
     )
@@ -237,7 +276,10 @@ def main() -> None:
     data = build_data_source(keys)
     session_factory = create_session_factory(settings.db_path)
     repo = Repository(session_factory)
-    risk = RiskManager(settings.app.risk, mode=settings.app.mode)
+    risk = RiskManager(settings.app.risk, mode=settings.app.mode, state_path=DATA_DIR / "risk_day.json")
+    if isinstance(executor, PaperExecutor):
+        # Practice money keeps what earlier runs made or lost.
+        executor.restore_result(repo.realised_pnl("paper", executor.name))
     challenges = ChallengeManager(
         config=settings.app.challenge,
         risk=settings.app.risk,
@@ -260,6 +302,7 @@ def main() -> None:
         state_path=DATA_DIR / "engine_state.json",
     )
 
+    engine.journal = journal
     catalysts = CatalystManager(session_factory, events)
     news = NewsFeed(*(keys or ("", "")))
     engine.news = news
@@ -285,9 +328,13 @@ def main() -> None:
     market = watchlist_for(chosen.market)
     if market:
         engine.set_watchlist(market)
+    engine.apply_saved_watchlist()
     engine.config.risk.fractional_shares = chosen.small_account
+    w_start = Words(chosen.language == "tr")
+    if monitor.restore(DATA_DIR / "live_feed.json", w_start.unfinished_step()):
+        monitor.info(activity.INFO, w_start.reopened())
     if notice:
-        monitor.info(activity.WARN, notice(Words(chosen.language == "tr")))
+        monitor.info(activity.WARN, notice(w_start))
 
     telegram = TelegramNotifier(
         # The sold copy is never connected to anyone's Telegram.
@@ -302,7 +349,7 @@ def main() -> None:
     if settings.app.telegram.enabled and edition.limits().telegram:
         telegram.start()
 
-    token = settings.secrets.dashboard_token
+    token = settings.secrets.dashboard_token or local_token(DATA_DIR / "dashboard.token")
     api = create_app(
         engine, repo, mentor, claude, events, token, settings, catalysts, news,
         research, analyst, profiles, keystore=keystore, restarter=restarter,
@@ -318,8 +365,17 @@ def main() -> None:
 
     engine.start()
     brain.start()
-    reflex = build_reflex(engine, brain, data, keys, claude, monitor, events)
+    reflex = build_reflex(engine, brain, data, keys, claude, monitor, events, journal)
     reflex.start()
+    keeper.add("journal", journal.save)
+    keeper.add("live feed", lambda: monitor.save(DATA_DIR / "live_feed.json"))
+    keeper.add("AI feed", lambda: mentor.save(DATA_DIR / "mentor_feed.json"))
+    keeper.add("bots", brain.swarm.save_progress)
+    keeper.add("engine", engine.save_state)
+    if reflex.memory is not None:
+        keeper.add("news memory", reflex.memory.save)
+    keeper.start()
+    _remind_to_arm(engine, events)
     _mark("threads started", "Opening the window")
 
     if args.headless:
@@ -335,6 +391,7 @@ def main() -> None:
             reflex.stop()
             brain.stop()
             engine.stop()
+            keeper.stop()
             telegram.stop()
             web.stop()
         if restarter.requested.is_set():
@@ -361,6 +418,7 @@ def main() -> None:
             reflex.stop()
             brain.stop()
             engine.stop()
+            keeper.stop()
             telegram.stop()
             web.stop()
             sys.exit(0)
@@ -378,6 +436,7 @@ def main() -> None:
     reflex.stop()
     brain.stop()
     engine.stop()
+    keeper.stop()
     telegram.stop()
     web.stop()
     if restarter.requested.is_set():
@@ -385,6 +444,40 @@ def main() -> None:
         relaunch()
         exit_code = 0
     sys.exit(exit_code)
+
+
+def _remind_to_arm(engine, events, first_after: float = 25.0) -> None:
+    """Real money that is not armed only watches. Say so once after the start
+    and once at each market open (a Windows notice when the window is not in
+    front, and a Telegram message with an Arm button). Never arms by itself."""
+    import threading
+
+    def loop() -> None:
+        reminded_open = None
+        time.sleep(first_after)
+        first = True
+        while engine.running:
+            try:
+                live = engine.executor.broker == "alpaca_live"
+                state = engine.clock.state()
+                due = first or (state.is_open and reminded_open != _ny_today())
+                if live and due and not engine.risk.armed and not engine.halted:
+                    events.publish("not_armed", {})
+                    if state.is_open:
+                        reminded_open = _ny_today()
+                first = False
+            except Exception:
+                log.debug("arm reminder failed", exc_info=True)
+            time.sleep(60)
+
+    threading.Thread(target=loop, name="arm-reminder", daemon=True).start()
+
+
+def _ny_today() -> str:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    return datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
 
 
 def _taskbar_identity() -> None:
@@ -427,14 +520,30 @@ def _licensed(settings: Settings, headless: bool) -> bool:
     return activate(lic, verdict, turkish)
 
 
-def build_reflex(engine, brain, data, keys, claude, monitor, events):
-    """The news reflex: official feeds with no key, plus Alpaca's wire when keys work."""
+def build_reflex(engine, brain, data, keys, claude, monitor, events, journal=None):
+    """The news reflex: official feeds with no key, plus Alpaca's wire when keys work.
+    It keeps its own track record (news memory) and learns from it."""
+    from app.brain.news_memory import NewsMemory
+    from app.brain.news_memory import label as kind_label
     from app.brain.reflex import NewsReflex
     from app.brain.wires import WireReader
 
+    memory = NewsMemory(DATA_DIR / "brain" / "news_memory.json", data)
+
+    def lesson(kind: str, st: dict) -> None:
+        w = BrainWords(engine.language == "tr")
+        text = w.t(f"Learned about {kind_label(kind)}: {st['n']} cases, {st['hit']:.0%} went the expected way, "
+                   f"average {st['avg']:+.2f}% in a day.",
+                   f"{kind_label(kind, True)} hakkında öğrendi: {st['n']} olay, %{st['hit'] * 100:.0f} beklenen yöne "
+                   f"gitti, günde ortalama %{st['avg']:+.2f}.")
+        monitor.info("learn", text)
+        if journal is not None:
+            journal.event("lesson", text)
+
+    memory.on_lesson = lesson
     reader = WireReader(alpaca=AlpacaNews(*keys) if keys else None)
     reflex = NewsReflex(engine, reader, data, claude, lambda: brain.settings, lambda: engine.language == "tr",
-                        DATA_DIR / "brain" / "reflex.json", monitor, events)
+                        DATA_DIR / "brain" / "reflex.json", monitor, events, memory=memory)
     engine.reflex = reflex
     return reflex
 
@@ -460,6 +569,9 @@ def build_brain(engine, data, keys, claude, monitor, events, risk, mentor) -> Br
         w = BrainWords(engine.language == "tr")
         monitor.info("learn", w.promotion_title(p), None, w.promotion_text(p).splitlines())
         events.publish("brain_promotion", {"title": w.promotion_title(p), "text": w.promotion_text(p)})
+        if engine.journal is not None:
+            engine.journal.event("promotion", w.promotion_title(p), w.promotion_text(p).splitlines()[0]
+                                 if w.promotion_text(p) else None)
         engine.scan_now()
 
     def found(d: dict) -> None:
@@ -498,8 +610,6 @@ def _print_banner(
     print(f"  Telegram : {'on' if telegram.enabled else 'off (set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_IDS)'}")
     ai = claude.backend
     print(f"  AI       : {ai['provider'] + ' · ' + ai['model'] if ai['available'] else 'rule-based (connect a free Groq key in Settings)'}")
-    if not settings.secrets.dashboard_token:
-        print("  Warning  : no DASHBOARD_TOKEN — anyone on your Wi-Fi can control the bot.")
     print()
 
 
