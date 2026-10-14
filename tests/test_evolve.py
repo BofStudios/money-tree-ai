@@ -307,3 +307,17 @@ def test_modes_change_style_and_speed(tmp_path):
     assert r["switches"]["news_trading"] is False
     assert client.get("/api/readiness?token=tok").json()["checks"]
     assert client.get("/api/memory?token=tok").json()["level"] >= 1
+
+
+def test_a_falling_daily_chart_halves_the_buy_but_does_not_block_it(tmp_path):
+    from app.brain.brain import Brain
+
+    brain = Brain(tmp_path / "brain", None)
+    close = np.linspace(200, 100, 120)               # a clear downtrend
+    brain.daily["AAA"] = {"close": close, "high": close, "low": close}
+    idx = pd.DatetimeIndex([datetime(2026, 10, 1, 14, tzinfo=timezone.utc) + timedelta(minutes=15 * i) for i in range(30)])
+    frame = pd.DataFrame({"open": 100.0, "high": 100.0, "low": 100.0, "close": 100.0, "volume": 1.0}, index=idx)
+    r = brain.research("AAA", frame, {"price": 100.0}, True)
+    assert r.daily_up is False and r.trend_ok and r.size <= 0.5
+    brain.settings.quality_mode = "STRICT"
+    assert not brain.research("AAA", frame, {"price": 100.0}, True).trend_ok

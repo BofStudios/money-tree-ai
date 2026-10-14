@@ -46,7 +46,7 @@ function readyCard(r, compact) {
   const missed = r.missed_total ? `
       <div class="rd-missed">
         <span>${esc(t("ready.missed", { n: r.missed_total }))}</span>
-        <ul>${r.missed.map((m) => `<li><b>${m.count}×</b> ${esc(m.title)}${m.symbol ? ` <em>${esc(m.symbol)}</em>` : ""}</li>`).join("")}</ul>
+        <ul>${r.missed.map((m) => `<li><b>${m.count}×</b> ${esc(m.title)}${m.symbol ? ` <em>${esc(m.symbol)}</em>` : ""}${m.detail ? `<small>${esc(m.detail)}</small>` : ""}</li>`).join("")}</ul>
       </div>` : "";
   const checks = compact ? "" : `
       <details class="rd-all" ${r.verdict === "watching" ? "open" : ""}>

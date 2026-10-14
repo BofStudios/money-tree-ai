@@ -236,3 +236,4 @@ button.sm { padding: 6px 10px; font-size: 12.5px; }
 .ob-risk input { margin-top: 3px; accent-color: var(--accent); width: 16px; height: 16px; flex: none; }
 .ob-risk a { color: var(--accent); }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
+.rd-missed small { display: block; color: var(--text-3); font-size: 12px; margin: 1px 0 0 22px; }

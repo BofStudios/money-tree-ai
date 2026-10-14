@@ -161,6 +161,7 @@ class PortfolioEngine:
         self._watch_added: list[str] = []
         self._watch_removed: list[str] = []
         self._save_lock = threading.Lock()
+        self._held_why: dict[str, str] = {}          # symbol -> why research held its buy back
         self._blocked: dict[str, dict] = {}          # why a buy did not happen -> count, last time, symbol
         self._blocked_day = ""
         self._halted, self._halted_at = self._load_halt()
@@ -1080,7 +1081,7 @@ class PortfolioEngine:
         if position is None and signal.action is Action.BUY and self.brain is not None and not news:
             research = self._research_gate(symbol, snapshot, w)
             if research is False:
-                self.note_block("research", symbol)
+                self.note_block("research", symbol, self._held_why.get(symbol, ""))
                 return False
 
         balance, max_positions, position_pct = self._effective_limits()
@@ -1520,6 +1521,7 @@ class PortfolioEngine:
         if not r.ok:
             self._held_back[symbol] = candle
             why = bw.held_back_why(r)
+            self._held_why[symbol] = why
             self.mentor.rejected(symbol, "buy", why)
             self.events.publish("brain_held_back", {"symbol": symbol, "why": why})
             return False

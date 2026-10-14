@@ -610,7 +610,10 @@ class Brain:
         f = self.features(symbol, history, snapshot, intraday)
         quality_ok = {"OFF": True, "BALANCED": (rep is None or rep.decision != "AVOID"),
                       "STRICT": (rep is not None and rep.decision == "BUY_ZONE")}[s.quality_mode]
-        trend_ok = s.quality_mode == "OFF" or f.daily_up is not False
+        # A falling daily chart blocks only in STRICT. Otherwise it halves the order:
+        # the stop-loss, the daily loss limit and arming are unchanged.
+        trend_ok = s.quality_mode != "STRICT" or f.daily_up is not False
+        t_size = 0.5 if (f.daily_up is False and s.quality_mode != "STRICT") else 1.0
         flags = self.flags_for(symbol)
         count = self.radar.count(symbol)
         mood = f.news
@@ -619,7 +622,7 @@ class Brain:
         learned = self.learner.verdict(f) if s.learning else Verdict(False, None, [], 1.0)
         q_size = 1.0 if s.quality_mode == "OFF" or (rep and rep.decision == "BUY_ZONE") else 0.75
         n_size = 0.75 if s.news_check and mood is not None and mood < -GOOD_MOOD else 1.0
-        size = min(max(q_size * n_size * learned.size, 0.5), 1.0)
+        size = min(max(q_size * n_size * t_size * learned.size, 0.4), 1.0)
         return Research(symbol, rep, quality_ok, f.daily_up, trend_ok, mood, count, flags, news_ok,
                         learned, not learned.blocked, f, size, self.alt(symbol))
 

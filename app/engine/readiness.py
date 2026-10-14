@@ -128,6 +128,7 @@ def readiness(engine, brain=None, reflex=None) -> dict:
     blocked = engine.blocked_today()
     missed = sorted(blocked.items(), key=lambda kv: -kv[1].get("count", 0))
     lines = [{"key": k, "count": int(v.get("count", 0)), "symbol": v.get("symbol", ""),
+              "detail": v.get("detail", ""),
               "title": t(*BLOCK_WORDS.get(k, BLOCK_WORDS["rules"]))} for k, v in missed]
 
     bad = [c for c in checks if c["state"] == "bad"]
