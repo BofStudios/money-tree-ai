@@ -93,6 +93,33 @@ async function loadReady() {
   try { ready = await api("GET", "/api/readiness"); renderReady(); } catch { /* the next poll tries again */ }
 }
 
+/* -------------------------------------------------------------- scorecard */
+
+let score = null;
+
+function pct(v) { return v === null || v === undefined ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`; }
+
+function scoreCard(s) {
+  if (!s) return "";
+  const tone = s.verdict === "ahead" ? "up" : s.verdict === "behind" ? "down" : "";
+  return `
+    <section class="score-card sc-${esc(s.verdict || "none")}">
+      <div class="sc-head"><span class="sc-word">${esc(t("score.title"))}</span><b>${esc(s.headline)}</b></div>
+      ${s.bot_pct === null ? "" : `
+      <div class="sc-vs">
+        <div><span>${esc(t("score.bot"))}</span><b class="${tone}">${esc(pct(s.bot_pct))}</b><small>$${Number(s.start_equity).toFixed(2)} → $${Number(s.equity).toFixed(2)}</small></div>
+        <i>vs</i>
+        <div><span>${esc(t("score.spy"))}</span><b>${esc(pct(s.spy_pct))}</b><small>${s.spy_value ? `$${Number(s.start_equity).toFixed(2)} → $${Number(s.spy_value).toFixed(2)}` : ""}</small></div>
+      </div>`}
+      <p class="note faint">${esc(t("score.trades", { n: s.trades, w: s.win_rate, p: `${s.realised >= 0 ? "+" : ""}$${Number(s.realised).toFixed(2)}` }))} · ${esc(s.note)}</p>
+    </section>`;
+}
+
+async function loadScore() {
+  try { score = await api("GET", "/api/scorecard"); } catch { return; }
+  if ($("homeScore")) $("homeScore").innerHTML = scoreCard(score);
+}
+
 /* ------------------------------------------------------------------ modes */
 
 function cardRow(group, options, active, extra = {}) {
@@ -299,7 +326,7 @@ document.addEventListener("change", (e) => {
 window.addEventListener("mt:view", (e) => {
   view = e.detail;
   if (view === "modes") { loadModes(); loadReady(); }
-  if (view === "home") loadReady();
+  if (view === "home") { loadReady(); loadScore(); }
   if (view === "settings") api("GET", "/api/modes").then((m) => { if ($("dataHomePath")) $("dataHomePath").textContent = m.home; }).catch(() => {});
 });
 let lastStatus = 0;
@@ -314,4 +341,6 @@ window.addEventListener("mt:lang", () => { renderReady(); renderModes(); const h
 setInterval(() => { if (!document.hidden) loadReady(); }, 15000);
 loadReady();
 loadMemory();
+loadScore();
+setInterval(() => { if (!document.hidden && view === "home") loadScore(); }, 300000);
 setInterval(() => { if (!document.hidden) loadMemory(); }, 120000);

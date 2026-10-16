@@ -321,3 +321,47 @@ def test_a_falling_daily_chart_halves_the_buy_but_does_not_block_it(tmp_path):
     assert r.daily_up is False and r.trend_ok and r.size <= 0.5
     brain.settings.quality_mode = "STRICT"
     assert not brain.research("AAA", frame, {"price": 100.0}, True).trend_ok
+
+
+def test_auto_eco_slows_the_bots_while_the_pc_is_in_use(tmp_path):
+    from app.brain.brain import Brain
+
+    brain = Brain(tmp_path / "brain", None)
+    duties = []
+    brain.swarm.set_duty = duties.append
+    idle = [5.0]
+    brain.idle_fn = lambda: idle[0]
+    assert brain.govern() and duties[-1] == 0.25
+    idle[0] = 600.0
+    assert brain.govern() and duties[-1] == 1.0
+    idle[0] = 5.0
+    brain.settings.ultra = True
+    assert not brain.govern(), "ultra always runs full"
+    brain.settings.ultra = False
+    brain.settings.auto_eco = False
+    assert not brain.govern()
+
+
+def test_scorecard_compares_the_bot_with_holding_spy(tmp_path):
+    from app.engine import scorecard as sc
+
+    engine = build(tmp_path)
+    now = datetime.now(timezone.utc)
+    engine.repo.equity_curve = lambda mode, days=90: [
+        {"time": int((now - timedelta(days=20)).timestamp()), "value": 100.0},
+        {"time": int(now.timestamp()), "value": 102.0}]
+
+    class Spy:
+        def get_ohlcv(self, symbol, timeframe, limit=100):
+            idx = pd.DatetimeIndex([now - timedelta(days=30 - i) for i in range(31)])
+            close = np.linspace(100, 110, 31)
+            return pd.DataFrame({"open": close, "high": close, "low": close, "close": close, "volume": 1.0}, index=idx)
+
+    engine.data = Spy()
+    sc._cache.clear()
+    assert sc.scorecard(engine)["verdict"] == "idle", "no trades: only cash against SPY"
+    engine.repo.save_closed_trade(_trade(2.0, "take-profit"), "paper", engine.executor.name)
+    card = sc.scorecard(engine)
+    assert card["bot_pct"] == 2.0
+    assert card["spy_pct"] > 2.0 and card["verdict"] == "behind"
+    assert "behind SPY" in card["headline"]

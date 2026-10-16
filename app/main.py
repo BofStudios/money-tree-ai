@@ -558,6 +558,9 @@ def build_brain(engine, data, keys, claude, monitor, events, risk, mentor) -> Br
         latest_price=getattr(data, "get_quote", None), monitor=monitor,
     )
     brain.symbols_fn = engine.watched_symbols
+    from app.common.idle import idle_seconds
+
+    brain.idle_fn = idle_seconds
     brain.timeframe_fn = lambda: engine.timeframe
     brain.turkish_fn = lambda: engine.language == "tr"
     brain.risk_fn = lambda: (risk.config.min_stop_pct, risk.config.max_stop_pct)

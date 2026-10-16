@@ -66,6 +66,7 @@ class BrainSettings:
     ultra: bool = False              # every core, the world's feeds, a scan every 15 seconds
     before_ultra: dict = field(default_factory=dict)   # what ultra changed, to put back
     warned: bool = False             # the start-up warning was acknowledged
+    auto_eco: bool = True            # bots slow down while someone uses this PC
 
     @staticmethod
     def load(path: Path) -> "BrainSettings":
@@ -117,6 +118,8 @@ class Brain:
         self.settings = BrainSettings.load(self.dir / "settings.json")
         self.radar = NewsRadar(now)
         self.on_ultra = None          # callback(bool): the engine's speed follows ultra
+        self.idle_fn = None           # -> seconds since the last mouse/keyboard input, or None
+        self._busy_pc = False         # someone is using the PC: the bots run light
         self.learner = Learner()
         self.shadows = ShadowBook()
         self.swarm = Swarm(self.dir / "swarm.json", now)
@@ -158,6 +161,7 @@ class Brain:
         self._stop.clear()
         self._thread = threading.Thread(target=self._loop, name="brain-worker", daemon=True)
         self._thread.start()
+        threading.Thread(target=self._govern_loop, name="auto-eco", daemon=True).start()
 
     def _resume_swarm(self) -> None:
         """Yesterday's or today's training candles from disk: the bots start now."""
@@ -228,7 +232,30 @@ class Brain:
                 "before_ultra": {}}
 
     def _duty(self) -> float:
-        return 1.0 if self.settings.power == "full" else 0.15
+        if self.settings.power != "full":
+            return 0.15
+        if self._busy_pc and not self.settings.ultra:
+            return 0.25
+        return 1.0
+
+    def govern(self) -> bool:
+        """Auto eco: while someone uses this PC the bots run at a quarter of the
+        speed; two minutes after the last mouse or keyboard input they go full
+        speed again. Ultra always runs full. Returns True when it changed."""
+        idle = self.idle_fn() if self.idle_fn else None
+        busy = bool(self.settings.auto_eco and idle is not None and idle < 120 and not self.settings.ultra)
+        if busy == self._busy_pc:
+            return False
+        self._busy_pc = busy
+        self.swarm.set_duty(self._duty())
+        return True
+
+    def _govern_loop(self) -> None:
+        while not self._stop.wait(10.0):
+            try:
+                self.govern()
+            except Exception:
+                log.debug("auto eco failed", exc_info=True)
 
     def _restart_swarm(self) -> None:
         with self._swarm_lock:

@@ -26,7 +26,7 @@ STYLES = {
     "balanced": {"quality_mode": "BALANCED", "news_min_confidence": 0.6},
     "bold": {"quality_mode": "OFF", "news_min_confidence": 0.55},
 }
-SWITCHES = ("news_trading", "self_improve", "discover", "ai_check", "learning", "news_check")
+SWITCHES = ("news_trading", "self_improve", "discover", "ai_check", "learning", "news_check", "auto_eco")
 
 
 def style_of(settings) -> str:
@@ -120,6 +120,12 @@ def build_mode_router(engine, token: str) -> APIRouter:
         from app.engine.readiness import readiness as build
 
         return build(engine, getattr(engine, "brain", None), getattr(engine, "reflex", None))
+
+    @router.get("/scorecard", dependencies=guarded)
+    def scorecard() -> dict:
+        from app.engine.scorecard import scorecard as build
+
+        return build(engine, getattr(engine, "language", "en") == "tr")
 
     @router.get("/memory", dependencies=guarded)
     def memory() -> dict:
