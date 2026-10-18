@@ -42,7 +42,7 @@
 
 1. Download the zip from the [latest release](https://github.com/BofStudios/money-tree-ai/releases/latest), unpack it and run `Money Tree AI.exe`.
 2. Practice money works at once, with no keys. Add free [Alpaca](https://alpaca.markets) keys in *Settings* to use their paper or live account.
-3. Read the guide: *Settings → User guide* (English and Turkish).
+3. Read the step-by-step tutorial (Alpaca setup, every mode, every screen): [English](docs/TUTORIAL.md) · [Türkçe](docs/TUTORIAL.tr.md). The same short guide is in the app: *Settings → User guide*.
 
 Or run from source: `pip install -r requirements.txt` then `python -m app.main`.
 
