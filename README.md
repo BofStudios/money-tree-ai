@@ -1,4 +1,54 @@
-# Money Tree AI
+<p align="center">
+  <img src="assets/logo.png" width="120" alt="Money Tree AI logo">
+</p>
+
+<h1 align="center">Money Tree AI</h1>
+
+<p align="center"><b>A free, open-source desktop bot that watches US stocks, reads breaking news,<br>learns from its own results and shows you every reason behind every move.</b></p>
+
+<p align="center">
+  <a href="https://github.com/BofStudios/money-tree-ai/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/BofStudios/money-tree-ai?style=for-the-badge&color=ffd60a&labelColor=111"></a>
+  <a href="https://github.com/BofStudios/money-tree-ai/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/BofStudios/money-tree-ai?style=for-the-badge&color=ffd60a&labelColor=111&filter=desktop-*"></a>
+  <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-ffd60a?style=for-the-badge&labelColor=111"></a>
+  <img alt="Windows" src="https://img.shields.io/badge/Windows-10%20%7C%2011-ffd60a?style=for-the-badge&labelColor=111">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-361%20passing-32d583?style=for-the-badge&labelColor=111">
+</p>
+
+> [!WARNING]
+> **This is research software, not financial advice, and it does not promise profit.** Trading can lose
+> money, also more than you expect. The built-in strategy finished close to break-even in the author's own
+> backtests. Start with practice money, use only money you can afford to lose, and read the
+> [terms](installer/terms.txt). You are responsible for every trade on your account.
+
+> [!TIP]
+> If this project helps you, **a star on GitHub** is the best way to say thanks and helps others find it.
+
+<p align="center">
+  <img src="docs/screenshots/home.jpg" width="49%" alt="Home: the bot against SPY, level and readiness (simulated money)">
+  <img src="docs/screenshots/memory.jpg" width="49%" alt="Brain, Memory: level, what it learned (simulated money)">
+</p>
+
+### Why it is different
+
+- **It says why.** An *Is it trading?* card tells you at once if the bot only watches and which gate is closed.
+- **It remembers.** Keys, settings and everything it learned live in one folder, `%LOCALAPPDATA%\BofStudios\Money Tree AI`. Closing the app or installing a new version never starts it over.
+- **It improves while it runs.** Ten strategy bots breed and test strategies; every news idea is checked against the real price a day later, and each kind of news is trusted more or less from that record.
+- **It is honest about results.** A scorecard compares the bot with simply holding SPY.
+- **Stop always wins.** One red button; real money is never armed by itself and you arm it after every start.
+- **Your data stays on your PC.** Keys are encrypted for your Windows user (DPAPI), the dashboard has its own password, nothing is sent to us.
+- **Modes:** Eco, Normal or Ultra, Careful, Balanced or Bold, Full auto, Ask me first or Ideas only. English and Turkish.
+
+### Quick start
+
+1. Download the zip from the [latest release](https://github.com/BofStudios/money-tree-ai/releases/latest), unpack it and run `Money Tree AI.exe`.
+2. Practice money works at once, with no keys. Add free [Alpaca](https://alpaca.markets) keys in *Settings* to use their paper or live account.
+3. Read the guide: *Settings → User guide* (English and Turkish).
+
+Or run from source: `pip install -r requirements.txt` then `python -m app.main`.
+
+Found a bug or a security problem? See [SECURITY.md](SECURITY.md). Contributions are welcome, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+---
 
 A Windows desktop app for researching US stocks and testing a mechanical trading
 strategy. It has a desktop window, a phone dashboard on the same Wi-Fi, a Telegram
