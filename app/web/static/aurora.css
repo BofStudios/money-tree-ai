@@ -1,0 +1,114 @@
+/* Aurora: the 6.3 look. Loaded last; desktop only (wide windows).
+
+   - Navigation is a slim rail on the far left, the AI panel moves to the
+     right, the page in between gets the room.
+   - Home is a two-column dashboard: the money on top, then the cards side by side.
+   - Cards get a light gradient edge, big numbers a warm gradient.
+   Phones keep the bottom bar and one column. No animated blur, no backdrop-filter. */
+
+:root {
+  --nav-w: 88px;
+  --edge: linear-gradient(140deg, rgba(255, 228, 92, 0.55), rgba(255, 170, 0, 0.12) 35%, rgba(255, 214, 10, 0.05) 65%, rgba(255, 214, 10, 0.35));
+}
+
+body::before {
+  background:
+    radial-gradient(900px 520px at 12% -10%, rgba(255, 214, 10, 0.13), transparent 60%),
+    radial-gradient(800px 600px at 100% 30%, rgba(255, 140, 0, 0.07), transparent 60%),
+    radial-gradient(700px 500px at 40% 110%, rgba(46, 230, 197, 0.05), transparent 60%);
+}
+
+/* Gradient-edged cards (a padding-box/border-box pair: no GPU effect needed). */
+.hero, .ready-card, .score-card, .fl-card, .mode-card, .agent, .mem-fact, .now, .perf {
+  border: 1px solid transparent !important;
+  background:
+    linear-gradient(180deg, rgba(22, 18, 8, 0.96), rgba(10, 9, 5, 0.96)) padding-box,
+    var(--edge) border-box !important;
+}
+.mode-card.on {
+  background:
+    linear-gradient(180deg, rgba(48, 38, 6, 0.98), rgba(16, 13, 5, 0.98)) padding-box,
+    linear-gradient(140deg, #ffe45c, #ffb800 50%, #ffd60a) border-box !important;
+}
+.mode-card.speed-ultra.on {
+  background:
+    linear-gradient(180deg, rgba(60, 12, 10, 0.98), rgba(18, 6, 5, 0.98)) padding-box,
+    linear-gradient(140deg, #ff6b5f, #ff2d20) border-box !important;
+}
+.agent { border-top-width: 1px !important; }
+.agent::before {
+  content: ""; display: block; height: 3px; margin: -16px -16px 6px; border-radius: 16px 16px 0 0;
+  background: linear-gradient(90deg, var(--ag), transparent);
+}
+
+.moneycard .figure, .mem-ring b, .sc-vs b:not(.up):not(.down) {
+  background: linear-gradient(180deg, #fff6c2, #ffd60a 55%, #e0a800);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+
+h1 { font-size: 34px; }
+.fl-title h1, .block-head.standalone h2 { letter-spacing: -0.01em; }
+
+/* ----------------------------------------------------------- wide windows */
+
+@media (min-width: 1100px) {
+  .shell { padding-left: var(--nav-w); }
+  .main { order: 1; padding-bottom: 40px; }
+  .ai {
+    order: 2; width: 340px;
+    border-right: 0 !important; border-left: 1px solid rgba(255, 214, 10, 0.16);
+    background: linear-gradient(180deg, #0c0905, #050403) !important;
+  }
+
+  .tabbar {
+    left: 0 !important; top: 0; bottom: 0 !important; right: auto !important; transform: none !important;
+    width: var(--nav-w); flex-direction: column; align-items: stretch; gap: 4px;
+    padding: 76px 10px 14px; border-radius: 0 !important;
+    border: 0 !important; border-right: 1px solid rgba(255, 214, 10, 0.16) !important;
+    background: linear-gradient(180deg, #0d0a04, #050403) !important;
+    box-shadow: 8px 0 30px -18px rgba(255, 214, 10, 0.35) !important;
+    overflow-y: auto; scrollbar-width: none;
+  }
+  .tabbar::-webkit-scrollbar { display: none; }
+  .tabbar::before {
+    content: ""; position: absolute; left: 22px; top: 18px; width: 44px; height: 44px; border-radius: 14px;
+    background: url("/logo.png") center / 44px no-repeat;
+    filter: drop-shadow(0 0 10px rgba(255, 214, 10, 0.5));
+  }
+  .tab {
+    position: relative; flex: none; padding: 10px 4px 8px; border-radius: 14px; gap: 5px;
+    font-size: 10.5px; letter-spacing: 0.01em;
+  }
+  .tab svg { width: 21px; height: 21px; }
+  .tab.active { color: var(--accent-hot) !important; box-shadow: none !important; background: linear-gradient(180deg, rgba(255, 214, 10, 0.2), rgba(255, 214, 10, 0.06)) !important; }
+  .tab.active::before {
+    content: ""; position: absolute; left: -10px; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0;
+    background: var(--accent); box-shadow: 0 0 12px var(--accent);
+  }
+  .tab .tab-dot { position: absolute; top: 8px; right: 18px; }
+
+  :root { --col: 1000px; }
+  .page { padding: 28px 28px 0; }
+
+  /* Home: a dashboard of two columns. */
+  .view[data-view="home"].active {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px 18px; align-items: start;
+  }
+  .view[data-view="home"] > * { margin: 0 !important; min-width: 0; }
+  .view[data-view="home"] > #moneyCard,
+  .view[data-view="home"] > #proposalBox,
+  .view[data-view="home"] > .run { grid-column: 1 / -1; }
+  .view[data-view="home"] > .block {
+    border-top: 0 !important; padding: 16px 18px; border-radius: 18px;
+    background:
+      linear-gradient(180deg, rgba(18, 15, 7, 0.92), rgba(9, 8, 5, 0.92)) padding-box,
+      var(--edge) border-box;
+    border: 1px solid transparent;
+  }
+  .view[data-view="home"] > .block:last-child { grid-column: 1 / -1; }
+  .moneycard .figure { font-size: 64px; letter-spacing: -0.03em; }
+}
+
+@media (min-width: 1100px) and (max-width: 1400px) {
+  .ai { width: 300px; }
+}
