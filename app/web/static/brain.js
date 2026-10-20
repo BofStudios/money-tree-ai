@@ -70,6 +70,7 @@ function renderBrain() {
   else if (brainTab === "news") body.innerHTML = newsTab();
   else if (brainTab === "learning") body.innerHTML = learningTab();
   else if (brainTab === "gates") body.innerHTML = gatesTab();
+  else if (brainTab === "desk") { body.innerHTML = `<div id="deskView" class="desk-view"></div>`; window.mtRenderDesk?.(); }
   else if (brainTab === "memory") { body.innerHTML = `<div id="memView" class="mem-view"></div>`; window.mtRenderMemory?.(); }
   else body.innerHTML = picksTab();
 }

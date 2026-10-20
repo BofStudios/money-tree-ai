@@ -127,6 +127,12 @@ def build_mode_router(engine, token: str) -> APIRouter:
 
         return build(engine, getattr(engine, "language", "en") == "tr")
 
+    @router.get("/desk", dependencies=guarded)
+    def desk() -> dict:
+        from app.engine.desk import report
+
+        return report(engine, getattr(engine, "language", "en") == "tr")
+
     @router.get("/memory", dependencies=guarded)
     def memory() -> dict:
         from app.brain.memory_report import report

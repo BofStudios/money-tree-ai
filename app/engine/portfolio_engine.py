@@ -162,6 +162,8 @@ class PortfolioEngine:
         self._watch_removed: list[str] = []
         self._save_lock = threading.Lock()
         self._held_why: dict[str, str] = {}          # symbol -> why research held its buy back
+        self._theses: dict[str, dict] = {}            # Orion: open position -> its written thesis
+        self._thesis_log: list[dict] = []             # the last theses, newest first
         self._blocked: dict[str, dict] = {}          # why a buy did not happen -> count, last time, symbol
         self._blocked_day = ""
         self._halted, self._halted_at = self._load_halt()
@@ -282,6 +284,8 @@ class PortfolioEngine:
         self._news_deadline = {str(k): float(v) for k, v in (saved.get("news_deadlines") or {}).items()}
         self._watch_added = [str(x) for x in saved.get("watch_added") or []]
         self._watch_removed = [str(x) for x in saved.get("watch_removed") or []]
+        self._theses = {str(k): v for k, v in (saved.get("theses") or {}).items() if isinstance(v, dict)}
+        self._thesis_log = [x for x in saved.get("thesis_log") or [] if isinstance(x, dict)][:20]
         if saved.get("blocked_day") == _ny_day():
             self._blocked_day = _ny_day()
             self._blocked = {str(k): dict(v) for k, v in (saved.get("blocked") or {}).items() if isinstance(v, dict)}
@@ -310,6 +314,8 @@ class PortfolioEngine:
                     "watch_removed": list(self._watch_removed),
                     "blocked_day": self._blocked_day,
                     "blocked": {k: dict(v) for k, v in self._blocked.items()},
+                    "theses": dict(self._theses),
+                    "thesis_log": list(self._thesis_log[:20]),
                 }
             tmp.write_text(json.dumps(doc), encoding="utf-8")
             for attempt in range(5):
@@ -345,6 +351,32 @@ class PortfolioEngine:
             row["last_at"] = time.time()
             row["symbol"] = symbol
             row["detail"] = (detail or "")[:160]
+
+    # ------------------------------------------------ Orion: the thesis
+
+    def theses(self) -> list[dict]:
+        """Open positions' theses first, then the most recent closed ones."""
+        with self._lock:
+            open_ = [dict(v, open=True) for k, v in self._theses.items() if k in self._positions]
+            done = [dict(v, open=False) for v in self._thesis_log if v.get("symbol") not in self._positions]
+        return open_ + done[:10]
+
+    def _write_thesis(self, opened: Position, reason: str, research) -> None:
+        from app.engine.desk import thesis
+
+        try:
+            doc = thesis(opened.symbol, opened.entry_price, opened.stop_loss, opened.take_profit, reason,
+                         research, self.language == "tr")
+        except Exception:
+            log.exception("could not write the thesis for %s", opened.symbol)
+            return
+        with self._lock:
+            self._theses[opened.symbol] = doc
+            self._thesis_log.insert(0, doc)
+            del self._thesis_log[20:]
+        self.monitor.info("research", ("Orion: tez · " if self.language == "tr" else "Orion: thesis · ") + opened.symbol,
+                          doc["invalid"], doc["why"][:3] + doc["against"][:2])
+        self._save_halt()
 
     def blocked_today(self) -> dict[str, dict]:
         with self._lock:
@@ -1069,6 +1101,21 @@ class PortfolioEngine:
         if position is None and self.proposals.has_pending_for(symbol):
             return False
 
+        # Nova: never too much of one sector at once.
+        if position is None and signal.action is Action.BUY:
+            from app.engine.desk import sector_crowded, sector_name
+
+            with self._lock:
+                held = list(self._positions)
+            crowded = sector_crowded(symbol, held)
+            if crowded:
+                name = sector_name(crowded, self.language == "tr")
+                why = (f"{name}: zaten en fazla pozisyon var" if self.language == "tr"
+                       else f"{name}: the sector already holds the maximum")
+                self.monitor.info(activity.INFO, w.not_placed(symbol, why))
+                self.note_block("sector", symbol, why)
+                return False
+
         locked = self.protections.blocked(symbol)
         if position is None and locked:
             self.mentor.rejected(symbol, f"buy on '{signal.reason}'", locked)
@@ -1176,6 +1223,7 @@ class PortfolioEngine:
             return False
 
         self._register_position(opened, intent.reason)
+        self._write_thesis(opened, intent.reason, self._research.get(opened.symbol))
         self._brain_bought(opened)
         self.mentor.opened(opened, True)
         if self.journal is not None:
@@ -1424,6 +1472,7 @@ class PortfolioEngine:
             return fail(error or "the order was not filled")
 
         self._register_position(opened, intent.reason)
+        self._write_thesis(opened, intent.reason, None)
         self.mentor.opened(opened, True)
         self.proposals.finish(proposal, "approved")
         self.events.publish("trade_opened", {"position": opened.to_dict(), "reason": intent.reason})

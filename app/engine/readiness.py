@@ -21,6 +21,7 @@ BLOCK_WORDS = {
     "ai": ("The AI check found a red flag", "Yapay zekâ kontrolü kırmızı bayrak buldu"),
     "too_small": ("The order would be too small", "Emir çok küçük olurdu"),
     "rules": ("The risk rules said no", "Risk kuralları izin vermedi"),
+    "sector": ("Nova: the sector already held the maximum", "Nova: sektörde zaten en fazla pozisyon vardı"),
 }
 
 

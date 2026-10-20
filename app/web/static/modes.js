@@ -282,6 +282,45 @@ window.mtRenderMemory = () => {
   loadMemory();
 };
 
+/* ------------------------------------------------------------------- desk */
+
+const AGENT_MARK = { atlas: "◉", vega: "≋", orion: "◆", titan: "⧗", luna: "☾", nova: "⛨" };
+
+function deskHtml(d) {
+  if (!d) return `<div class="fl-card"><p class="note">…</p></div>`;
+  const thesis = (x) => `
+    <div class="thesis ${x.open ? "open" : ""}">
+      <b>${esc(x.symbol)}</b> <span>$${Number(x.price).toFixed(2)}${x.reward_risk ? ` · R/R ${x.reward_risk}` : ""}</span>
+      <ul class="why">${x.why.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>
+      <ul class="against">${x.against.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>
+      <small>${esc(x.invalid)}</small>
+    </div>`;
+  return `
+    <div class="desk-grid">${d.agents.map((a) => `
+      <article class="agent agent-${esc(a.id)}">
+        <header><span class="agent-mark">${AGENT_MARK[a.id] || "•"}</span>
+          <div><b>${esc(a.name)}</b><span>${esc(a.role)}</span></div></header>
+        <p class="agent-how">${esc(a.how)}</p>
+        <p class="agent-stat">${esc(a.stat)}</p>
+        ${(a.theses || []).map(thesis).join("")}
+        <ul class="agent-items">${a.items.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>
+      </article>`).join("")}
+    </div>
+    <p class="note faint">${esc(d.note)}</p>`;
+}
+
+async function loadDesk() {
+  let d;
+  try { d = await api("GET", "/api/desk"); } catch { return; }
+  const host = $("deskView");
+  if (host) host.innerHTML = deskHtml(d);
+}
+window.mtRenderDesk = () => {
+  const host = $("deskView");
+  if (host && !host.innerHTML) host.innerHTML = deskHtml(null);
+  loadDesk();
+};
+
 /* ----------------------------------------------------------------- events */
 
 document.addEventListener("click", (e) => {

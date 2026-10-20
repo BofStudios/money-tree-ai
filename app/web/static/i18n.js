@@ -796,6 +796,7 @@ const STRINGS = {
     "mem.k.level": "Level up",
     "mem.k.arm": "Armed",
     "brain.tab.memory": "Memory",
+    "brain.tab.desk": "Desk",
 
     "score.title": "The bot against SPY",
     "score.bot": "The bot",
@@ -1582,6 +1583,7 @@ const STRINGS = {
     "mem.k.level": "Seviye atladı",
     "mem.k.arm": "Kuruldu",
     "brain.tab.memory": "Hafıza",
+    "brain.tab.desk": "Masa",
 
     "score.title": "Bot ve SPY",
     "score.bot": "Bot",

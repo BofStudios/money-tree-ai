@@ -365,3 +365,27 @@ def test_scorecard_compares_the_bot_with_holding_spy(tmp_path):
     assert card["bot_pct"] == 2.0
     assert card["spy_pct"] > 2.0 and card["verdict"] == "behind"
     assert "behind SPY" in card["headline"]
+
+
+def test_nova_never_holds_more_than_two_of_one_sector(tmp_path):
+    from app.engine.desk import sector_crowded
+
+    assert sector_crowded("AMD", ["NVDA", "MU"]) == "chips"
+    assert sector_crowded("AMD", ["NVDA", "AAPL"]) is None
+    assert sector_crowded("SPY", ["QQQ", "IWM"]) is None, "index funds are not capped"
+    assert sector_crowded("ZZZZ", ["YYYY", "XXXX"]) is None
+
+
+def test_every_buy_gets_a_thesis_and_the_desk_shows_six_agents(tmp_path):
+    from app.engine.desk import report
+
+    state = tmp_path / "engine_state.json"
+    engine = build(tmp_path, state_path=state)
+    engine._scan(FakeMarket())
+    theses = engine.theses()
+    assert theses and theses[0]["open"] and theses[0]["why"] and theses[0]["against"] and "stop" in theses[0]["invalid"]
+    again = build(tmp_path, state_path=state)
+    assert again._thesis_log, "theses survive a restart"
+    d = report(engine)
+    assert [a["id"] for a in d["agents"]] == ["atlas", "vega", "orion", "titan", "luna", "nova"]
+    assert d["agents"][2]["theses"]

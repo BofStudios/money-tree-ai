@@ -11,7 +11,7 @@
   <a href="https://github.com/BofStudios/money-tree-ai/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/BofStudios/money-tree-ai?style=for-the-badge&color=ffd60a&labelColor=111&filter=desktop-*"></a>
   <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-ffd60a?style=for-the-badge&labelColor=111"></a>
   <img alt="Windows" src="https://img.shields.io/badge/Windows-10%20%7C%2011-ffd60a?style=for-the-badge&labelColor=111">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-361%20passing-32d583?style=for-the-badge&labelColor=111">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-363%20passing-32d583?style=for-the-badge&labelColor=111">
 </p>
 
 > [!WARNING]
