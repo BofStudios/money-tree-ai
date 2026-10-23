@@ -11,7 +11,7 @@
   <a href="https://github.com/BofStudios/money-tree-ai/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/BofStudios/money-tree-ai?style=for-the-badge&color=ffd60a&labelColor=111&filter=desktop-*"></a>
   <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-ffd60a?style=for-the-badge&labelColor=111"></a>
   <img alt="Windows" src="https://img.shields.io/badge/Windows-10%20%7C%2011-ffd60a?style=for-the-badge&labelColor=111">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-363%20passing-32d583?style=for-the-badge&labelColor=111">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-370%20passing-32d583?style=for-the-badge&labelColor=111">
 </p>
 
 > [!WARNING]
@@ -74,6 +74,25 @@ Practice money stays because it is the only way to see the bot work before any
 money is at risk, and because a new Alpaca live account cannot trade until it
 is funded. (Midas signal mode was removed in 4.0: an old config that still says
 `signal` starts on practice money.)
+
+## Desktop 7.0 "Portfolio": the bot decides the horizon
+
+Everything used to be a short trade of a few dollars, so the account moved by
+cents. Now the money is split into three **books**, and each position answers
+only to the rules of the book that bought it (`app/engine/books.py`):
+
+| Book | Horizon | Buys | Sells |
+|---|---|---|---|
+| Long-term (60%) | months | quality companies and broad funds in a long uptrend, ranked by the five checks and six-month momentum, one per sector | the 200-day trend breaks, the checks turn AVOID, or after 30 days it is no longer near the top; stop 15%, trailing 15% |
+| Swing (25%) | weeks | a pullback in a daily uptrend that turns up | stop 2 daily ATRs, target 2.5x, trailing from +6%, 35 days, or under the 50-day line |
+| Short (15%) | hours | breaking news and the 15-minute strategy | tight stops, a time limit on news trades |
+
+The split follows results (a book that earned more gets up to 1.4x, one that
+lost down to 0.6x, the long book never under 40%), and no new long buys while
+SPY is under its 200-day average. A daily review runs after 9:45 New York time;
+the **Portfolio** tab shows the books, their holdings and every decision with
+its reason. Fixed: a news trade could be sold seconds after the buy by the
+15-minute strategy's exit rule. Modes moved to *Settings → Advanced controls*.
 
 ## Desktop 6.0 "Evolve": memory, self-improvement, Modes
 

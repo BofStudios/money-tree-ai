@@ -171,8 +171,16 @@ class RiskManager:
         symbol_info: SymbolInfo | None = None,
         position_pct: float | None = None,
         atr: float | None = None,
+        allocation: float | None = None,
+        max_value: float | None = None,
+        stop_pct: float | None = None,
+        reward_risk: float | None = None,
     ) -> tuple[OrderRequest | None, str | None]:
-        """Returns (order, rejection_reason). Exactly one is non-None."""
+        """Returns (order, rejection_reason). Exactly one is non-None.
+
+        A portfolio book passes its own `allocation` (the dollars to put in),
+        `stop_pct` and `reward_risk`; the short book passes `max_value`, what is
+        left of its budget. Every gate above the sizing stays the same."""
         self._roll_day_if_needed(balance.total)
 
         if not signal.is_actionable:
@@ -202,8 +210,14 @@ class RiskManager:
             self.disarm("daily loss limit reached")
             return None, RejectionReason.DAILY_LOSS_HIT
 
-        stop_pct = self.stop_distance_pct(price, atr)
-        qty = self.size_position(balance, price, position_pct, stop_pct)
+        stop_pct = stop_pct or self.stop_distance_pct(price, atr)
+        if allocation is not None:
+            spendable = balance.available * (1 - FEE_BUFFER)
+            qty = max(min(allocation, spendable) / price, 0.0) if price > 0 else 0.0
+        else:
+            qty = self.size_position(balance, price, position_pct, stop_pct)
+        if max_value is not None and price > 0:
+            qty = min(qty, max(max_value, 0.0) / price)
         if symbol_info is not None:
             qty = symbol_info.round_qty(qty)
             if qty < symbol_info.min_qty or qty * price < symbol_info.min_notional:
@@ -214,7 +228,7 @@ class RiskManager:
             return None, RejectionReason.INSUFFICIENT_BALANCE
 
         side = Side.BUY if signal.action is Action.BUY else Side.SELL
-        stop_loss, take_profit = self._protective_levels(signal, side, price, stop_pct)
+        stop_loss, take_profit = self._protective_levels(signal, side, price, stop_pct, reward_risk)
         return (
             OrderRequest(
                 symbol=symbol,
@@ -228,7 +242,8 @@ class RiskManager:
             None,
         )
 
-    def update_trailing_stop(self, position: Position, price: float) -> float | None:
+    def update_trailing_stop(self, position: Position, price: float,
+                             activate_pct: float | None = None, trail_pct: float | None = None) -> float | None:
         """Raise the stop behind a winning trade. Returns the new stop, or None.
 
         The original stop stays put until the trade is up by `activate_at_pct`;
@@ -241,16 +256,16 @@ class RiskManager:
 
         if position.side is Side.BUY:
             gain_pct = (price / position.entry_price - 1) * 100
-            if gain_pct < trailing.activate_at_pct:
+            if gain_pct < (activate_pct or trailing.activate_at_pct):
                 return None
-            candidate = price * (1 - trailing.trail_pct / 100.0)
+            candidate = price * (1 - (trail_pct or trailing.trail_pct) / 100.0)
             if position.stop_loss is not None and candidate <= position.stop_loss:
                 return None
         else:
             gain_pct = (1 - price / position.entry_price) * 100
-            if gain_pct < trailing.activate_at_pct:
+            if gain_pct < (activate_pct or trailing.activate_at_pct):
                 return None
-            candidate = price * (1 + trailing.trail_pct / 100.0)
+            candidate = price * (1 + (trail_pct or trailing.trail_pct) / 100.0)
             if position.stop_loss is not None and candidate >= position.stop_loss:
                 return None
 
@@ -300,7 +315,8 @@ class RiskManager:
         }
 
     def _protective_levels(
-        self, signal: Signal, side: Side, price: float, stop_pct: float | None = None
+        self, signal: Signal, side: Side, price: float, stop_pct: float | None = None,
+        reward_risk: float | None = None,
     ) -> tuple[float, float]:
         """Stop first, then the target as a multiple of that distance.
 
@@ -308,7 +324,7 @@ class RiskManager:
         matter how wide the stop turned out to be.
         """
         stop_fraction = (stop_pct if stop_pct is not None else self.config.stop_loss_pct) / 100.0
-        take_fraction = stop_fraction * self.config.reward_risk
+        take_fraction = stop_fraction * (reward_risk or self.config.reward_risk)
         if side is Side.BUY:
             stop = signal.stop_loss or price * (1 - stop_fraction)
             take = signal.take_profit or price * (1 + take_fraction)

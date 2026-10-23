@@ -127,6 +127,16 @@ def build_mode_router(engine, token: str) -> APIRouter:
 
         return build(engine, getattr(engine, "language", "en") == "tr")
 
+    @router.get("/portfolio", dependencies=guarded)
+    def portfolio() -> dict:
+        return engine.books.snapshot()
+
+    @router.post("/portfolio/review", dependencies=owner)
+    def portfolio_review() -> dict:
+        """Run the daily review now (it still only trades while the market is open)."""
+        rows = engine.books.review(force=True)
+        return {"done": rows, **engine.books.snapshot()}
+
     @router.get("/desk", dependencies=guarded)
     def desk() -> dict:
         from app.engine.desk import report

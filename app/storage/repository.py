@@ -61,6 +61,7 @@ class Repository:
                 "pnl": round(r.pnl, 2),
                 "pnl_pct": round(r.pnl_pct, 2),
                 "exit_reason": r.exit_reason,
+                "entry_reason": r.entry_reason or "",
                 "opened_at": r.opened_at.isoformat(),
                 "closed_at": r.closed_at.isoformat(),
             }

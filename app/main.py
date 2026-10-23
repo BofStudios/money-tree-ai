@@ -557,7 +557,10 @@ def build_brain(engine, data, keys, claude, monitor, events, risk, mentor) -> Br
         asset_check=make_asset_check(*keys) if keys else None,
         latest_price=getattr(data, "get_quote", None), monitor=monitor,
     )
-    brain.symbols_fn = engine.watched_symbols
+    from app.engine.books import LONG_UNIVERSE
+
+    # The brain researches the long book's choices too, not only what the 15-minute scan watches.
+    brain.symbols_fn = lambda: list(dict.fromkeys(engine.watched_symbols() + LONG_UNIVERSE))
     from app.common.idle import idle_seconds
 
     brain.idle_fn = idle_seconds

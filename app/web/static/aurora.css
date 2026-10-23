@@ -112,3 +112,41 @@ h1 { font-size: 34px; }
 @media (min-width: 1100px) and (max-width: 1400px) {
   .ai { width: 300px; }
 }
+
+/* 7.0: the portfolio, three books */
+#portReady:empty { display: none; }
+#portReady { margin: 6px 0 16px; }
+.port-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.port-money { display: flex; align-items: center; gap: 12px; font-size: 14px; color: var(--text-2); }
+.port-money .armed { color: var(--good); } .port-money .warn { color: var(--warn); }
+.port-regime { font: 600 12px/1 var(--mono); padding: 8px 12px; border-radius: 999px; border: 1px solid currentColor; }
+.port-regime.up { color: var(--good); } .port-regime.down { color: var(--warn); }
+.book-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.book { --bk: var(--accent); padding: 16px; border-radius: 18px; border: 1px solid var(--line); background: var(--card);
+  box-shadow: var(--card-edge); display: flex; flex-direction: column; gap: 10px; }
+.book-long { --bk: #ffd60a; } .book-swing { --bk: #2ee6c5; } .book-short { --bk: #ff9f1c; }
+.book header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.book header b { display: block; font-size: 17px; color: var(--bk); }
+.book header span { font-size: 12.5px; color: var(--text-3); }
+.book header strong { font: 700 26px/1 var(--mono); color: var(--bk); }
+.book-bar { height: 6px; border-radius: 6px; background: rgba(255, 255, 255, 0.06); overflow: hidden; }
+.book-bar i { display: block; height: 100%; background: var(--bk); border-radius: 6px; }
+.book-money { margin: 0; font: 500 12px/1.4 var(--mono); color: var(--text-2); }
+.book-hold { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.book-hold li { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 10px; align-items: baseline;
+  padding: 7px 9px; border-radius: 10px; background: rgba(255, 255, 255, 0.03); font-size: 13px; }
+.book-hold li span { font-family: var(--mono); color: var(--text-2); }
+.book-hold li em { font: 600 12.5px var(--mono); font-style: normal; }
+.book-hold li em.up { color: var(--good); } .book-hold li em.down { color: var(--bad); }
+.book-hold li small { grid-column: 1 / -1; color: var(--text-3); font-size: 11.5px; }
+.book-hold li.empty { display: block; color: var(--text-3); }
+.book-rules { margin: 0; font-size: 12px; line-height: 1.5; color: var(--text-3); }
+.book-why { margin: 0; font: 500 11.5px/1.4 var(--mono); color: var(--text-3); }
+.port-actions { display: flex; align-items: center; gap: 12px; margin: 14px 0 4px; flex-wrap: wrap; }
+.port-log { list-style: none; margin: 8px 0 0; padding: 0; }
+.port-log li { display: grid; grid-template-columns: 64px 1fr auto; gap: 10px; align-items: start; padding: 9px 0; border-top: 1px solid var(--line-soft); }
+.port-log li i { font: 700 10.5px/1.8 var(--mono); font-style: normal; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); }
+.port-log li.lg-buy i { color: var(--good); } .port-log li.lg-sell i { color: var(--warn); }
+.port-log li b { font-size: 13.5px; } .port-log li small { display: block; color: var(--text-3); font-size: 12.5px; margin-top: 2px; }
+.port-log li time { font: 500 11.5px var(--mono); color: var(--text-3); white-space: nowrap; }
+.port-log li.empty { display: block; color: var(--text-3); border: 0; }

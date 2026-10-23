@@ -22,6 +22,7 @@ BLOCK_WORDS = {
     "too_small": ("The order would be too small", "Emir çok küçük olurdu"),
     "rules": ("The risk rules said no", "Risk kuralları izin vermedi"),
     "sector": ("Nova: the sector already held the maximum", "Nova: sektörde zaten en fazla pozisyon vardı"),
+    "budget": ("The short book's budget was used", "Kısa vade bütçesi doluydu"),
 }
 
 

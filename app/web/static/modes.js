@@ -282,6 +282,72 @@ window.mtRenderMemory = () => {
   loadMemory();
 };
 
+/* -------------------------------------------------------------- portfolio */
+
+const BOOK_ORDER = ["long", "swing", "short"];
+
+function money$(v) { return `$${Number(v || 0).toFixed(2)}`; }
+
+function bookCard(id, b) {
+  const pct = Math.round((b.weight || 0) * 100);
+  const used = b.budget > 0 ? Math.min(100, Math.round((b.used / b.budget) * 100)) : 0;
+  const rows = b.holdings.length ? b.holdings.map((h) => `
+      <li><b>${esc(h.symbol)}</b><span>${esc(money$(h.value))}</span>
+        <em class="${h.pnl_pct >= 0 ? "up" : "down"}">${h.pnl_pct >= 0 ? "+" : ""}${h.pnl_pct.toFixed(2)}%</em>
+        <small>${esc(t("port.days", { n: h.days }))}${h.stop ? ` · stop ${esc(money$(h.stop))}` : ""}</small></li>`).join("")
+    : `<li class="empty">${esc(t("port.empty"))}</li>`;
+  return `
+    <article class="book book-${id}">
+      <header>
+        <div><b>${esc(t(`port.${id}`))}</b><span>${esc(t(`port.${id}.horizon`))}</span></div>
+        <strong>${pct}%</strong>
+      </header>
+      <div class="book-bar"><i style="width:${used}%"></i></div>
+      <p class="book-money">${esc(t("port.money", { used: money$(b.used), budget: money$(b.budget), free: money$(b.free), slots: b.slots }))}</p>
+      <ul class="book-hold">${rows}</ul>
+      <p class="book-rules">${esc(t(`port.${id}.rules`))}</p>
+      ${b.why ? `<p class="book-why">${esc(t("port.split"))}: ${esc(b.why)}</p>` : ""}
+    </article>`;
+}
+
+function portfolioHtml(p) {
+  if (!p) return `<div class="fl-card"><p class="note">…</p></div>`;
+  const s = window.mtState || {};
+  const live = s.broker === "alpaca_live";
+  const armed = !!(s.risk && s.risk.armed);
+  const regime = p.regime_up === null || p.regime_up === undefined ? t("port.regime.unknown")
+    : t(p.regime_up ? "port.regime.up" : "port.regime.down");
+  const log = p.log.length ? p.log.map((r) => `
+      <li class="lg-${esc(r.action)}"><i>${esc(t(`port.act.${r.action}`))}</i>
+        <div><b>${esc(t(`port.${r.book}`))} · ${esc(r.symbol)}</b><small>${esc(r.why)}</small></div>
+        <time>${esc(new Date(r.at * 1000).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }))}</time></li>`).join("")
+    : `<li class="empty">${esc(t("port.noLog"))}</li>`;
+  return `
+    <section class="port-head">
+      <div class="port-money">
+        <span class="${live ? (armed ? "armed" : "warn") : ""}">${esc(t(live ? (armed ? "modes.money.armed" : "modes.money.notArmed") : "modes.money.practiceBody"))}</span>
+        ${live ? `<button class="${armed ? "ghost sm" : "arm-big"}" data-arm="${armed ? "off" : "on"}">${esc(t(armed ? "modes.money.disarm" : "modes.money.arm"))}</button>` : ""}
+      </div>
+      <div class="port-regime ${p.regime_up === false ? "down" : "up"}">${esc(regime)}</div>
+    </section>
+    <div class="book-grid">${BOOK_ORDER.map((id) => bookCard(id, p.books[id])).join("")}</div>
+    <div class="port-actions">
+      <button class="ghost sm" data-port-review>${esc(t("port.reviewNow"))}</button>
+      <span class="note faint">${esc(t("port.lastReview", { d: p.last_review || "—", n: p.universe }))}</span>
+    </div>
+    <h2 class="mem-h">${esc(t("port.log"))}</h2>
+    <ul class="port-log">${log}</ul>
+    <p class="note faint legal-note">${esc(t("settings.legal"))}</p>`;
+}
+
+async function loadPortfolio() {
+  try {
+    const p = await api("GET", "/api/portfolio");
+    if ($("portBody")) $("portBody").innerHTML = portfolioHtml(p);
+    if ($("portReady")) $("portReady").innerHTML = readyCard(ready, true);
+  } catch { /* the next look tries again */ }
+}
+
 /* ------------------------------------------------------------------- desk */
 
 const AGENT_MARK = { atlas: "◉", vega: "≋", orion: "◆", titan: "⧗", luna: "☾", nova: "⛨" };
@@ -329,6 +395,15 @@ document.addEventListener("click", (e) => {
   if (b.dataset.fix) { fix(b.dataset.fix); return; }
   if (b.dataset.arm) { arm(b.dataset.arm === "on"); return; }
   if (b.hasAttribute("data-open-memory")) { window.mtOpenBrainTab?.("memory"); return; }
+  if (b.hasAttribute("data-port-review")) {
+    b.disabled = true;
+    api("POST", "/api/portfolio/review")
+      .then((p) => { if ($("portBody")) $("portBody").innerHTML = portfolioHtml(p); })
+      .catch((err) => window.showAlert?.({ tone: "bad", title: err.message }))
+      .finally(() => { b.disabled = false; });
+    return;
+  }
+  if (b.dataset.goto) { window.showView?.(b.dataset.goto); return; }
   const group = b.dataset.pick;
   const value = b.dataset.value;
   if (!group || !modes) return;
@@ -366,6 +441,7 @@ window.addEventListener("mt:view", (e) => {
   view = e.detail;
   if (view === "modes") { loadModes(); loadReady(); }
   if (view === "home") { loadReady(); loadScore(); }
+  if (view === "portfolio") { loadReady().then(loadPortfolio); }
   if (view === "settings") api("GET", "/api/modes").then((m) => { if ($("dataHomePath")) $("dataHomePath").textContent = m.home; }).catch(() => {});
 });
 let lastStatus = 0;
@@ -374,6 +450,7 @@ window.addEventListener("mt:status", () => {
   lastStatus = Date.now();
   if (view === "home" || view === "modes") loadReady();
   if (view === "modes" && !busy) loadModes();
+  if (view === "portfolio") loadPortfolio();
 });
 window.addEventListener("mt:lang", () => { renderReady(); renderModes(); const h = $("memView"); if (h) h.innerHTML = memoryHtml(memory); });
 

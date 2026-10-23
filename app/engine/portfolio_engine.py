@@ -163,10 +163,15 @@ class PortfolioEngine:
         self._save_lock = threading.Lock()
         self._held_why: dict[str, str] = {}          # symbol -> why research held its buy back
         self._theses: dict[str, dict] = {}            # Orion: open position -> its written thesis
+        self._books: dict[str, str] = {}              # position -> "long" / "swing" / "short"
+        self._pending_book: dict[str, str] = {}       # a buy waiting for approval -> its book
         self._thesis_log: list[dict] = []             # the last theses, newest first
         self._blocked: dict[str, dict] = {}          # why a buy did not happen -> count, last time, symbol
         self._blocked_day = ""
         self._halted, self._halted_at = self._load_halt()
+        from app.engine.books import Books
+
+        self.books = Books(self)
 
         self._lock = threading.RLock()
         # One trading action at a time: a scan, a manual close, an approval.
@@ -286,6 +291,7 @@ class PortfolioEngine:
         self._watch_removed = [str(x) for x in saved.get("watch_removed") or []]
         self._theses = {str(k): v for k, v in (saved.get("theses") or {}).items() if isinstance(v, dict)}
         self._thesis_log = [x for x in saved.get("thesis_log") or [] if isinstance(x, dict)][:20]
+        self._books = {str(k): str(v) for k, v in (saved.get("books") or {}).items() if v in ("long", "swing", "short")}
         if saved.get("blocked_day") == _ny_day():
             self._blocked_day = _ny_day()
             self._blocked = {str(k): dict(v) for k, v in (saved.get("blocked") or {}).items() if isinstance(v, dict)}
@@ -316,6 +322,7 @@ class PortfolioEngine:
                     "blocked": {k: dict(v) for k, v in self._blocked.items()},
                     "theses": dict(self._theses),
                     "thesis_log": list(self._thesis_log[:20]),
+                    "books": dict(self._books),
                 }
             tmp.write_text(json.dumps(doc), encoding="utf-8")
             for attempt in range(5):
@@ -351,6 +358,73 @@ class PortfolioEngine:
             row["last_at"] = time.time()
             row["symbol"] = symbol
             row["detail"] = (detail or "")[:160]
+
+    # ------------------------------------------------- the three books
+
+    def book_of(self, symbol: str) -> str:
+        return self._books.get(symbol, "short")
+
+    def _set_book(self, symbol: str, book: str) -> None:
+        with self._lock:
+            if book == "short":
+                self._books.pop(symbol, None)
+            else:
+                self._books[symbol] = book
+        self._save_halt()
+
+    def book_buy(self, symbol: str, book: str, reason: str, allocation: float,
+                 stop_pct: float, reward_risk: float) -> str:
+        """A buy the long or swing book decided on, for `allocation` dollars.
+        Same gates as every buy. Returns "bought", "waiting" or why not."""
+        symbol = symbol.strip().upper()
+        w = self.words()
+        with self._trade_lock:
+            if self._halted:
+                return w.halted_reason()
+            if not self.clock.state().is_open:
+                return "the market is closed"
+            with self._lock:
+                if symbol in self._positions:
+                    return "already held"
+            try:
+                history = self.data.get_ohlcv(symbol, self.timeframe, limit=HISTORY_BARS)
+            except Exception as exc:
+                return f"no prices: {_short(exc)}"
+            if history is None or history.empty:
+                return "no prices"
+            snapshot = self.strategy.snapshot(history)
+            price = float(history["close"].iloc[-1])
+            with self._lock:
+                self._history.setdefault(symbol, history)
+                self._snapshots.setdefault(symbol, snapshot)
+            signal = Signal(Action.BUY, reason, symbol=symbol, detail={
+                "book": book, "allocation": float(allocation), "stop_pct": float(stop_pct),
+                "reward_risk": float(reward_risk)})
+            acted = self._act(symbol, signal, snapshot, price, w)
+            with self._lock:
+                held = symbol in self._positions
+            if held:
+                return "bought"
+            if acted or self.proposals.has_pending_for(symbol):
+                return "waiting"
+            return "the rules did not allow it (see the Live tab)"
+
+    def book_sell(self, symbol: str, reason: str) -> str:
+        """Sell a holding because its book's own rule says so."""
+        symbol = symbol.strip().upper()
+        w = self.words()
+        with self._trade_lock:
+            if self._halted:
+                return w.halted_reason()
+            problem = self.why_not_close(symbol)
+            if problem:
+                return problem
+            with self._lock:
+                position = self._positions.get(symbol)
+            if position is None:
+                return "not held"
+            price = position.current_price or position.entry_price
+            return "sold" if self._exit(position, price, reason, w) else "the sale failed"
 
     # ------------------------------------------------ Orion: the thesis
 
@@ -586,7 +660,7 @@ class PortfolioEngine:
             account = self._account
         with self._lock:
             positions = [
-                {**p.to_dict(), "stop_at_broker": p.symbol in self._broker_stops}
+                {**p.to_dict(), "stop_at_broker": p.symbol in self._broker_stops, "book": self.book_of(p.symbol)}
                 for p in self._positions.values()
             ]
             snapshots = dict(self._snapshots)
@@ -838,6 +912,13 @@ class PortfolioEngine:
             for symbol, snapshot, price, signal in looked:
                 if self._manage(symbol, snapshot, price, signal, w):
                     signals_raised += 1
+            if is_open and not self._halted:
+                try:
+                    for row in self.books.review():
+                        self.monitor.info("learn" if row["action"] in ("buy", "sell") else activity.INFO,
+                                          f"{row['book'].capitalize()} · {row['symbol']} · {row['action']}", row["why"])
+                except Exception:
+                    log.exception("the portfolio review failed")
 
         self._scan_count += 1
         self._last_scan_at = datetime.now(timezone.utc)
@@ -1023,6 +1104,15 @@ class PortfolioEngine:
             position = self._positions.get(symbol)
         if position is not None and self._protect(position, price, w):
             return False
+        book = self.book_of(symbol)
+        if position is not None and book != "short":
+            # A long or swing holding answers only to its own book (the daily
+            # review), never to the 15-minute strategy.
+            return False
+        if (position is not None and symbol in self._news_deadline and signal.action is Action.CLOSE):
+            # A news trade has its stop, target, time limit and news check;
+            # the chart strategy sold them seconds after the buy.
+            return False
         if position is not None and not self._halted and time.time() >= self._news_deadline.get(symbol, float("inf")):
             self._news_deadline.pop(symbol, None)
             self._save_halt()
@@ -1048,7 +1138,11 @@ class PortfolioEngine:
             at_broker = symbol in self._broker_stops
 
         old = position.stop_loss
-        raised = self.risk.update_trailing_stop(position, price)
+        from app.engine.books import TRAIL
+
+        trail = TRAIL.get(self.book_of(symbol))
+        raised = (self.risk.update_trailing_stop(position, price, *trail) if trail
+                  else self.risk.update_trailing_stop(position, price))
         if raised is not None:
             position.stop_loss = tick(raised)
             if at_broker:
@@ -1125,7 +1219,8 @@ class PortfolioEngine:
 
         research = None
         news = bool(signal.detail.get("news"))
-        if position is None and signal.action is Action.BUY and self.brain is not None and not news:
+        book = signal.detail.get("book", "short")
+        if position is None and signal.action is Action.BUY and self.brain is not None and not news and book == "short":
             research = self._research_gate(symbol, snapshot, w)
             if research is False:
                 self.note_block("research", symbol, self._held_why.get(symbol, ""))
@@ -1133,9 +1228,12 @@ class PortfolioEngine:
 
         balance, max_positions, position_pct = self._effective_limits()
 
-        # Buys waiting for your OK count against the cap.
+        # Buys waiting for your OK count against the cap. The cap is the short
+        # book's; the long and swing books keep their own slots.
+        with self._lock:
+            open_count = sum(1 for s in self._positions if self.book_of(s) == "short")
         committed = open_count + self._pending_entry_count()
-        if position is None and committed >= max_positions:
+        if position is None and book == "short" and committed >= max_positions:
             held = (
                 f"I already hold {open_count} positions"
                 if committed == open_count
@@ -1150,9 +1248,22 @@ class PortfolioEngine:
             self.note_block("cap", symbol)
             return False
 
+        sizing = {}
+        if book != "short":
+            sizing = {"allocation": signal.detail.get("allocation"), "stop_pct": signal.detail.get("stop_pct"),
+                      "reward_risk": signal.detail.get("reward_risk")}
+        elif signal.action is Action.BUY and position is None:
+            try:
+                sizing = {"max_value": self.books.budgets()["short"]["free"]}
+            except Exception:
+                sizing = {}
+            if sizing.get("max_value") is not None and sizing["max_value"] < self.config.risk.min_order_value:
+                self.monitor.info(activity.INFO, w.not_placed(symbol, "the short book's budget is used"))
+                self.note_block("budget", symbol)
+                return False
         order, rejection = self.risk.validate(
             signal, balance, position, price, symbol,
-            position_pct=position_pct, atr=snapshot.get("atr"),
+            position_pct=position_pct, atr=snapshot.get("atr"), **sizing,
         )
         if order is None:
             if rejection:
@@ -1169,6 +1280,8 @@ class PortfolioEngine:
         self.mentor.considering(symbol, signal.reason, snapshot)
 
         size = research.size if research is not None else float(signal.detail.get("size", 1.0))
+        if book != "short":
+            size = 1.0
         intent = TradeIntent(
             symbol=symbol,
             side=order.side,
@@ -1203,6 +1316,7 @@ class PortfolioEngine:
             proposal = self.proposals.add(kind, intent)
             if proposal is None:
                 return False
+            self._pending_book[symbol] = book
             if kind == "approval":
                 self.mentor.awaiting_approval(intent, APPROVAL_MINUTES)
                 self.monitor.info(
@@ -1223,6 +1337,7 @@ class PortfolioEngine:
             return False
 
         self._register_position(opened, intent.reason)
+        self._set_book(opened.symbol, book)
         self._write_thesis(opened, intent.reason, self._research.get(opened.symbol))
         self._brain_bought(opened)
         self.mentor.opened(opened, True)
@@ -1341,6 +1456,7 @@ class PortfolioEngine:
             self._positions.pop(trade.symbol, None)
             entry_reason = self._entry_reasons.pop(trade.symbol, "")
             self._broker_stops.discard(trade.symbol)
+            self._books.pop(trade.symbol, None)
 
         self.repo.save_closed_trade(trade, self.mode, self.executor.name, entry_reason)
         if self.journal is not None:
@@ -1472,6 +1588,7 @@ class PortfolioEngine:
             return fail(error or "the order was not filled")
 
         self._register_position(opened, intent.reason)
+        self._set_book(opened.symbol, self._pending_book.pop(symbol, "short"))
         self._write_thesis(opened, intent.reason, None)
         self.mentor.opened(opened, True)
         self.proposals.finish(proposal, "approved")
