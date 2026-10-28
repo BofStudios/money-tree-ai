@@ -129,6 +129,8 @@ def build_mode_router(engine, token: str) -> APIRouter:
 
     @router.get("/portfolio", dependencies=guarded)
     def portfolio() -> dict:
+        if getattr(engine, "style", "") == "scalp":
+            return engine.scalper.snapshot()
         return engine.books.snapshot()
 
     @router.post("/portfolio/review", dependencies=owner)

@@ -162,7 +162,7 @@ class MainWindow(QMainWindow):
 
     def _build_tray(self) -> None:
         self.tray = QSystemTrayIcon(_app_icon(), self)
-        self.tray.setToolTip("Money Tree AI")
+        self.tray.setToolTip(APP_NAME)
 
         menu = QMenu()
         show = QAction("Show dashboard", self)

@@ -11,7 +11,7 @@
   <a href="https://github.com/BofStudios/money-tree-ai/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/BofStudios/money-tree-ai?style=for-the-badge&color=ffd60a&labelColor=111&filter=desktop-*"></a>
   <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-ffd60a?style=for-the-badge&labelColor=111"></a>
   <img alt="Windows" src="https://img.shields.io/badge/Windows-10%20%7C%2011-ffd60a?style=for-the-badge&labelColor=111">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-370%20passing-32d583?style=for-the-badge&labelColor=111">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-380%20passing-32d583?style=for-the-badge&labelColor=111">
 </p>
 
 > [!WARNING]
@@ -74,6 +74,33 @@ Practice money stays because it is the only way to see the bot work before any
 money is at risk, and because a new Alpaca live account cannot trade until it
 is funded. (Midas signal mode was removed in 4.0: an old config that still says
 `signal` starts on practice money.)
+
+## Desktop 8.0 "Money Ter Ter Ter": the scalper
+
+A second bot built from the same code: `python scripts/build_exe.py --scalp`
+(or `MONEYTREE_STYLE=scalp` from source). It trades only for minutes and
+holds nothing overnight (`app/engine/scalper.py`):
+
+- **Pace**: one-minute candles, a look every 10 seconds, the latest trade
+  price from Alpaca, ~25 of the most traded US stocks and funds on the radar.
+- **Entry**: a stretched dip that has started to turn: RSI(7) at 30 or under,
+  at least 1.5 one-minute ATRs under today's VWAP, the last trade above the
+  last candle. Two scalps at once, ~48% of the account each, 20 a day,
+  between 9:45 and 15:40 New York. News lifts a stock up the radar for 30
+  minutes; the chart still has to confirm.
+- **Exit**: stop 2.5 one-minute ATRs (0.35-1.2%), target 1.5x the stop, 30
+  minutes at most, everything flat at 15:52.
+- **Guards**: after six scalps in a day that lost 0.15% each on average, no
+  new scalps that day. A broker refusal for the day-trade rule stops new
+  scalps for the day. The daily loss limit, Stop and arming work as before.
+
+Honest numbers. Replayed on five real days (21-27 Oct 2026, 24 stocks,
+0.03% cost a trade): chasing one-minute breakouts lost on every variant
+tried (-0.03% to -0.13% a trade). The shipped dip rules made 74 trades, won
+47%, +0.02% a trade: $55 became $55.43. That is about even, not an edge.
+
+Both bots share the data home (keys, history) and the dashboard port, so
+only one runs at a time: opening the second brings the running one forward.
 
 ## Desktop 7.0 "Portfolio": the bot decides the horizon
 

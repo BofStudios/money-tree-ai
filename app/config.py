@@ -9,8 +9,9 @@ from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.common import home as _home
+from app.style import SCALP
 
-APP_NAME = "Money Tree AI"
+APP_NAME = "Money Ter Ter Ter" if SCALP else "Money Tree AI"
 
 FROZEN = getattr(sys, "frozen", False)
 

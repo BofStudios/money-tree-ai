@@ -2,6 +2,7 @@
 
     python scripts/build_exe.py              # the build you sell: needs licence ids
     python scripts/build_exe.py --personal   # your own copy: never asks for a key
+    python scripts/build_exe.py --scalp      # Money Ter Ter Ter, the scalper (a personal copy)
 
 The result lands in dist/. It is a one-folder build on purpose: a one-file build
 has to unpack Qt's WebEngine runtime to a temp directory on every launch, which
@@ -43,7 +44,10 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--personal", action="store_true",
                         help="build for your own PC: no licence check, no installer")
+    parser.add_argument("--scalp", action="store_true",
+                        help="Money Ter Ter Ter: the scalper (app/engine/scalper.py); implies --personal")
     args = parser.parse_args()
+    args.personal = args.personal or args.scalp
 
     if not args.personal and not licensing.configured():
         print("Licence ids are not set. Create the product on Lemon Squeezy, then put its\n"
@@ -57,7 +61,8 @@ def main() -> None:
         raise SystemExit(1)
 
     original = FLAG.read_text(encoding="utf-8")
-    FLAG.write_text(f"PERSONAL = {args.personal}\n", encoding="utf-8")
+    style = "scalp" if args.scalp else "portfolio"
+    FLAG.write_text(f'PERSONAL = {args.personal}\nSTYLE = "{style}"\n', encoding="utf-8")
     try:
         build_exe()
     finally:

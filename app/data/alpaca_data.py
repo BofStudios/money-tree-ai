@@ -5,10 +5,11 @@ import re
 import threading
 import time
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 from alpaca.data.historical import StockHistoricalDataClient
-from alpaca.data.requests import StockBarsRequest
+from alpaca.data.requests import StockBarsRequest, StockLatestTradeRequest
 from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
 
 from app.data.base import MarketDataSource
@@ -17,6 +18,7 @@ log = logging.getLogger(__name__)
 
 _COLUMNS = ["open", "high", "low", "close", "volume"]
 _UNITS = {"m": TimeFrameUnit.Minute, "h": TimeFrameUnit.Hour, "d": TimeFrameUnit.Day}
+_NY = ZoneInfo("America/New_York")
 
 
 class AlpacaData(MarketDataSource):
@@ -109,6 +111,13 @@ class AlpacaData(MarketDataSource):
             return None
         return float(frame["close"].iloc[-1])
 
+    def latest_prices(self, symbols: list[str]) -> dict[str, float]:
+        """The last trade of each symbol in one request (the scalper's live price)."""
+        if not symbols:
+            return {}
+        trades = self.client.get_stock_latest_trade(StockLatestTradeRequest(symbol_or_symbols=list(symbols)))
+        return {s: float(t.price) for s, t in (trades or {}).items() if t is not None and t.price}
+
 
 def _to_timeframe(timeframe: str) -> TimeFrame:
     match = re.fullmatch(r"(\d+)([mhd])", timeframe.lower())
@@ -124,6 +133,13 @@ def _lookback_for(timeframe: str, limit: int) -> timedelta:
         return timedelta(days=60)
     amount, unit = int(match.group(1)), match.group(2)
     minutes = {"m": 1, "h": 60, "d": 60 * 24}[unit] * amount
+    if unit == "m" and minutes * limit <= 390:
+        # Less than a session (the scalper's 150 one-minute candles): today and
+        # the end of the previous weekday, not a week of minutes for every symbol.
+        ny = datetime.now(_NY)
+        prev = ny - timedelta(days=3 if ny.weekday() == 0 else 2 if ny.weekday() == 6 else 1)
+        start = prev.replace(hour=16, minute=0, second=0, microsecond=0) - timedelta(minutes=minutes * limit)
+        return ny - start
     # Roughly 6.5 trading hours a day, so pad generously for nights and weekends.
     bars_per_day = max((6.5 * 60) / minutes, 1)
     days = (limit / bars_per_day) * 2.2 + 5

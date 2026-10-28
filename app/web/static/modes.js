@@ -340,10 +340,81 @@ function portfolioHtml(p) {
     <p class="note faint legal-note">${esc(t("settings.legal"))}</p>`;
 }
 
+/* 8.0: Money Ter Ter Ter, the scalper, takes the portfolio's place. */
+
+function scalpHtml(p) {
+  const s = window.mtState || {};
+  const live = s.broker === "alpaca_live";
+  const armed = !!(s.risk && s.risk.armed);
+  const d = p.today || {};
+  const rate = d.scalps ? Math.round((d.wins / d.scalps) * 100) : 0;
+  const pct = (v) => `${v >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`;
+  const open = p.open.length ? p.open.map((h) => `
+      <li><b>${esc(h.symbol)}</b><span>${esc(money$(h.value))} · ${esc(t("scalp.min", { n: h.minutes }))}</span>
+        <em class="${h.pnl_pct >= 0 ? "up" : "down"}">${pct(h.pnl_pct)}</em>
+        <small>${h.stop ? `stop ${esc(money$(h.stop))}` : ""}${h.target ? ` · ${esc(t("scalp.target"))} ${esc(money$(h.target))}` : ""} · ${esc(h.reason)}</small></li>`).join("")
+    : `<li class="empty">${esc(t("scalp.noOpen"))}</li>`;
+  const radar = p.radar.length ? p.radar.map((r) => `
+      <li><b>${esc(r.symbol)}${r.tip ? " ⚡" : ""}</b><span>${esc(t("scalp.dipLine", { d: r.dip }))} · ${r.relvol}x</span>
+        <em class="up">${r.score.toFixed(1)}</em>
+        <small>RSI ${r.rsi} · stop ${r.stop_pct}%</small></li>`).join("")
+    : `<li class="empty">${esc(t("scalp.noRadar"))}</li>`;
+  const done = p.recent.length ? p.recent.map((r) => `
+      <li class="lg-${r.pnl >= 0 ? "buy" : "sell"}"><i>${r.pnl >= 0 ? "+" : ""}${Number(r.pnl).toFixed(2)}</i>
+        <div><b>${esc(r.symbol)} · ${pct(r.pnl_pct)}</b><small>${esc(r.why)}</small></div>
+        <time>${esc(new Date(r.at.endsWith("Z") || r.at.includes("+") ? r.at : r.at + "Z").toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }))}</time></li>`).join("")
+    : `<li class="empty">${esc(t("scalp.noDone"))}</li>`;
+  const log = p.log.slice(0, 14).map((r) => `
+      <li class="lg-${esc(r.action)}"><i>${esc(t(`scalp.act.${r.action}`))}</i>
+        <div><b>${esc(r.symbol)}</b><small>${esc(r.why)}</small></div>
+        <time>${esc(new Date(r.at * 1000).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" }))}</time></li>`).join("");
+  const rules = p.rules || {};
+  return `
+    <section class="port-head">
+      <div class="port-money">
+        <span class="${live ? (armed ? "armed" : "warn") : ""}">${esc(t(live ? (armed ? "modes.money.armed" : "modes.money.notArmed") : "modes.money.practiceBody"))}</span>
+        ${live ? `<button class="${armed ? "ghost sm" : "arm-big"}" data-arm="${armed ? "off" : "on"}">${esc(t(armed ? "modes.money.disarm" : "modes.money.arm"))}</button>` : ""}
+      </div>
+      <div class="port-regime up">${esc(t("scalp.pace", { s: rules.seconds || 10, n: p.universe }))}</div>
+    </section>
+    <div class="scalp-stats">
+      <div><b>${d.scalps || 0}</b><span>${esc(t("scalp.stat.done"))}</span></div>
+      <div><b>${rate}%</b><span>${esc(t("scalp.stat.wins"))}</span></div>
+      <div><b class="${(d.pnl || 0) >= 0 ? "up" : "down"}">${(d.pnl || 0) >= 0 ? "+" : ""}${money$(d.pnl).replace("$-", "-$")}</b><span>${esc(t("scalp.stat.pnl"))}</span></div>
+      <div><b>${d.entries || 0}/${d.max || 0}</b><span>${esc(t("scalp.stat.entries"))}</span></div>
+    </div>
+    ${p.state ? `<p class="scalp-state">${esc(p.state)}</p>` : ""}
+    <div class="book-grid">
+      <article class="book book-short"><header><div><b>${esc(t("scalp.open"))}</b><span>${esc(t("scalp.openSub", { n: rules.slots || 2 }))}</span></div></header>
+        <ul class="book-hold">${open}</ul></article>
+      <article class="book book-swing"><header><div><b>${esc(t("scalp.radar"))}</b><span>${esc(t("scalp.radarSub"))}</span></div></header>
+        <ul class="book-hold">${radar}</ul></article>
+    </div>
+    <p class="book-rules scalp-rules">${esc(t("scalp.rules", { lo: rules.stop_min, hi: rules.stop_max, rr: rules.rr, h: rules.max_hold, rsi: rules.rsi, d: rules.dip }))}</p>
+    <h2 class="mem-h">${esc(t("scalp.done"))}</h2>
+    <ul class="port-log">${done}</ul>
+    ${log ? `<h2 class="mem-h">${esc(t("scalp.log"))}</h2><ul class="port-log">${log}</ul>` : ""}
+    <p class="note faint legal-note">${esc(t("settings.legal"))}</p>`;
+}
+
+function applyStyle(style) {
+  if (style !== "scalp" || document.body.dataset.style === "scalp") return;
+  document.body.dataset.style = "scalp";
+  const swap = [["nav.portfolio", "nav.scalp"], ["port.title", "scalp.title"], ["port.subtitle", "scalp.subtitle"]];
+  for (const [from, to] of swap) {
+    document.querySelectorAll(`[data-i18n="${from}"]`).forEach((el) => { el.dataset.i18n = to; el.textContent = t(to); });
+  }
+  document.title = "Money Ter Ter Ter";
+  document.querySelectorAll(".boot-name").forEach((el) => { el.textContent = "Money Ter Ter Ter"; });
+  const brand = $("edBadge")?.parentElement;
+  if (brand && brand.firstChild && brand.firstChild.nodeType === 3) brand.firstChild.textContent = "Money Ter Ter Ter ";
+}
+
 async function loadPortfolio() {
   try {
     const p = await api("GET", "/api/portfolio");
-    if ($("portBody")) $("portBody").innerHTML = portfolioHtml(p);
+    applyStyle(p.style);
+    if ($("portBody")) $("portBody").innerHTML = p.style === "scalp" ? scalpHtml(p) : portfolioHtml(p);
     if ($("portReady")) $("portReady").innerHTML = readyCard(ready, true);
   } catch { /* the next look tries again */ }
 }
@@ -446,6 +517,7 @@ window.addEventListener("mt:view", (e) => {
 });
 let lastStatus = 0;
 window.addEventListener("mt:status", () => {
+  applyStyle((window.mtState || {}).style);
   if (Date.now() - lastStatus < 4000) return;
   lastStatus = Date.now();
   if (view === "home" || view === "modes") loadReady();

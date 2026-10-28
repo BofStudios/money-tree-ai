@@ -1,1 +1,2 @@
 PERSONAL = False
+STYLE = "portfolio"

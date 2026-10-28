@@ -177,7 +177,10 @@ def build_data_source(keys: tuple[str, str] | None) -> MarketDataSource:
         from app.data.fallback import FallbackData
 
         # Yahoo fills whatever Alpaca leaves out, including everything when the keys fail.
-        return FallbackData(AlpacaData(*keys), YahooData())
+        from app.style import SCALP
+
+        # The scalper looks every ten seconds; one-minute candles are kept 20 seconds.
+        return FallbackData(AlpacaData(*keys, cache_seconds=20 if SCALP else 45), YahooData())
     # No keys: free public candles, so the app works before any key is saved.
     return YahooData()
 
@@ -234,6 +237,12 @@ def main() -> None:
     if _boot.MIGRATED:
         log.info("copied %d files from the old folder into the data home", len(_boot.MIGRATED))
     settings = load_settings()
+    from app.style import SCALP
+
+    if SCALP:
+        from app.engine.scalper import apply_scalp
+
+        apply_scalp(settings.app)
     for change in edition.clamp_risk(settings.app.risk):
         log.info("%s edition limit: %s", edition.NAME, change)
     if not _licensed(settings, args.headless):
@@ -560,7 +569,9 @@ def build_brain(engine, data, keys, claude, monitor, events, risk, mentor) -> Br
     from app.engine.books import LONG_UNIVERSE
 
     # The brain researches the long book's choices too, not only what the 15-minute scan watches.
-    brain.symbols_fn = lambda: list(dict.fromkeys(engine.watched_symbols() + LONG_UNIVERSE))
+    # The scalper's names are already in watched_symbols().
+    extra = [] if engine.style == "scalp" else LONG_UNIVERSE
+    brain.symbols_fn = lambda: list(dict.fromkeys(engine.watched_symbols() + extra))
     from app.common.idle import idle_seconds
 
     brain.idle_fn = idle_seconds

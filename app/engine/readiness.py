@@ -23,6 +23,7 @@ BLOCK_WORDS = {
     "rules": ("The risk rules said no", "Risk kuralları izin vermedi"),
     "sector": ("Nova: the sector already held the maximum", "Nova: sektörde zaten en fazla pozisyon vardı"),
     "budget": ("The short book's budget was used", "Kısa vade bütçesi doluydu"),
+    "daytrade": ("The broker refused a day trade (day-trade rule)", "Aracı kurum gün içi işlemi reddetti (gün içi işlem kuralı)"),
 }
 
 

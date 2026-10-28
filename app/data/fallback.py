@@ -78,6 +78,16 @@ class FallbackData(MarketDataSource):
                 return price
         return self.fallback.get_quote(symbol)
 
+    def latest_prices(self, symbols: list[str]) -> dict[str, float]:
+        fetch = getattr(self.primary, "latest_prices", None)
+        if fetch is None or self._resting():
+            return {}
+        try:
+            return fetch(symbols)
+        except Exception:
+            log.exception("%s latest prices failed", self.primary.name)
+            return {}
+
     def close(self) -> None:
         self.primary.close()
         self.fallback.close()

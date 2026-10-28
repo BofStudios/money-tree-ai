@@ -314,7 +314,7 @@ class Books:
             items = list(eng._positions.items())
         for s, p in items:
             price = p.current_price or p.entry_price
-            holdings[eng.book_of(s)].append({
+            holdings.setdefault(eng.book_of(s), []).append({
                 "symbol": s, "value": round(price * p.qty, 2), "pnl_pct": round(p.unrealized_pnl_pct, 2),
                 "days": round((time.time() - p.opened_at.timestamp()) / 86400, 1),
                 "stop": p.stop_loss, "reason": eng._entry_reasons.get(s, "")})

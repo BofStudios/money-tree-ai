@@ -170,8 +170,15 @@ class PortfolioEngine:
         self._blocked_day = ""
         self._halted, self._halted_at = self._load_halt()
         from app.engine.books import Books
+        from app.engine.scalper import HISTORY_BARS as SCALP_BARS, Scalper
+        from app.style import STYLE
 
         self.books = Books(self)
+        # Money Ter Ter Ter (8.0): the scalper replaces the books and the 15-minute strategy.
+        self.style = STYLE
+        self.scalper = Scalper(self)
+        self.history_bars = SCALP_BARS if STYLE == "scalp" else HISTORY_BARS
+        self._live: dict[str, float] = {}             # symbol -> latest trade price, scalp style
 
         self._lock = threading.RLock()
         # One trading action at a time: a scan, a manual close, an approval.
@@ -373,7 +380,7 @@ class PortfolioEngine:
         self._save_halt()
 
     def book_buy(self, symbol: str, book: str, reason: str, allocation: float,
-                 stop_pct: float, reward_risk: float) -> str:
+                 stop_pct: float, reward_risk: float, price: float | None = None) -> str:
         """A buy the long or swing book decided on, for `allocation` dollars.
         Same gates as every buy. Returns "bought", "waiting" or why not."""
         symbol = symbol.strip().upper()
@@ -387,13 +394,13 @@ class PortfolioEngine:
                 if symbol in self._positions:
                     return "already held"
             try:
-                history = self.data.get_ohlcv(symbol, self.timeframe, limit=HISTORY_BARS)
+                history = self.data.get_ohlcv(symbol, self.timeframe, limit=self.history_bars)
             except Exception as exc:
                 return f"no prices: {_short(exc)}"
             if history is None or history.empty:
                 return "no prices"
             snapshot = self.strategy.snapshot(history)
-            price = float(history["close"].iloc[-1])
+            price = float(price or history["close"].iloc[-1])
             with self._lock:
                 self._history.setdefault(symbol, history)
                 self._snapshots.setdefault(symbol, snapshot)
@@ -469,6 +476,9 @@ class PortfolioEngine:
         "bought", "waiting" (for your approval or idea only) or the reason it did not."""
         symbol = symbol.strip().upper()
         w = self.words()
+        if self.style == "scalp":
+            # A headline puts the stock on the scalper's radar; the chart has to confirm.
+            return self.scalper.news_tip(symbol, reason.removeprefix("news: "))
         with self._trade_lock:
             if self._halted:
                 return w.halted_reason()
@@ -478,7 +488,7 @@ class PortfolioEngine:
                 if symbol in self._positions:
                     return "already held"
             try:
-                history = self.data.get_ohlcv(symbol, self.timeframe, limit=HISTORY_BARS)
+                history = self.data.get_ohlcv(symbol, self.timeframe, limit=self.history_bars)
             except Exception as exc:
                 return f"no prices: {_short(exc)}"
             if history is None or history.empty:
@@ -526,7 +536,7 @@ class PortfolioEngine:
         if not hasattr(self, "_normal_interval"):
             self._normal_interval = self.config.scan_interval_seconds
         self.ultra = on
-        self.config.scan_interval_seconds = 15 if on else self._normal_interval
+        self.config.scan_interval_seconds = min(15, self._normal_interval) if on else self._normal_interval
         with self._lock:
             self._extra = list(ULTRA_EXTRA) if on else []
         self.scan_now()
@@ -676,6 +686,7 @@ class PortfolioEngine:
             "automatic": self.executor.is_automatic,
             "data_source": self.data.name,
             "timeframe": self.timeframe,
+            "style": self.style,
             "running": self.running,
             "halted": self._halted,
             "halted_at": self._halted_at.isoformat() if self._halted_at else None,
@@ -894,6 +905,7 @@ class PortfolioEngine:
             symbols = self._scan_symbols()
         self.mentor.scan_start(len(symbols), self.timeframe)
         frames = self._fetch_bars(symbols, w)
+        self._live = self._latest_prices(symbols) if self.style == "scalp" and is_open else {}
         looked = self._analyse(symbols, frames, trade, w)
         if self.brain is not None:
             try:
@@ -912,7 +924,14 @@ class PortfolioEngine:
             for symbol, snapshot, price, signal in looked:
                 if self._manage(symbol, snapshot, price, signal, w):
                     signals_raised += 1
-            if is_open and not self._halted:
+            if is_open and self.style == "scalp":
+                try:
+                    for row in self.scalper.tick(frames, self._live):
+                        if row["action"] in ("buy", "sell"):
+                            self.monitor.info("learn", f"Scalp · {row['symbol']} · {row['action']}", row["why"])
+                except Exception:
+                    log.exception("the scalper failed")
+            elif is_open and not self._halted:
                 try:
                     for row in self.books.review():
                         self.monitor.info("learn" if row["action"] in ("buy", "sell") else activity.INFO,
@@ -1045,7 +1064,7 @@ class PortfolioEngine:
         # stays open for exactly as long as that request takes.
         handle = self.monitor.begin(activity.BARS, w.fetching_bars(len(symbols), self.timeframe))
         try:
-            frames = self.data.get_many_ohlcv(symbols, self.timeframe, limit=HISTORY_BARS)
+            frames = self.data.get_many_ohlcv(symbols, self.timeframe, limit=self.history_bars)
         except Exception as exc:
             handle.fail(_short(exc))
             raise
@@ -1056,6 +1075,17 @@ class PortfolioEngine:
         missing = [w.no_data_for(s) for s in symbols if s not in frames]
         handle.done(w.bars_summary(len(frames), len(symbols)), missing)
         return frames
+
+    def _latest_prices(self, symbols: list[str]) -> dict[str, float]:
+        """The last trade of each symbol, fresher than a closed one-minute candle."""
+        fetch = getattr(self.data, "latest_prices", None)
+        if fetch is None:
+            return {}
+        try:
+            return {s: float(p) for s, p in (fetch(symbols) or {}).items() if p and p > 0}
+        except Exception:
+            log.exception("latest prices failed")
+            return {}
 
     def _analyse(
         self, symbols: list[str], frames: dict[str, pd.DataFrame], trade: bool, w: Words
@@ -1072,7 +1102,7 @@ class PortfolioEngine:
             handle.progress(f"{symbol} · {index}/{len(symbols)}")
 
             snapshot = self.strategy.snapshot(history)
-            price = float(history["close"].iloc[-1])
+            price = float(self._live.get(symbol) or history["close"].iloc[-1])
             with self._lock:
                 self._history[symbol] = history
                 self._snapshots[symbol] = snapshot
@@ -1120,6 +1150,8 @@ class PortfolioEngine:
             return False
         if position is None and symbol in self._news_deadline:
             self._news_deadline.pop(symbol, None)
+        if position is None and self.style == "scalp":
+            return False   # the scalper chooses its own entries
         if not signal.is_actionable:
             return False
         return self._act(symbol, signal, snapshot, price, w)
@@ -1369,6 +1401,8 @@ class PortfolioEngine:
         except Exception as exc:
             handle.fail(_short(exc))
             self.mentor.rejected(symbol, "place the buy", str(exc))
+            if self.scalper.refused_for_day_trades(str(exc)):
+                self.note_block("daytrade", symbol, _short(exc))
             return None, str(exc)
         if opened is None:
             handle.fail(w.order_not_filled())
@@ -1513,6 +1547,8 @@ class PortfolioEngine:
         timeframe = HORIZON_TIMEFRAMES.get(horizon)
         if timeframe is None:
             raise ValueError(f"horizon must be one of {tuple(HORIZON_TIMEFRAMES)}")
+        if self.style == "scalp":
+            return self.timeframe   # the scalper always reads one-minute candles
         if timeframe != self.timeframe:
             with self._lock:
                 self.timeframe = timeframe
@@ -1657,6 +1693,8 @@ class PortfolioEngine:
         held = [s for s in self._positions if s not in self.symbols]
         found = self.brain.discovered_symbols() if self.brain is not None else []
         extra = [s for s in getattr(self, "_extra", []) if s not in self._watch_removed]
+        if self.style == "scalp":
+            extra += [s for s in self.scalper.symbols() if s not in self._watch_removed]
         return list(dict.fromkeys(list(self.symbols) + held + found + extra))
 
     # ------------------------------------------------------------ the brain
