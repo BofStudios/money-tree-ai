@@ -253,6 +253,9 @@ def main() -> None:
         settings.app.web.host = args.host
     if args.port:
         settings.app.web.port = args.port
+    else:
+        # Another program on the PC may already hold 8765; the window would show its page.
+        settings.app.web.port = _free_port(settings.app.web.host, settings.app.web.port)
 
     events = EventBus()
     monitor = Monitor(events)
@@ -500,6 +503,22 @@ def _taskbar_identity() -> None:
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("BofStudios.MoneyTreeAI")
     except Exception:
         log.debug("could not set the taskbar id", exc_info=True)
+
+
+def _free_port(host: str, port: int) -> int:
+    """The configured port, or the next free one when another program holds it."""
+    import socket
+
+    for candidate in range(port, port + 20):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            try:
+                probe.bind((host, candidate))
+            except OSError:
+                continue
+        if candidate != port:
+            log.warning("port %d is taken by another program; the dashboard uses %d", port, candidate)
+        return candidate
+    return port
 
 
 def _licensed(settings: Settings, headless: bool) -> bool:

@@ -121,7 +121,12 @@ def island_main(index: int, family: str | None, strength: float, arrays: list[di
         pop.append(trial(random_genome(rng, family)))
     tested, generations, last = len(pop), 0, time.time()
     rate = 0.0
+    # A hard exit of the app skips the clean-up that ends daemon processes;
+    # without this check the bots kept running after the window was closed.
+    owner = mp.parent_process()
     while not stop.is_set():
+        if owner is not None and not owner.is_alive():
+            return
         started = time.time()
         parents = sorted(pop, key=lambda p: fitness(p[1]), reverse=True)[:PARENTS]
         children = []
