@@ -333,6 +333,9 @@ class Scalper:
 
         if eng.halted:
             return t("stopped: no new trades", "durduruldu: yeni işlem yok")
+        pace = eng.buy_wait() if hasattr(eng, "buy_wait") else None
+        if pace and eng.clock.state().is_open:
+            return pace
         if not eng.clock.state().is_open:
             local = datetime.combine(now.date(), START, tzinfo=NY).astimezone(ZoneInfo("Europe/Istanbul"))
             return t(f"the market is closed: Ultra starts at 9:45 New York ({local:%H:%M} Türkiye)",

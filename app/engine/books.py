@@ -103,7 +103,7 @@ def trend(d: dict) -> dict | None:
     r = rsi_series(close)
     s50, s200 = sma(close, 50), sma(close, 200)
     return {
-        "close": float(close[-1]), "prev": float(close[-2]), "sma50": s50, "sma200": s200,
+        "close": float(close[-1]), "prev": float(close[-2]), "sma20": sma(close, 20), "sma50": s50, "sma200": s200,
         "uptrend": bool(close[-1] > s200 and s50 > s200),
         "mom126": float(close[-1] / close[-127] - 1) * 100 if len(close) > 127 and close[-127] > 0 else 0.0,
         "rsi": float(r[-1]) if not math.isnan(r[-1]) else None,
@@ -131,6 +131,20 @@ def swing_vote(d: dict) -> float | None:
         return None
 
 
+def long_timing_ok(t: dict | None) -> bool:
+    """9.0.1: a long buy also needs a calm entry. Daily RSI between 40 and
+    68 (not overheated), the close at most 4% over the 20-day average (not
+    chasing a spike) and today not falling."""
+    if not t:
+        return False
+    rsi = t.get("rsi")
+    if rsi is not None and not 40 <= rsi <= 68:
+        return False
+    if t.get("sma20") and t["close"] > t["sma20"] * 1.04:
+        return False
+    return t["close"] >= t["prev"]
+
+
 # ------------------------------------------------------------------ books
 
 class Books:
@@ -140,6 +154,7 @@ class Books:
         self.log: list[dict] = []      # newest first: what each book did and why
         self.regime_up: bool | None = None
         self.weight_why: dict[str, str] = {}
+        self._said: set[tuple] = set()  # (day, book, symbol, action): non-buy notes once a day
 
     # ----------------------------------------------------------- money split
     def slots(self, book: str, equity: float) -> int:
@@ -198,14 +213,16 @@ class Books:
         return now >= opened and self.last_review != now.strftime("%Y-%m-%d")
 
     def review(self, force: bool = False, buys: bool = True) -> list[dict]:
-        """Once a trading day: sell what broke its book's rules, then fill free
-        room. In Ultra (buys=False) the books only sell: the money is Ultra's."""
+        """Once a trading day: sell what broke its book's rules. Every look:
+        fill free room, one buy at a time and only when the entry timing is
+        right (9.0.1; it used to buy everything at once). In Ultra
+        (buys=False) the books only sell: the money is Ultra's."""
         eng = self.engine
-        if not force and not self.due():
-            return []
-        self.last_review = datetime.now(NY).strftime("%Y-%m-%d")
         brain = eng.brain
         if brain is None:
+            return []
+        exits = force or self.due()
+        if not exits and not buys:
             return []
         done: list[dict] = []
         daily = dict(brain.daily)
@@ -213,12 +230,14 @@ class Books:
         spy = trend(daily["SPY"]) if "SPY" in daily else None
         self.regime_up = None if spy is None else bool(spy["close"] > spy["sma200"])
 
-        # 1. exits by each book's own rules
+        # 1. exits by each book's own rules, once a day
         with eng._lock:
             held = {s: (eng.book_of(s), p) for s, p in eng._positions.items()}
         long_ranked = self._rank_long(daily, reports)
         top = {s for s, _ in long_ranked[: self.slots("long", 1e9) * 3]}
-        for s, (book, p) in held.items():
+        if exits:
+            self.last_review = datetime.now(NY).strftime("%Y-%m-%d")
+        for s, (book, p) in (held.items() if exits else ()):
             t = trend(daily[s]) if s in daily else None
             age = (time.time() - p.opened_at.timestamp()) / 86400
             why = None
@@ -239,13 +258,13 @@ class Books:
                 result = eng.book_sell(s, f"{PREFIX[book]}{why}")
                 done.append(self._note(book, s, "sell" if result == "sold" else "skip", why if result == "sold" else f"{why} ({result})"))
 
-        # 2. buys into the free room of each book
-        if not buys:
+        # 2. one buy into the free room of a book, when the pace allows
+        if not buys or eng.buy_wait():
             return done
         budgets = self.budgets()
         with eng._lock:
             held_now = {s: eng.book_of(s) for s in eng._positions}
-        for book, picks in (("long", self._long_picks(long_ranked, held_now)),
+        for book, picks in (("long", self._long_picks(long_ranked, held_now, daily)),
                             ("swing", self._swing_picks(daily, reports, held_now))):
             b = budgets[book]
             count = sum(1 for v in held_now.values() if v == book)
@@ -253,18 +272,26 @@ class Books:
             if free_slots <= 0 or b["free"] < MIN_ORDER:
                 continue
             if book == "long" and self.regime_up is False:
-                done.append(self._note(book, "SPY", "wait", "SPY is under its 200-day average: no new long buys until it recovers"))
+                self._say(done, book, "SPY", "wait", "SPY is under its 200-day average: no new long buys until it recovers")
                 continue
             per = b["free"] / free_slots
+            if per < MIN_ORDER:
+                continue
             for s, stop, rr, why in picks[:free_slots]:
-                if per < MIN_ORDER:
-                    break
                 result = eng.book_buy(s, book, f"{PREFIX[book]}{why}", per, stop, rr)
-                done.append(self._note(book, s, "buy" if result == "bought" else ("wait" if result == "waiting" else "skip"),
-                                       why if result in ("bought", "waiting") else f"{why} ({result})"))
                 if result in ("bought", "waiting"):
-                    held_now[s] = book
+                    done.append(self._note(book, s, "buy" if result == "bought" else "wait", why))
+                    return done          # one buy per look: the next look re-reads the market
+                self._say(done, book, s, "skip", f"{why} ({result})")
         return done
+
+    def _say(self, done: list, book: str, symbol: str, action: str, why: str) -> None:
+        """A wait or skip note, once a day per stock, so the log is not the same line every minute."""
+        key = (datetime.now(NY).strftime("%Y-%m-%d"), book, symbol, action)
+        if key in self._said:
+            return
+        self._said.add(key)
+        done.append(self._note(book, symbol, action, why))
 
     def _rank_long(self, daily: dict, reports: dict) -> list[tuple[str, float]]:
         rows = []
@@ -288,7 +315,7 @@ class Books:
         ranked = [(s, 0.5 * q / 5 + 0.5 * (moms.index(m) / max(len(moms) - 1, 1))) for s, q, m in rows]
         return sorted(ranked, key=lambda r: -r[1])
 
-    def _long_picks(self, ranked: list, held: dict) -> list:
+    def _long_picks(self, ranked: list, held: dict, daily: dict | None = None) -> list:
         from app.engine.desk import sector_of
 
         sectors = {sector_of(s) for s, b in held.items() if b == "long"}
@@ -296,6 +323,8 @@ class Books:
         for s, score in ranked:
             if s in held:
                 continue
+            if daily is not None and s in daily and not long_timing_ok(trend(daily[s])):
+                continue   # a good company, but not today: overheated or falling today
             sec = sector_of(s)
             if sec in sectors and sec != "other":
                 continue

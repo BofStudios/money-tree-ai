@@ -11,7 +11,7 @@
   <a href="https://github.com/BofStudios/money-tree-ai/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/BofStudios/money-tree-ai?style=for-the-badge&color=ffd60a&labelColor=111&filter=desktop-*"></a>
   <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-ffd60a?style=for-the-badge&labelColor=111"></a>
   <img alt="Windows" src="https://img.shields.io/badge/Windows-10%20%7C%2011-ffd60a?style=for-the-badge&labelColor=111">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-385%20passing-32d583?style=for-the-badge&labelColor=111">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-387%20passing-32d583?style=for-the-badge&labelColor=111">
 </p>
 
 > [!WARNING]
@@ -74,6 +74,16 @@ Practice money stays because it is the only way to see the bot work before any
 money is at risk, and because a new Alpaca live account cannot trade until it
 is funded. (Midas signal mode was removed in 4.0: an old config that still says
 `signal` starts on practice money.)
+
+## Desktop 9.0.1: calm start, one buy at a time
+
+9.0 bought four stocks in three seconds after Start and spent the whole
+account at once. Now, after the app starts, Start is pressed, real money is
+armed or the mode changes, the bot only watches for 3 minutes. After that it
+buys one position at a time: the next buy waits 5 minutes in Balanced and 1
+minute in Ultra. The long book also waits for a calm entry: daily RSI 40-68,
+at most 4% over the 20-day average, and not on a falling day. Exits are not
+slowed: stops, targets and Stop work as before.
 
 ## Desktop 9.0: one Money Tree, two modes
 

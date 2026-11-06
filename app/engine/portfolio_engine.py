@@ -56,6 +56,12 @@ from app.strategy.base import Strategy
 log = logging.getLogger(__name__)
 
 HISTORY_BARS = 400
+# 9.0.1: the pace of buying. After the app starts, Start is pressed, real
+# money is armed or the mode changes, the bot only watches for CALM_SECONDS
+# (it reads the market first). After that, one buy at a time: the next buy
+# waits BUY_GAP seconds, so the money is never all spent in one burst.
+CALM_SECONDS = 180
+BUY_GAP = {"portfolio": 300, "scalp": 60}
 CLOSED_MARKET_SLEEP = 300
 ERROR_BACKOFF = 30
 
@@ -169,6 +175,9 @@ class PortfolioEngine:
         self._blocked: dict[str, dict] = {}          # why a buy did not happen -> count, last time, symbol
         self._blocked_day = ""
         self._halted, self._halted_at = self._load_halt()
+        self._calm_until = 0.0          # no buys before this (epoch seconds)
+        self._last_buy_at = 0.0
+        self._seen_armed = False
         from app.engine.books import Books
         from app.engine.scalper import HISTORY_BARS as SCALP_BARS, Scalper
         from app.style import STYLE
@@ -198,6 +207,7 @@ class PortfolioEngine:
             return
         self._stop.clear()
         self._started_at = datetime.now(timezone.utc)
+        self.calm_start()
         self._thread = threading.Thread(target=self._run, name="portfolio-engine", daemon=True)
         self._thread.start()
         self.mentor.boot(self.mode, self.symbols, self.timeframe, self.executor.name)
@@ -262,6 +272,7 @@ class PortfolioEngine:
             self._halted_at = None
         self._save_halt()
         if was:
+            self.calm_start()
             log.warning("trading started again by the owner (%s)", by)
             self.monitor.info(activity.INFO, self.words().resumed())
         if not (self._thread and self._thread.is_alive()):
@@ -576,8 +587,33 @@ class PortfolioEngine:
             self._snapshots.clear()
             self._last_signal.clear()
         self.proposals.clear_pending()
+        self.calm_start()
         self.scan_now()
         self.events.publish("status", self.status())
+
+    # ------------------------------------------------------- the pace of buying
+
+    def calm_start(self) -> None:
+        self._calm_until = max(self._calm_until, time.time() + CALM_SECONDS)
+
+    def buy_wait(self) -> str | None:
+        """Why no new buy may happen right now (the pace), or None."""
+        now = time.time()
+        armed = bool(getattr(self.risk, "armed", False))
+        if armed and not self._seen_armed:
+            self.calm_start()
+        self._seen_armed = armed
+        tr = self.language == "tr"
+        if now < self._calm_until:
+            left = int(self._calm_until - now)
+            return (f"sakin başlangıç: bot önce piyasayı okuyor, {left} sn sonra alım yapabilir" if tr
+                    else f"calm start: the bot reads the market first; buys allowed in {left} s")
+        gap = BUY_GAP.get(self.style, 300)
+        if self._last_buy_at and now - self._last_buy_at < gap:
+            left = int(gap - (now - self._last_buy_at))
+            return (f"tek tek alım: sonraki alım {left} sn sonra" if tr
+                    else f"one buy at a time: the next buy in {left} s")
+        return None
 
     def status_positions(self) -> list[dict]:
         with self._lock:
@@ -1260,6 +1296,12 @@ class PortfolioEngine:
         if self._halted:
             return False
 
+        if position is None and signal.action is Action.BUY:
+            wait = self.buy_wait()
+            if wait:
+                self.note_block("pace", symbol, wait)
+                return False
+
         if signal.action is Action.CLOSE:
             if position is None:
                 return False
@@ -1441,6 +1483,7 @@ class PortfolioEngine:
         )
         try:
             opened = self.executor.open_position(intent)
+            self._last_buy_at = time.time()
         except Exception as exc:
             handle.fail(_short(exc))
             self.mentor.rejected(symbol, "place the buy", str(exc))

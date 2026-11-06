@@ -21,6 +21,14 @@ def rising(n=260, start=100.0, step=0.4):
     return daily(start + step * np.arange(n))
 
 
+def calm(n=260, start=100.0, step=0.4):
+    """A long uptrend after a week of drifting down, today up: a calm entry."""
+    c = start + step * np.arange(n)
+    c[-8:] = c[-9] - step * 0.8 * np.arange(1, 9)
+    c[-1] = c[-2] + step
+    return daily(c)
+
+
 def test_trend_reads_a_long_uptrend():
     t = B.trend(rising())
     assert t["uptrend"] and t["mom126"] > 0 and t["sma50"] > t["sma200"]
@@ -77,7 +85,7 @@ def test_each_book_trails_with_its_own_distance(tmp_path):
 def test_the_review_buys_the_best_long_candidates_and_respects_a_falling_market(tmp_path):
     engine = news_engine(tmp_path)
     reports = {s: SimpleNamespace(decision="BUY_ZONE", score=4.5) for s in ("AAPL", "MSFT", "NVDA")}
-    engine.brain = SimpleNamespace(daily={"SPY": rising(), "AAPL": rising(step=0.8), "MSFT": rising(step=0.5),
+    engine.brain = SimpleNamespace(daily={"SPY": rising(), "AAPL": calm(step=0.8), "MSFT": calm(step=0.5),
                                           "NVDA": daily(200 - 0.3 * np.arange(260))},
                                    reports=reports, discovered_symbols=lambda: [])
     done = engine.books.review(force=True)
@@ -99,3 +107,33 @@ def test_the_short_book_keeps_to_its_budget(tmp_path):
     engine._scan(FakeMarket())
     used = sum(p.qty * p.entry_price for s, p in engine._positions.items() if engine.book_of(s) == "short")
     assert used <= budget * 1.01
+
+
+def test_a_long_buy_waits_for_a_calm_entry():
+    assert B.long_timing_ok(B.trend(calm()))
+    assert not B.long_timing_ok(B.trend(rising())), "a straight line up (RSI near 100) is overheated"
+    falling_today = calm()
+    falling_today["close"][-1] = falling_today["close"][-2] - 1
+    assert not B.long_timing_ok(B.trend(falling_today))
+
+
+@pytest.mark.real_pace
+def test_after_start_the_bot_watches_first_then_buys_one_at_a_time(tmp_path, monkeypatch):
+    from app.engine import portfolio_engine as PE
+
+    engine = news_engine(tmp_path)
+    reports = {s: SimpleNamespace(decision="BUY_ZONE", score=4.5) for s in ("AAPL", "JPM")}
+    engine.data.prices["JPM"] = 100.0
+    engine.brain = SimpleNamespace(daily={"SPY": rising(), "AAPL": calm(step=0.8), "JPM": calm(step=0.5)},
+                                   reports=reports, discovered_symbols=lambda: [])   # two sectors
+    engine.calm_start()
+    assert "calm start" in (engine.buy_wait() or "")
+    assert not [r for r in engine.books.review(force=True) if r["action"] == "buy"], "nothing in the first minutes"
+
+    engine._calm_until = 0
+    first = [r for r in engine.books.review() if r["action"] == "buy"]
+    assert len(first) == 1, "one buy per look, never a burst"
+    assert "one buy at a time" in (engine.buy_wait() or "")
+    assert not [r for r in engine.books.review() if r["action"] == "buy"]
+    engine._last_buy_at -= PE.BUY_GAP["portfolio"] + 1
+    assert len([r for r in engine.books.review() if r["action"] == "buy"]) == 1
