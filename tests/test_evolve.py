@@ -292,17 +292,22 @@ def _modes_client(tmp_path):
     return TestClient(app), engine, brain
 
 
-def test_modes_change_style_and_speed(tmp_path):
+def test_there_are_two_modes_balanced_and_ultra(tmp_path):
     client, engine, brain = _modes_client(tmp_path)
     assert client.get("/api/modes").status_code == 401
-    r = client.post("/api/modes?token=tok", json={"style": "bold"}).json()
-    assert r["style"] == "bold" and brain.settings.quality_mode == "OFF"
-    assert client.post("/api/modes?token=tok", json={"speed": "ultra"}).status_code == 400
-    r = client.post("/api/modes?token=tok", json={"speed": "ultra", "confirm": True}).json()
-    assert r["speed"] == "ultra" and engine.config.scan_interval_seconds == 15
+    r = client.get("/api/modes?token=tok").json()
+    assert r["mode"] == "balanced" and "speed" not in r and "style" not in r
+    assert client.post("/api/modes?token=tok", json={"mode": "eco"}).status_code == 400
+    assert client.post("/api/modes?token=tok", json={"mode": "ultra"}).status_code == 400, "Ultra needs the warning"
+    r = client.post("/api/modes?token=tok", json={"mode": "ultra", "confirm": True}).json()
+    assert r["mode"] == "ultra" and brain.settings.ultra
+    assert engine.style == "scalp" and engine.timeframe == "1m" and engine.config.scan_interval_seconds == 10
     assert len(engine.watched_symbols()) > 10
-    r = client.post("/api/modes?token=tok", json={"speed": "eco"}).json()
-    assert r["speed"] == "eco" and not brain.settings.ultra and brain.settings.power == "light"
+    r = client.post("/api/modes?token=tok", json={"mode": "balanced"}).json()
+    assert r["mode"] == "balanced" and not brain.settings.ultra and brain.settings.power == "full"
+    assert engine.style == "portfolio" and engine.timeframe != "1m"
+    r = client.post("/api/modes?token=tok", json={"speed": "ultra", "confirm": True}).json()
+    assert r["mode"] == "ultra", "the old speed key still means Ultra"
     r = client.post("/api/modes?token=tok", json={"news_trading": False}).json()
     assert r["switches"]["news_trading"] is False
     assert client.get("/api/readiness?token=tok").json()["checks"]

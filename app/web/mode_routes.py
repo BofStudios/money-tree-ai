@@ -1,9 +1,15 @@
-"""The Modes tab: every way the bot can run, in one place, as a few big choices.
+"""The Modes tab. Since 9.0 there are two modes and nothing in between:
 
-  speed     Eco (light bots) · Normal · Ultra (every core, the world's feeds)
-  style     Careful · Balanced · Bold: how sure the research and the news
-            must be before a buy. The risk limits do not change with it.
+  balanced  the portfolio: long, swing and short books, 15-minute candles,
+            the research and news gates at their balanced setting.
+  ultra     fast trading: one-minute candles, a look every ten seconds, the
+            confluence vote of nine indicators, every CPU core and the
+            world's news feeds; up to the whole account in play.
+
   switches  news trading, self-improvement, discovery, the AI check ...
+
+Neither mode changes a safety gate: Stop, the daily loss limit, the safety
+pauses, arming and the stops at the broker are the same in both.
 
 Who decides (full auto / ask me / ideas only) is the profile's autonomy
 (PATCH /api/profile); real money and arming stay on /api/mode and /api/arm.
@@ -21,26 +27,17 @@ from app.config import HOME
 
 LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost", "testclient"}
 
-STYLES = {
-    "careful": {"quality_mode": "STRICT", "news_min_confidence": 0.75},
-    "balanced": {"quality_mode": "BALANCED", "news_min_confidence": 0.6},
-    "bold": {"quality_mode": "OFF", "news_min_confidence": 0.55},
+MODES = ("balanced", "ultra")
+# What each mode sets on the research desk besides Ultra itself.
+MODE_SETTINGS = {
+    "balanced": {"quality_mode": "BALANCED", "news_min_confidence": 0.6, "power": "full"},
+    "ultra": {"quality_mode": "BALANCED", "news_min_confidence": 0.55, "power": "full"},
 }
 SWITCHES = ("news_trading", "self_improve", "discover", "ai_check", "learning", "news_check", "auto_eco")
 
 
-def style_of(settings) -> str:
-    for name, values in STYLES.items():
-        if settings.quality_mode == values["quality_mode"] and \
-                abs(float(settings.news_min_confidence) - values["news_min_confidence"]) < 0.001:
-            return name
-    return "custom"
-
-
-def speed_of(settings) -> str:
-    if settings.ultra:
-        return "ultra"
-    return "eco" if settings.power == "light" else "normal"
+def mode_of(settings) -> str:
+    return "ultra" if getattr(settings, "ultra", False) else "balanced"
 
 
 def build_mode_router(engine, token: str) -> APIRouter:
@@ -71,8 +68,7 @@ def build_mode_router(engine, token: str) -> APIRouter:
         b = getattr(engine, "brain", None)
         s = b.settings if b is not None else None
         return {
-            "speed": speed_of(s) if s else "normal",
-            "style": style_of(s) if s else "balanced",
+            "mode": mode_of(s) if s else "balanced",
             "autonomy": engine.autonomy,
             "money": {"mode": engine.mode, "broker": engine.executor.broker, "armed": engine.risk.armed},
             "switches": {k: bool(getattr(s, k, True)) for k in SWITCHES} if s else {},
@@ -90,23 +86,19 @@ def build_mode_router(engine, token: str) -> APIRouter:
     def set_modes(changes: dict = Body(...)) -> dict:
         b = brain()
         update: dict = {}
-        speed = changes.get("speed")
-        if speed is not None:
-            if speed not in ("eco", "normal", "ultra"):
-                raise HTTPException(status_code=400, detail="speed must be eco, normal or ultra")
-            if speed == "ultra" and not b.settings.ultra and not changes.get("confirm"):
+        mode = changes.get("mode")
+        if mode is None and changes.get("speed") is not None:     # before 9.0
+            mode = "ultra" if changes["speed"] == "ultra" else "balanced"
+        if mode is not None:
+            if mode not in MODES:
+                raise HTTPException(status_code=400, detail="mode must be balanced or ultra")
+            if mode == "ultra" and not b.settings.ultra and not changes.get("confirm"):
                 raise HTTPException(status_code=400, detail="Ultra needs confirm=true after the warning.")
-            if speed == "ultra":
+            if mode == "balanced" and b.settings.ultra:
+                b.apply_settings({"ultra": False})
+            update.update(MODE_SETTINGS[mode])
+            if mode == "ultra":
                 update["ultra"] = True
-            else:
-                if b.settings.ultra:
-                    b.apply_settings({"ultra": False})
-                update["power"] = "light" if speed == "eco" else "full"
-        style = changes.get("style")
-        if style is not None:
-            if style not in STYLES:
-                raise HTTPException(status_code=400, detail="style must be careful, balanced or bold")
-            update.update(STYLES[style])
         for key in SWITCHES:
             if key in changes:
                 update[key] = bool(changes[key])

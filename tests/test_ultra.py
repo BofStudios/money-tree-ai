@@ -27,12 +27,14 @@ def test_ultra_uses_every_core_and_puts_things_back():
     assert off["bots"] == 2 and off["power"] == "light" and off["before_ultra"] == {}
 
 
-def test_engine_scans_every_15_seconds_in_ultra(tmp_path):
+def test_ultra_is_the_fast_trader_and_balanced_puts_the_portfolio_back(tmp_path):
     from tests.test_portfolio_engine import build
 
     engine = build(tmp_path)
-    normal = engine.config.scan_interval_seconds
+    normal, frame_, cooldown = engine.config.scan_interval_seconds, engine.timeframe, engine.config.protections.cooldown_minutes
     engine.set_ultra(True)
-    assert engine.config.scan_interval_seconds == 15 and engine.status()["ultra"]
+    assert engine.config.scan_interval_seconds == 10 and engine.status()["ultra"]
+    assert engine.style == "scalp" and engine.timeframe == "1m"
     engine.set_ultra(False)
-    assert engine.config.scan_interval_seconds == normal
+    assert engine.config.scan_interval_seconds == normal and engine.style == "portfolio"
+    assert engine.timeframe == frame_ and engine.config.protections.cooldown_minutes == cooldown

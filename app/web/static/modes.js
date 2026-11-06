@@ -155,14 +155,10 @@ function renderModes() {
         ${live ? `<button class="${armed ? "ghost" : "arm-big"}" data-arm="${armed ? "off" : "on"}">${esc(t(armed ? "modes.money.disarm" : "modes.money.arm"))}</button>` : ""}
       </div>
     </section>
-    <section class="mode-block">
-      <h2>${esc(t("modes.speed"))}</h2>
-      ${cardRow("speed", ["eco", "normal", "ultra"], modes.speed)}
-    </section>
-    <section class="mode-block">
-      <h2>${esc(t("modes.style"))}</h2>
-      ${cardRow("style", ["careful", "balanced", "bold"], modes.style)}
-      ${modes.style === "custom" ? `<p class="note faint">${esc(t("modes.style.custom"))}</p>` : ""}
+    <section class="mode-block mode-main">
+      <h2>${esc(t("modes.mode"))}</h2>
+      ${cardRow("mode", ["balanced", "ultra"], modes.mode || "balanced")}
+      <p class="note faint">${esc(t("modes.mode.note"))}</p>
     </section>
     <section class="mode-block">
       <h2>${esc(t("modes.who"))}</h2>
@@ -340,7 +336,7 @@ function portfolioHtml(p) {
     <p class="note faint legal-note">${esc(t("settings.legal"))}</p>`;
 }
 
-/* 8.0: Money Ter Ter Ter, the scalper, takes the portfolio's place. */
+/* 9.0: in Ultra the fast trader takes the portfolio's place on this screen. */
 
 function scalpHtml(p) {
   const s = window.mtState || {};
@@ -357,7 +353,7 @@ function scalpHtml(p) {
   const radar = p.radar.length ? p.radar.map((r) => `
       <li><b>${esc(r.symbol)}${r.tip ? " ⚡" : ""}</b><span>${esc(t("scalp.dipLine", { d: r.dip }))} · ${r.relvol}x</span>
         <em class="up">${r.score.toFixed(1)}</em>
-        <small>RSI ${r.rsi} · stop ${r.stop_pct}%</small></li>`).join("")
+        <small>RSI ${r.rsi} · ${esc(t("scalp.vote", { n: r.vote ?? 0 }))} · stop ${r.stop_pct}%</small></li>`).join("")
     : `<li class="empty">${esc(t("scalp.noRadar"))}</li>`;
   const done = p.recent.length ? p.recent.map((r) => `
       <li class="lg-${r.pnl >= 0 ? "buy" : "sell"}"><i>${r.pnl >= 0 ? "+" : ""}${Number(r.pnl).toFixed(2)}</i>
@@ -390,7 +386,7 @@ function scalpHtml(p) {
       <article class="book book-swing"><header><div><b>${esc(t("scalp.radar"))}</b><span>${esc(t("scalp.radarSub"))}</span></div></header>
         <ul class="book-hold">${radar}</ul></article>
     </div>
-    <p class="book-rules scalp-rules">${esc(t("scalp.rules", { lo: rules.stop_min, hi: rules.stop_max, rr: rules.rr, h: rules.max_hold, rsi: rules.rsi, d: rules.dip }))}</p>
+    <p class="book-rules scalp-rules">${esc(t("scalp.rules", { lo: rules.stop_min, hi: rules.stop_max, rr: rules.rr, h: rules.max_hold, rsi: rules.rsi, d: rules.dip, v: Math.round((rules.conf_min || 0.375) * 8) }))}</p>
     <h2 class="mem-h">${esc(t("scalp.done"))}</h2>
     <ul class="port-log">${done}</ul>
     ${log ? `<h2 class="mem-h">${esc(t("scalp.log"))}</h2><ul class="port-log">${log}</ul>` : ""}
@@ -398,16 +394,14 @@ function scalpHtml(p) {
 }
 
 function applyStyle(style) {
-  if (style !== "scalp" || document.body.dataset.style === "scalp") return;
-  document.body.dataset.style = "scalp";
+  const want = style === "scalp" ? "scalp" : "portfolio";
+  if (!style || document.body.dataset.style === want) return;
+  document.body.dataset.style = want;
   const swap = [["nav.portfolio", "nav.scalp"], ["port.title", "scalp.title"], ["port.subtitle", "scalp.subtitle"]];
-  for (const [from, to] of swap) {
+  for (const [a, b] of swap) {
+    const [from, to] = want === "scalp" ? [a, b] : [b, a];
     document.querySelectorAll(`[data-i18n="${from}"]`).forEach((el) => { el.dataset.i18n = to; el.textContent = t(to); });
   }
-  document.title = "Money Ter Ter Ter";
-  document.querySelectorAll(".boot-name").forEach((el) => { el.textContent = "Money Ter Ter Ter"; });
-  const brand = $("edBadge")?.parentElement;
-  if (brand && brand.firstChild && brand.firstChild.nodeType === 3) brand.firstChild.textContent = "Money Ter Ter Ter ";
 }
 
 async function loadPortfolio() {
@@ -478,15 +472,10 @@ document.addEventListener("click", (e) => {
   const group = b.dataset.pick;
   const value = b.dataset.value;
   if (!group || !modes) return;
-  if (group === "speed") {
-    if (value === "ultra") {
-      if (modes.speed === "ultra") { window.showAlert?.({ tone: "good", title: t("modes.ultraOn") }); return; }
-      window.mtUltra?.warn(() => loadModes());
-      return;
-    }
-    if (value !== modes.speed) change({ speed: value });
-  } else if (group === "style") {
-    if (value !== modes.style) change({ style: value });
+  if (group === "mode") {
+    if (value === modes.mode) return;
+    if (value === "ultra") { window.mtUltra?.warn(() => loadModes()); return; }
+    change({ mode: "balanced" });
   } else if (group === "who") {
     if (value === modes.autonomy) return;
     api("PATCH", "/api/profile", { autonomy: value })

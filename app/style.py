@@ -1,18 +1,19 @@
-"""Which bot this copy is.
+"""How the engine starts.
 
-portfolio  Money Tree (7.0): three books, the bot decides the horizon.
-scalp      Money Ter Ter Ter (8.0): one-minute candles, a look every ten
-           seconds, in and out within minutes, flat before the close
-           (app/engine/scalper.py).
+Since 9.0 there is one app, Money Tree, with two modes the owner picks on
+the Modes screen: Balanced (the portfolio books) and Ultra (the one-minute
+trader, app/engine/scalper.py). The engine switches at run time
+(PortfolioEngine.set_ultra); the choice is kept in the brain's settings.
 
-An exe carries it in app/_build.py (scripts/build_exe.py --scalp); a source
-run reads MONEYTREE_STYLE. Both share the same data home and keys.
+STYLE only says how the engine starts before that choice is read:
+"portfolio" always for a build. A source run may set MONEYTREE_STYLE=scalp
+(the tests do). The 8.0 "scalp" build flag is read as portfolio.
 """
 from __future__ import annotations
 
 import os
 
-from app import _build
-
-STYLE = os.environ.get("MONEYTREE_STYLE") or getattr(_build, "STYLE", "portfolio")
+STYLE = os.environ.get("MONEYTREE_STYLE") or "portfolio"
+if STYLE not in ("portfolio", "scalp"):
+    STYLE = "portfolio"
 SCALP = STYLE == "scalp"

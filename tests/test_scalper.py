@@ -1,4 +1,4 @@
-"""Desktop 8.0: Money Ter Ter Ter, the scalper."""
+"""Ultra, the one-minute trader (8.0 scalper; 9.0 confluence vote and early exits)."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -16,14 +16,27 @@ DIP = (-0.08, 0.02)          # falling all session, the last candle up: oversold
 RISE = (0.06, -0.03)
 
 
-def frame(step=DIP, n=150, now=NOW):
+def frame(step=DIP, n=150, now=NOW, fall=20):
+    """A quiet session, then the last `fall` minutes move by `step`."""
     close = [100.0]
     for i in range(1, n):
-        close.append(close[-1] + step[i % 2])
+        close.append(close[-1] + (step if i >= n - fall else (0.03, -0.03))[i % 2])
     close = np.array(close)
     index = pd.DatetimeIndex([now.replace(second=0) - timedelta(minutes=n - i) for i in range(n)]).tz_convert("UTC")
     return pd.DataFrame({"open": close, "high": close * 1.0005, "low": close * 0.9995, "close": close,
                          "volume": np.full(n, 1000.0)}, index=index)
+
+
+VOTE = {"score": 0.625, "votes": {k: i < 5 for i, k in enumerate(
+    ("stoch_rsi", "bollinger", "macd", "mfi", "williams", "cci", "climax", "hammer"))}, "veto": None}
+
+
+@pytest.fixture(autouse=True)
+def five_of_eight(request, monkeypatch):
+    """The scalper's own rules are tested with the confluence vote fixed at
+    5 of 8; the vote itself is tested on its own below."""
+    if "real_vote" not in request.keywords:
+        monkeypatch.setattr(S, "dip_confluence", lambda *a, **k: dict(VOTE))
 
 
 def scalp_engine(tmp_path):
@@ -138,3 +151,51 @@ def test_minute_candles_fetch_about_a_session_not_a_week():
 
     assert _lookback_for("1m", S.HISTORY_BARS) < timedelta(days=4)
     assert _lookback_for("15m", 400) > timedelta(days=20)
+
+
+@pytest.mark.real_vote
+def test_the_confluence_vote_counts_indicators_and_vetoes_a_falling_knife():
+    from app.strategy.confluence import CHECKS
+
+    c = S.read_chart(frame(), NOW)
+    assert set(c["conf"]["votes"]) == set(CHECKS) and 0 <= c["conf"]["score"] <= 1
+    knife = S.read_chart(frame(fall=40), NOW)
+    assert knife["conf"]["veto"] == "knife" and S.score(knife, False) is None, "a steady slide is not a dip"
+
+
+@pytest.mark.real_vote
+def test_too_few_confirmations_means_no_buy():
+    c = S.read_chart(frame(), NOW)
+    weak = dict(c, conf=dict(c["conf"], score=S.CONF_MIN - 0.125, veto=None))
+    assert S.score(weak, False) is None
+    strong = dict(c, conf=dict(c["conf"], score=S.CONF_MIN, veto=None))
+    assert S.score(strong, False) is not None
+
+
+def test_a_strong_vote_may_use_the_whole_account(tmp_path, monkeypatch):
+    monkeypatch.setattr(S, "dip_confluence", lambda *a, **k: dict(VOTE, score=S.ALL_IN_VOTE))
+    engine = scalp_engine(tmp_path)
+    engine.scalper.tick({"AAPL": frame()}, now=NOW)
+    p = engine.position_for("AAPL")
+    equity = engine.executor.get_balance().total
+    assert p is not None and p.qty * p.entry_price > equity * 0.9
+
+
+def test_ultra_sells_early_when_the_dip_is_repaid(tmp_path):
+    engine = scalp_engine(tmp_path)
+    assert engine.book_buy("AAPL", "scalp", "Scalp: test", 500, 0.5, 1.5) == "bought"
+    p = engine.position_for("AAPL")
+    p.opened_at = NOW
+    chart = {"price": p.entry_price * 1.003, "vwap": p.entry_price * 1.002, "rsi": 55}
+    assert "VWAP" in engine.scalper._exit_why(p, chart, NOW + timedelta(minutes=4))
+    assert engine.scalper._exit_why(p, dict(chart, price=p.entry_price * 1.001), NOW + timedelta(minutes=4)) is None
+    assert "RSI" in engine.scalper._exit_why(p, dict(chart, vwap=p.entry_price * 1.01, rsi=80), NOW + timedelta(minutes=4))
+
+
+def test_balanced_mode_still_finishes_ultras_trades(tmp_path):
+    engine = scalp_engine(tmp_path)
+    engine.book_buy("AAPL", "scalp", "Scalp: test", 500, 0.5, 1.5)
+    engine.position_for("AAPL").opened_at = NOW - timedelta(minutes=S.MAX_HOLD_MIN + 1)
+    engine.style = "portfolio"
+    rows = engine.scalper.exits_only(now=NOW)
+    assert engine.position_for("AAPL") is None and rows[0]["action"] == "sell"

@@ -52,6 +52,7 @@ LONG_STOP, SWING_STOP_MIN, SWING_STOP_MAX, SWING_RR = 15.0, 3.0, 9.0, 2.5
 LONG_TARGET_RR = 20.0          # +300%: a long holding has no real target
 SWING_DAYS, LONG_REVIEW_DAYS = 35, 30
 MIN_ORDER = 1.0
+SWING_VOTE_MIN = 0.4       # 2 of 5 daily indicators must see the turn
 
 # Large, liquid names and funds the long book chooses from (it also looks at
 # everything the bot already watches). Chips and energy are here on purpose.
@@ -110,6 +111,24 @@ def trend(d: dict) -> dict | None:
         "rsi_min5": float(np.nanmin(r[-5:])) if not np.all(np.isnan(r[-5:])) else None,
         "atr_pct": atr_pct(high, low, close),
     }
+
+
+def swing_vote(d: dict) -> float | None:
+    """9.0: MACD, Stochastic RSI, Bollinger, money flow and ADX on the daily
+    chart (app/strategy/confluence.py), 0..1; None without volume data."""
+    from app.strategy.confluence import daily_confluence
+
+    close = np.asarray(d.get("close", []), dtype=float)
+    vol = d.get("volume")
+    if vol is None or len(close) < 60:
+        return None
+    try:
+        return float(daily_confluence(np.asarray(d.get("high", close), dtype=float),
+                                      np.asarray(d.get("low", close), dtype=float), close,
+                                      np.asarray(vol, dtype=float))["score"])
+    except Exception:
+        log.debug("swing vote failed", exc_info=True)
+        return None
 
 
 # ------------------------------------------------------------------ books
@@ -178,8 +197,9 @@ class Books:
         opened = now.replace(hour=9, minute=45, second=0, microsecond=0)
         return now >= opened and self.last_review != now.strftime("%Y-%m-%d")
 
-    def review(self, force: bool = False) -> list[dict]:
-        """Once a trading day: sell what broke its book's rules, then fill free room."""
+    def review(self, force: bool = False, buys: bool = True) -> list[dict]:
+        """Once a trading day: sell what broke its book's rules, then fill free
+        room. In Ultra (buys=False) the books only sell: the money is Ultra's."""
         eng = self.engine
         if not force and not self.due():
             return []
@@ -220,6 +240,8 @@ class Books:
                 done.append(self._note(book, s, "sell" if result == "sold" else "skip", why if result == "sold" else f"{why} ({result})"))
 
         # 2. buys into the free room of each book
+        if not buys:
+            return done
         budgets = self.budgets()
         with eng._lock:
             held_now = {s: eng.book_of(s) for s in eng._positions}
@@ -294,10 +316,15 @@ class Books:
             if not t or not t["uptrend"] or t["rsi"] is None or t["rsi_prev"] is None or t["rsi_min5"] is None:
                 continue
             if t["rsi_min5"] < 42 and t["rsi"] > t["rsi_prev"] and t["close"] > t["prev"]:
+                vote = swing_vote(daily[s])
+                if vote is not None and vote < SWING_VOTE_MIN:
+                    continue   # the other indicators do not see the turn yet
                 stop = min(max(2 * (t["atr_pct"] or 2.0), SWING_STOP_MIN), SWING_STOP_MAX)
-                out.append((t["rsi_min5"], s, stop))
+                out.append((-(vote or 0.0), t["rsi_min5"], s, stop, vote))
         out.sort()
-        return [(s, stop, SWING_RR, f"a pullback in an uptrend: RSI dipped to {low:.0f} and turns up") for low, s, stop in out]
+        return [(s, stop, SWING_RR, f"a pullback in an uptrend: RSI dipped to {low:.0f} and turns up"
+                 + (f" · {round(vote * 5)}/5 indicators agree" if vote is not None else ""))
+                for _, low, s, stop, vote in out]
 
     def _note(self, book: str, symbol: str, action: str, why: str) -> dict:
         row = {"at": time.time(), "book": book, "symbol": symbol, "action": action, "why": why}

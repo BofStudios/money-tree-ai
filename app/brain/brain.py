@@ -50,6 +50,16 @@ RESEARCH = "research"   # the Live feed's kind for research steps
 LEARN = "learn"
 
 
+def _daily_of(df) -> dict:
+    """The daily arrays the books and the checks read; volume since 9.0 (the
+    confluence vote's money flow)."""
+    out = {"close": df["close"].to_numpy(float), "high": df["high"].to_numpy(float),
+           "low": df["low"].to_numpy(float)}
+    if "volume" in df:
+        out["volume"] = df["volume"].to_numpy(float)
+    return out
+
+
 @dataclass
 class BrainSettings:
     quality_mode: str = "BALANCED"   # STRICT / BALANCED / OFF
@@ -397,8 +407,7 @@ class Brain:
         for s, df in frames.items():
             if df is not None and not df.empty:
                 with self._lock:
-                    self.daily[s] = {"close": df["close"].to_numpy(float), "high": df["high"].to_numpy(float),
-                                     "low": df["low"].to_numpy(float)}
+                    self.daily[s] = _daily_of(df)
                 self._daily_at[s] = self._now()
         if handle:
             handle.done(f"{len(frames)}/{len(due)}")
@@ -543,7 +552,7 @@ class Brain:
             try:
                 df = self.data.get_ohlcv(sym, "1d", 260)
                 if df is not None and not df.empty:
-                    daily = {"close": df["close"].to_numpy(float), "high": df["high"].to_numpy(float), "low": df["low"].to_numpy(float)}
+                    daily = _daily_of(df)
                     with self._lock:
                         self.daily[sym] = daily
                     self._daily_at[sym] = t

@@ -30,7 +30,7 @@ body::before {
     linear-gradient(180deg, rgba(48, 38, 6, 0.98), rgba(16, 13, 5, 0.98)) padding-box,
     linear-gradient(140deg, #ffe45c, #ffb800 50%, #ffd60a) border-box !important;
 }
-.mode-card.speed-ultra.on {
+.mode-card.mode-ultra.on {
   background:
     linear-gradient(180deg, rgba(60, 12, 10, 0.98), rgba(18, 6, 5, 0.98)) padding-box,
     linear-gradient(140deg, #ff6b5f, #ff2d20) border-box !important;
@@ -151,7 +151,7 @@ h1 { font-size: 34px; }
 .port-log li time { font: 500 11.5px var(--mono); color: var(--text-3); white-space: nowrap; }
 .port-log li.empty { display: block; color: var(--text-3); border: 0; }
 
-/* 8.0: Money Ter Ter Ter, the scalper */
+/* Ultra mode (the one-minute trader) */
 .scalp-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 14px; }
 .scalp-stats div { padding: 14px 16px; border-radius: 16px; border: 1px solid var(--line); background: var(--card); }
 .scalp-stats b { display: block; font: 700 26px/1.1 var(--mono); color: var(--accent-hot); }

@@ -1,30 +1,41 @@
-"""Money Ter Ter Ter: the scalper (8.0).
+"""Ultra: the fast trader (9.0; it was the separate "scalp" build in 8.0).
 
-Only very short trades. The bot reads one-minute candles, looks every ten
-seconds at the latest trade price, and holds a position for minutes:
+Money Tree's Ultra mode. Only very short trades. The bot reads one-minute
+candles, looks every ten seconds at the latest trade price, and holds a
+position for minutes:
 
   research  every look ranks ~25 of the most traded US stocks and funds, plus
             the watchlist and whatever the news reflex just flagged, on the
             one-minute chart.
-  entry     a dip: RSI(7) at 30 or under, the price at least 1.5 one-minute
-            ATRs under today's VWAP, and the last trade above the last
-            candle's close (it has started to turn). The deepest dip wins;
-            two scalps at most at once, ~48% of the account each, 20 a day.
+  entry     a dip: RSI(7) at 35 or under, the price at least 1.2 one-minute
+            ATRs under today's VWAP, the last trade above the last candle's
+            close (it has started to turn), and the confluence vote
+            (app/strategy/confluence.py: Stochastic RSI, Bollinger, MACD,
+            MFI, Williams %R, CCI, volume climax, hammer) at 5 of 8 or more.
+            ADX vetoes a falling knife; a dip deeper than 7 ATRs is vetoed
+            (usually news). The best score wins: depth plus the vote.
+  money     two trades at once, about half the account each; when the vote
+            is strong (6 of 8 or more) and nothing is open, one trade may
+            use the whole account. 30 entries a day at most.
             Nothing before 9:45 or after 15:40 New York.
-  exit      stop 2.5 one-minute ATRs (0.35% to 1.2%), target 1.5x the stop,
-            30 minutes at most, everything flat at 15:52.
-  guard     after six scalps in a day, if they lost 0.15% each on average,
-            no new scalps that day.
+  exit      stop 2.5 one-minute ATRs (0.35% to 1.2%), target 1.5x the stop.
+            Out earlier when the idea is done: back at VWAP with a profit,
+            or RSI 72+ with a profit. 30 minutes at most, flat at 15:52.
+  guard     after six trades in a day, if they lost 0.15% each on average,
+            no new trades that day.
   news      a headline does not buy by itself here: it lifts the stock up the
             radar for 30 minutes and the chart has to confirm.
 
 Why dips and not breakouts: replayed on five real days (21-27 Oct 2026, 24
 stocks, 0.03% cost a trade), chasing one-minute breakouts lost on every
-variant tried (-0.03% to -0.13% a trade); buying the stretched dip back
-toward VWAP came out about even (+0.02% a trade). Neither is an edge to
-count on: the guard and the daily loss limit are there for the bad days.
+variant tried; buying the stretched dip back toward VWAP came out about
+even. On 3 Nov 2026 the deepest dips (6-9 ATRs) lost most: hence the
+vetoes. Replayed again on 28 Oct-5 Nov 2026 (24 stocks, 0.03% cost): the
+8.0 rules won 38% of trades and averaged -0.11% a trade; the 9.0 rules win
+about 49% and average about -0.08%. Better, still not an edge to count on:
+the guard and the daily loss limit are there for the bad days.
 
-A broker refusal for the day-trade rule stops new scalps for the day.
+A broker refusal for the day-trade rule stops new trades for the day.
 Every buy still passes Stop, the market clock, the sector limit, the safety
 pauses, the daily loss limit, arming and the owner's autonomy choice.
 """
@@ -38,11 +49,12 @@ from zoneinfo import ZoneInfo
 import numpy as np
 
 from app.engine.books import atr_pct, rsi_series
+from app.strategy.confluence import dip_confluence
 
 log = logging.getLogger(__name__)
 
 NY = ZoneInfo("America/New_York")
-PREFIX = "Scalp: "
+PREFIX = "Scalp: "            # kept: the trade history and the books read it
 BOOK = "scalp"
 
 # The most traded names: tight spreads, real one-minute volume.
@@ -52,14 +64,19 @@ UNIVERSE = [
     "PLTR", "MU", "SMCI", "COIN", "MSTR", "UBER", "SOFI", "HOOD", "INTC", "ARM",
 ]
 
-SLOTS = 2                    # scalps open at once
-ALLOC = 0.48                 # of the account per scalp
-RSI_MAX, DIP_ATR = 30, 1.5   # how oversold, and how far under VWAP in one-minute ATRs
+SLOTS = 2                    # trades open at once
+ALLOC = 0.485                # of the account per trade
+ALL_IN, ALL_IN_VOTE = 0.97, 0.75    # 6 of 8: one strong trade may use the whole account
+RSI_MAX, DIP_ATR = 35, 1.2   # how oversold, and how far under VWAP in one-minute ATRs
+DIP_MAX = 7.0                # deeper than this is usually news: vetoed
+CONF_MIN = 0.625             # the confluence vote: 5 of 8 (replay 28 Oct-5 Nov 2026: better than 3 or 4 of 8 on both halves)
+TAKE_RSI, TAKE_MIN = 72, 0.15   # out early when the idea is done (with at least this % profit)
+MIN_CASH = 1.0
 STOP_ATR, STOP_MIN, STOP_MAX = 2.5, 0.35, 1.2
 RR = 1.5
 MAX_HOLD_MIN = 30
 START, LAST_ENTRY, FLAT = dtime(9, 45), dtime(15, 40), dtime(15, 52)
-MAX_ENTRIES = 20             # scalps a day
+MAX_ENTRIES = 30             # trades a day
 GUARD_MIN, GUARD_AVG = 6, -0.15
 TIP_MINUTES = 30
 FRESH_SECONDS = 240          # a candle older than this is not a live chart
@@ -110,6 +127,13 @@ def read_chart(frame, now: datetime | None = None) -> dict | None:
     base = vol[-65:-5]
     relvol = float(vol[-5:].mean() / base.mean()) if len(base) and base.mean() > 0 else 1.0
     last = float(close[-1])
+    a = atr_pct(high, low, close) or 0.0
+    dip = (vwap / last - 1) * 100 / a if a > 0 and last > 0 else 0.0
+    try:
+        conf = dip_confluence(high, low, close, vol, dip)
+    except Exception:
+        log.debug("confluence failed", exc_info=True)
+        conf = {"score": 0.0, "votes": {}, "veto": None}
     return {
         "price": last, "vwap": vwap, "ema9": float(e9[-1]), "ema20": float(e20[-1]),
         "rsi": None if np.isnan(r[-1]) else float(r[-1]),
@@ -118,6 +142,7 @@ def read_chart(frame, now: datetime | None = None) -> dict | None:
         "mom15": float(last / close[-16] - 1) * 100 if close[-16] > 0 else 0.0,
         "prev": float(close[-2]),
         "age": (now - index[-1].to_pydatetime()).total_seconds(),
+        "conf": conf,
     }
 
 
@@ -130,7 +155,19 @@ def score(c: dict, tipped: bool) -> tuple[float, str] | None:
         return None
     if dip_of(c) < DIP_ATR or c["price"] <= c["prev"]:
         return None
-    return dip_of(c) + (1.5 if tipped else 0.0), "dip"
+    conf = c.get("conf") or {}
+    if conf.get("veto") or dip_of(c) > DIP_MAX:
+        return None
+    vote = float(conf.get("score", 0.0))
+    if vote < CONF_MIN:
+        return None
+    return min(dip_of(c), 5.0) + 4.0 * vote + (1.5 if tipped else 0.0), "dip"
+
+
+def votes_text(c: dict) -> str:
+    conf = c.get("conf") or {}
+    yes = [k for k, v in (conf.get("votes") or {}).items() if v]
+    return f"{len(yes)}/8 confirm ({', '.join(yes)})" if yes else "0/8 confirm"
 
 
 def dip_of(c: dict) -> float:
@@ -212,7 +249,9 @@ class Scalper:
         ranked.sort(key=lambda r: -r[0])
         self.radar = [{"symbol": s, "score": round(sc, 2), "setup": setup, "price": c["price"],
                        "dip": round(dip_of(c), 1), "relvol": round(c["relvol"], 2), "rsi": round(c["rsi"] or 0),
-                       "stop_pct": stop_for(c), "tip": s in tipped} for sc, s, setup, c in ranked[:8]]
+                       "stop_pct": stop_for(c), "tip": s in tipped,
+                       "vote": round(float((c.get("conf") or {}).get("score", 0.0)) * 8)}
+                      for sc, s, setup, c in ranked[:8]]
 
         self.state = self._why_not_now(now, len(held))
         if self.state:
@@ -220,14 +259,22 @@ class Scalper:
         with eng._lock:
             owned = set(eng._positions)
         equity = self._equity()
+        cash = self._cash()
+        if cash is not None and cash < MIN_CASH:
+            self.state = self._t("all the money is in trades: waiting for one to finish",
+                                 "tüm para işlemde: biri bitince yenisi")
+            return done
         for sc, symbol, setup, c in ranked:
             if symbol in owned or eng.protections.blocked(symbol):
                 continue
             stop = stop_for(c)
             tip = self.tips.get(symbol)
             reason = (f"{PREFIX}{setup} · {dip_of(c):.1f} ATR under VWAP · RSI {c['rsi']:.0f} · "
-                      f"volume {c['relvol']:.1f}x" + (f" · news: {tip[1]}" if symbol in tipped and tip else ""))
-            result = eng.book_buy(symbol, BOOK, reason, equity * ALLOC, stop, RR, price=c["price"])
+                      f"volume {c['relvol']:.1f}x · {votes_text(c)}"
+                      + (f" · news: {tip[1]}" if symbol in tipped and tip else ""))
+            vote = float((c.get("conf") or {}).get("score", 0.0))
+            share = ALL_IN if (vote >= ALL_IN_VOTE and not held) else ALLOC
+            result = eng.book_buy(symbol, BOOK, reason, equity * share, stop, RR, price=c["price"])
             if result == "bought":
                 self.entries += 1
                 done.append(self._note(symbol, "buy", reason[len(PREFIX):]))
@@ -246,7 +293,36 @@ class Scalper:
             return "flat before the close"
         if minutes >= MAX_HOLD_MIN:
             return f"time is up ({MAX_HOLD_MIN} min, {gain:+.2f}%)"
+        if c and gain >= TAKE_MIN:
+            if c.get("vwap") and price >= c["vwap"]:
+                return f"back at VWAP: the dip is repaid ({gain:+.2f}%)"
+            if c.get("rsi") is not None and c["rsi"] >= TAKE_RSI:
+                return f"RSI {c['rsi']:.0f}: profit taken ({gain:+.2f}%)"
         return None
+
+    def exits_only(self, now: datetime | None = None) -> list[dict]:
+        """Balanced mode: Ultra's trades still open finish by Ultra's own
+        time rules (30 minutes, flat before the close). No new buys."""
+        eng = self.engine
+        now = now or datetime.now(NY)
+        done: list[dict] = []
+        with eng._lock:
+            held = {s: p for s, p in eng._positions.items() if eng.book_of(s) == BOOK}
+        for symbol, p in held.items():
+            why = self._exit_why(p, None, now)
+            if why:
+                result = eng.book_sell(symbol, PREFIX + why)
+                done.append(self._note(symbol, "sell" if result == "sold" else "wait", why))
+        return done
+
+    def _t(self, en: str, tr: str) -> str:
+        return tr if getattr(self.engine, "language", "en") == "tr" else en
+
+    def _cash(self) -> float | None:
+        try:
+            return float(self.engine.executor.get_balance().available)
+        except Exception:
+            return None
 
     def _why_not_now(self, now: datetime, open_scalps: int) -> str:
         eng = self.engine
@@ -256,27 +332,27 @@ class Scalper:
             return tr_ if tr else en
 
         if eng.halted:
-            return t("stopped: no new scalps", "durduruldu: yeni işlem yok")
+            return t("stopped: no new trades", "durduruldu: yeni işlem yok")
         if not eng.clock.state().is_open:
             local = datetime.combine(now.date(), START, tzinfo=NY).astimezone(ZoneInfo("Europe/Istanbul"))
-            return t(f"the market is closed: scalps start at 9:45 New York ({local:%H:%M} Türkiye)",
+            return t(f"the market is closed: Ultra starts at 9:45 New York ({local:%H:%M} Türkiye)",
                      f"piyasa kapalı: işlemler New York 9:45'te (Türkiye {local:%H:%M}) başlar")
         if self.pdt_day == self._today(now):
-            return t("the broker refused a day trade today (day-trade rule): no new scalps until tomorrow",
+            return t("the broker refused a day trade today (day-trade rule): no new trades until tomorrow",
                      "aracı kurum bugün gün içi işlemi reddetti (day-trade kuralı): yarına kadar yeni işlem yok")
         if now.time() < START:
             return t("waiting for 9:45 New York: the first minutes are too wild",
                      "New York 9:45 bekleniyor (9:45): ilk dakikalar çok sert")
         if now.time() >= LAST_ENTRY:
-            return t("no new scalps after 15:40 New York", "New York 15:40'tan sonra yeni işlem yok")
+            return t("no new trades after 15:40 New York", "New York 15:40'tan sonra yeni işlem yok")
         if self._bad_day(now):
-            return t(f"today's scalps lost {-GUARD_AVG:.2f}% or more on average: no new scalps today",
+            return t(f"today's trades lost {-GUARD_AVG:.2f}% or more on average: no new trades today",
                      f"bugünkü işlemler ortalama %{-GUARD_AVG:.2f} ya da daha fazla kaybetti: bugün yeni işlem yok")
         if self.entries >= MAX_ENTRIES:
-            return t(f"{MAX_ENTRIES} scalps today: that is the day's limit",
+            return t(f"{MAX_ENTRIES} trades today: that is the day's limit",
                      f"bugün {MAX_ENTRIES} işlem: günlük sınır bu")
         if open_scalps >= SLOTS:
-            return t(f"{SLOTS} scalps open: waiting for one to finish",
+            return t(f"{SLOTS} trades open: waiting for one to finish",
                      f"{SLOTS} işlem açık (open): biri bitince yenisi")
         if not self.radar:
             return t("no chart passes right now: watching", "şu an kurallardan geçen grafik yok: izliyor")
@@ -335,7 +411,7 @@ class Scalper:
                       "entries": self.entries, "max": MAX_ENTRIES},
             "recent": [{"symbol": t["symbol"], "pnl": t["pnl"], "pnl_pct": t["pnl_pct"], "why": t["exit_reason"],
                         "at": t["closed_at"]} for t in trades[:12]],
-            "rules": {"slots": SLOTS, "alloc": ALLOC, "stop_min": STOP_MIN, "stop_max": STOP_MAX, "rr": RR,
+            "rules": {"slots": SLOTS, "alloc": ALLOC, "all_in": ALL_IN, "conf_min": CONF_MIN, "stop_min": STOP_MIN, "stop_max": STOP_MAX, "rr": RR,
                       "rsi": RSI_MAX, "dip": DIP_ATR,
                       "max_hold": MAX_HOLD_MIN, "seconds": eng.config.scan_interval_seconds},
             "universe": len(self.symbols()),

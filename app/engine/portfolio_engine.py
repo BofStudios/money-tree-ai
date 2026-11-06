@@ -174,7 +174,8 @@ class PortfolioEngine:
         from app.style import STYLE
 
         self.books = Books(self)
-        # Money Ter Ter Ter (8.0): the scalper replaces the books and the 15-minute strategy.
+        # Ultra (9.0): the one-minute trader replaces the books' buys and the
+        # 15-minute strategy. Balanced is the portfolio. set_ultra() switches.
         self.style = STYLE
         self.scalper = Scalper(self)
         self.history_bars = SCALP_BARS if STYLE == "scalp" else HISTORY_BARS
@@ -529,16 +530,52 @@ class PortfolioEngine:
             return "sold" if self._exit(position, price, reason, w) else "the sale failed"
 
     def set_ultra(self, on: bool) -> None:
-        """Ultra looks every 15 seconds instead of the configured interval, and
-        at sixteen more large stocks and funds (markets.ULTRA_EXTRA)."""
-        from app.engine.markets import ULTRA_EXTRA
+        """Money Tree has two modes (9.0).
 
-        if not hasattr(self, "_normal_interval"):
-            self._normal_interval = self.config.scan_interval_seconds
+        Balanced  the portfolio: long, swing and short books, 15-minute
+                  candles, the configured scan interval.
+        Ultra     fast trading: the one-minute trader (app/engine/scalper.py)
+                  buys, a look every ten seconds, pauses sized for minutes,
+                  and the books only sell by their own rules.
+
+        Switching never sells anything: positions keep their stop and target
+        at the broker, and each one is still managed by its own book's exit
+        rules. Every gate (Stop, the market clock, the safety pauses, the
+        daily loss limit, arming, autonomy) stays the same in both."""
+        from app.engine.scalper import HISTORY_BARS as SCALP_BARS, SCAN_SECONDS, apply_scalp
+
+        if not hasattr(self, "_balanced_pace"):
+            prot = self.config.protections
+            self._balanced_pace = {
+                "timeframe": self.timeframe if self.style != "scalp" else "15m",
+                "interval": self.config.scan_interval_seconds if self.style != "scalp" else 60,
+                "protections": prot.model_copy() if hasattr(prot, "model_copy") else None,
+            }
+        pace = self._balanced_pace
         self.ultra = on
-        self.config.scan_interval_seconds = min(15, self._normal_interval) if on else self._normal_interval
         with self._lock:
-            self._extra = list(ULTRA_EXTRA) if on else []
+            if on:
+                apply_scalp(self.config)
+                self.style = "scalp"
+                self.timeframe = "1m"
+                self.history_bars = SCALP_BARS
+                self.config.scan_interval_seconds = SCAN_SECONDS
+            else:
+                self.style = "portfolio"
+                self.timeframe = pace["timeframe"]
+                self.history_bars = HISTORY_BARS
+                self.config.scan_interval_seconds = pace["interval"]
+                self.config.timeframe = pace["timeframe"]
+                saved = pace.get("protections")
+                if saved is not None:
+                    for k in type(saved).model_fields:
+                        setattr(self.config.protections, k, getattr(saved, k))
+            self._extra = []
+            # Indicators computed on one candle size mean nothing on another.
+            self._history.clear()
+            self._snapshots.clear()
+            self._last_signal.clear()
+        self.proposals.clear_pending()
         self.scan_now()
         self.events.publish("status", self.status())
 
@@ -928,12 +965,18 @@ class PortfolioEngine:
                 try:
                     for row in self.scalper.tick(frames, self._live):
                         if row["action"] in ("buy", "sell"):
-                            self.monitor.info("learn", f"Scalp · {row['symbol']} · {row['action']}", row["why"])
+                            self.monitor.info("learn", f"Ultra · {row['symbol']} · {row['action']}", row["why"])
                 except Exception:
                     log.exception("the scalper failed")
-            elif is_open and not self._halted:
+            if is_open and not self._halted and self.style != "scalp":
                 try:
-                    for row in self.books.review():
+                    for row in self.scalper.exits_only():
+                        self.monitor.info("learn", f"Ultra · {row['symbol']} · {row['action']}", row["why"])
+                except Exception:
+                    log.exception("Ultra's leftover exits failed")
+            if is_open and not self._halted:
+                try:
+                    for row in self.books.review(buys=self.style != "scalp"):
                         self.monitor.info("learn" if row["action"] in ("buy", "sell") else activity.INFO,
                                           f"{row['book'].capitalize()} · {row['symbol']} · {row['action']}", row["why"])
                 except Exception:

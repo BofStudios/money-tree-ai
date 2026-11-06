@@ -11,7 +11,7 @@
   <a href="https://github.com/BofStudios/money-tree-ai/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/BofStudios/money-tree-ai?style=for-the-badge&color=ffd60a&labelColor=111&filter=desktop-*"></a>
   <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-ffd60a?style=for-the-badge&labelColor=111"></a>
   <img alt="Windows" src="https://img.shields.io/badge/Windows-10%20%7C%2011-ffd60a?style=for-the-badge&labelColor=111">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-380%20passing-32d583?style=for-the-badge&labelColor=111">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-385%20passing-32d583?style=for-the-badge&labelColor=111">
 </p>
 
 > [!WARNING]
@@ -75,7 +75,37 @@ money is at risk, and because a new Alpaca live account cannot trade until it
 is funded. (Midas signal mode was removed in 4.0: an old config that still says
 `signal` starts on practice money.)
 
-## Desktop 8.0 "Money Ter Ter Ter": the scalper
+## Desktop 9.0: one Money Tree, two modes
+
+The separate scalper build is gone: there is one app, **Money Tree**, and the
+Modes screen has two big cards and nothing in between.
+
+- **Balanced**: the portfolio (7.0): long, swing and short books, 15-minute
+  and daily candles. The swing book now also needs 2 of 5 daily indicators
+  (MACD, Stochastic RSI, Bollinger, money flow, ADX) to see the turn.
+- **Ultra**: fast trading on one-minute candles, a look every 10 seconds,
+  every CPU core and the world's news feeds (the 8.0 scalper, now built in).
+  Switching never sells anything; the books only sell by their own rules
+  while Ultra holds the money, and Ultra's leftovers finish by Ultra's time
+  rules after you go back to Balanced.
+
+Ultra's new confluence vote (`app/strategy/confluence.py`): besides RSI(7)
+and the dip under VWAP, at least 5 of 8 more indicators have to agree
+(Stochastic RSI, Bollinger %B, MACD histogram, MFI, Williams %R, CCI, a
+volume climax, a hammer candle). ADX vetoes a falling knife and a dip deeper
+than 7 ATRs is vetoed. It also sells early once the idea is done: back at
+VWAP with a profit, or RSI 72+ with a profit. Two trades at once, about half
+the account each; at 6 of 8 with nothing open, one trade may use the whole
+account.
+
+Honest numbers. Replayed on 28 Oct-5 Nov 2026 (7 days, 24 stocks, 0.03% cost
+a trade, no slot limit): the 8.0 rules made 611 trades, won 38%, -0.11% a
+trade; the 9.0 rules made 307, won 49%, -0.08% a trade. More accurate, but
+still a small loss on those days: fast trading is not an edge, and Balanced
+is the calmer choice. The daily loss limit, the bad-day guard, Stop and
+arming are unchanged in both modes.
+
+## Desktop 8.0 "Money Ter Ter Ter": the scalper (now Ultra mode)
 
 A second bot built from the same code: `python scripts/build_exe.py --scalp`
 (or `MONEYTREE_STYLE=scalp` from source). It trades only for minutes and
