@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
@@ -89,6 +90,8 @@ class MainActivity : FragmentActivity() {
     private var pausedAt = 0L
     private var crash by mutableStateOf<String?>(null)
     private var brainIntroSeen by mutableStateOf(true)
+    /** A screenshot was shared into the app: open the chat. */
+    private var openChat by mutableStateOf(false)
 
     private val notificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -104,6 +107,7 @@ class MainActivity : FragmentActivity() {
         // Semi-auto approvals arrive as notifications; without this permission
         // they would silently never show. Ask whenever it is missing.
         if (onboarded) askForNotifications()
+        takeShared(intent)
 
         setContent {
             CompositionLocalProvider(LocalTurkish provides settings.turkish) {
@@ -146,6 +150,42 @@ class MainActivity : FragmentActivity() {
         settings = prefs.settings(Hub.armed.value)
     }
 
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        takeShared(intent)
+    }
+
+    override fun onDestroy() {
+        // The chat is never kept: closing the app forgets it.
+        if (isFinishing) ChatSession.forget()
+        super.onDestroy()
+    }
+
+    /** "Share → Money Tree" from another app: the pictures go to the chat. */
+    private fun takeShared(intent: android.content.Intent?) {
+        if (intent == null) return
+        val uris = when (intent.action) {
+            android.content.Intent.ACTION_SEND -> listOfNotNull(stream(intent))
+            android.content.Intent.ACTION_SEND_MULTIPLE -> streams(intent)
+            else -> return
+        }
+        intent.getStringExtra(android.content.Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }?.let {
+            ChatSession.draft = it.take(2000)
+        }
+        ChatSession.incoming.addAll(uris.take(com.bofstudios.moneytree.ai.ChatAdvisor.MAX_IMAGES))
+        openChat = true
+    }
+
+    @Suppress("DEPRECATION")
+    private fun stream(intent: android.content.Intent): android.net.Uri? =
+        if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(android.content.Intent.EXTRA_STREAM, android.net.Uri::class.java)
+        else intent.getParcelableExtra(android.content.Intent.EXTRA_STREAM)
+
+    @Suppress("DEPRECATION")
+    private fun streams(intent: android.content.Intent): List<android.net.Uri> =
+        (if (Build.VERSION.SDK_INT >= 33) intent.getParcelableArrayListExtra(android.content.Intent.EXTRA_STREAM, android.net.Uri::class.java)
+        else intent.getParcelableArrayListExtra(android.content.Intent.EXTRA_STREAM)).orEmpty()
+
     override fun onPause() {
         super.onPause()
         pausedAt = SystemClock.elapsedRealtime()
@@ -161,6 +201,9 @@ class MainActivity : FragmentActivity() {
         var money by rememberSaveable { mutableStateOf<String?>(null) }
         BackHandler(enabled = money != null) { money = null }
 
+        androidx.compose.runtime.LaunchedEffect(openChat) {
+            if (openChat) { tab = 5; openChat = false }
+        }
         val m = money
         if (m != null) {
             MoneyScreen(settings, withdrawFirst = m == "withdraw", onBack = { money = null })
@@ -205,6 +248,7 @@ class MainActivity : FragmentActivity() {
                         1 -> LiveScreen(settings)
                         2 -> BrainScreen(settings, ::toast)
                         3 -> PortfolioScreen(prefs)
+                        5 -> ChatScreen(settings.turkish)
                         else -> SettingsScreen(settings, ::update, ::armWithAuth, ::toast, onOpenMoney = { money = "deposit" },
                             onRedoSetup = { onboarded = false }, askLive = askLive, onAskedLive = { askLive = false })
                     }
@@ -266,6 +310,7 @@ class MainActivity : FragmentActivity() {
             NavItem(Icons.Filled.PlayArrow, tx("Live", "Canlı"), tab == 1, dot = running) { onTab(1) }
             NavItem(Icons.Filled.Search, tx("Brain", "Beyin"), tab == 2) { onTab(2) }
             NavItem(Icons.AutoMirrored.Filled.List, tx("Portfolio", "Portföy"), tab == 3) { onTab(3) }
+            NavItem(Icons.Filled.Email, tx("Chat", "Sohbet"), tab == 5) { onTab(5) }
             NavItem(Icons.Filled.Settings, tx("Settings", "Ayarlar"), tab == 4) { onTab(4) }
         }
     }
@@ -275,7 +320,7 @@ class MainActivity : FragmentActivity() {
         Column(
             Modifier.clip(RoundedCornerShape(16.dp))
                 .background(if (selected) MT.AccentSoft else MT.Surface.copy(alpha = 0f))
-                .clickable(onClick = onClick).padding(horizontal = 11.dp, vertical = 8.dp),
+                .clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Box {
