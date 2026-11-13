@@ -27,7 +27,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from app import edition
 from app.brain import quality as q
 from app.brain import text
 from app.brain.genome import DEFAULT, EvolvedStrategy, Genome, Series
@@ -60,6 +59,9 @@ def _daily_of(df) -> dict:
     return out
 
 
+MAX_BOTS = 10           # strategy testers in the swarm
+
+
 @dataclass
 class BrainSettings:
     quality_mode: str = "BALANCED"   # STRICT / BALANCED / OFF
@@ -68,7 +70,7 @@ class BrainSettings:
     ai_check: bool = True
     self_improve: bool = True
     discover: bool = True
-    bots: int = field(default_factory=lambda: edition.limits().max_bots)
+    bots: int = field(default_factory=lambda: MAX_BOTS)
     power: str = "full"              # full / light
     news_trading: bool = True        # the news reflex may buy and sell
     news_max_positions: int = 2      # news trades open at once
@@ -83,7 +85,7 @@ class BrainSettings:
         try:
             d = json.loads(path.read_text(encoding="utf-8"))
             s = BrainSettings(**{k: v for k, v in d.items() if k in BrainSettings.__dataclass_fields__})
-            s.bots = int(min(max(int(s.bots), 0), edition.limits().max_bots))
+            s.bots = int(min(max(int(s.bots), 0), MAX_BOTS))
             return s
         except Exception:
             return BrainSettings()
@@ -204,7 +206,7 @@ class Brain:
                 if k in BrainSettings.__dataclass_fields__:
                     setattr(self.settings, k, v)
             s = self.settings
-            s.bots = int(min(max(int(s.bots), 0), edition.limits().max_bots))
+            s.bots = int(min(max(int(s.bots), 0), MAX_BOTS))
             if s.quality_mode not in ("STRICT", "BALANCED", "OFF"):
                 s.quality_mode = "BALANCED"
             if s.power not in ("full", "light"):

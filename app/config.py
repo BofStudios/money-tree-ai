@@ -225,7 +225,7 @@ class TelegramConfig(BaseModel):
 
 
 class WebConfig(BaseModel):
-    host: str = "0.0.0.0"
+    host: str = "127.0.0.1"      # 10.1: phone access is a switch in Settings, not this line
     port: int = 8765
 
 

@@ -24,9 +24,7 @@ belong to. Your keys, settings and what the bot learns live in
 
 Licence
 -------
-Your purchase includes a licence key by email. The app checks it online once
-per day at most and keeps working offline for up to 14 days. The terms of use
-and the MIT licence of the source code are on the next page.
+Free and open source (MIT). The terms of use and the MIT licence of the source code are on the next page.
 
 
 MONEY TREE AI — kurmadan önce oku
@@ -55,6 +53,4 @@ oldukları servise gönderilir. Anahtarların, ayarların ve botun öğrendikler
 
 Lisans
 ------
-Satın alımınla e-postana bir lisans anahtarı gelir. Uygulama bunu en fazla
-günde bir kez internetten doğrular ve 14 güne kadar çevrimdışı çalışır.
-Kullanım şartları ve kaynak kodunun MIT lisansı bir sonraki sayfadadır.
+Ücretsiz ve açık kaynak (MIT). Kullanım şartları ve kaynak kodunun MIT lisansı bir sonraki sayfadadır.

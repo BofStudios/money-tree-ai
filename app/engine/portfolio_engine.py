@@ -190,6 +190,7 @@ class PortfolioEngine:
         from app.engine.lab import Lab
 
         self.lab = Lab(self)            # 10.0: the replay of Ultra's rules, and the edge filter
+        self.privacy = None             # 10.1: app.privacy.prefs.Prefs, set by main (None = the defaults)
         self.history_bars = SCALP_BARS if STYLE == "scalp" else HISTORY_BARS
         self._live: dict[str, float] = {}             # symbol -> latest trade price, scalp style
 
@@ -1531,16 +1532,12 @@ class PortfolioEngine:
         explainer = self.explainer
         if explainer is None or not explainer.available:
             return
-        facts = (
-            f"Bought {opened.qty:g} {opened.symbol} at {opened.entry_price:.2f}. "
-            f"Rule that fired: {intent.reason}. "
-        )
-        if opened.stop_loss and opened.take_profit:
-            risk = abs(opened.entry_price - opened.stop_loss) * opened.qty
-            facts += (
-                f"Stop-loss {opened.stop_loss:.2f}, target {opened.take_profit:.2f}. "
-                f"Money at risk if the stop fills: {risk:.2f} USD. "
-            )
+        from app.privacy import minimize
+
+        level = self.privacy.get("ai_level") if self.privacy is not None else "full"
+        risk = abs(opened.entry_price - opened.stop_loss) * opened.qty if opened.stop_loss else None
+        facts = minimize.trade_facts(opened.symbol, opened.entry_price, intent.reason, opened.qty, risk,
+                                     opened.stop_loss, opened.take_profit, level)
         if headlines:
             facts += "Recent headlines: " + "; ".join(f"{h.source}: {h.headline}" for h in headlines) + "."
         handle = self.monitor.begin(activity.AI, w.asking_ai())

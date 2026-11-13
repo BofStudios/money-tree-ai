@@ -14,8 +14,10 @@ from app.engine.portfolio_engine import PortfolioEngine
 from app.mentor.ai import AIMentor
 from app.mentor.narrator import Narrator
 from app.storage.repository import Repository
+from app.web.auth import COOKIE, COOKIE_DAYS, SAFE_METHODS, Auth, same_origin
 from app.web.brain_routes import build_brain_router
 from app.web.lab_routes import build_lab_router
+from app.web.privacy_routes import build_privacy_router
 from app.web.mode_routes import build_mode_router
 from app.web.money_routes import build_money_router
 from app.web.routes import build_router
@@ -46,6 +48,7 @@ def create_app(
 ) -> FastAPI:
     api = FastAPI(title="Money Tree AI", docs_url=None, redoc_url=None)
     hub = WebSocketHub(events)
+    auth = Auth(token)          # one lockout counter for every router
 
     @api.on_event("startup")
     async def _bind_loop() -> None:
@@ -53,16 +56,17 @@ def create_app(
 
     api.include_router(
         build_router(
-            engine, repo, mentor, claude, hub, token, settings, catalysts, news,
+            engine, repo, mentor, claude, hub, auth, settings, catalysts, news,
             research, analyst, profiles, keystore,
         )
     )
     api.include_router(
-        build_money_router(engine, repo, settings, keystore, restarter, token, config_path, key_problems)
+        build_money_router(engine, repo, settings, keystore, restarter, auth, config_path, key_problems)
     )
-    api.include_router(build_brain_router(engine, token))
-    api.include_router(build_mode_router(engine, token))
-    api.include_router(build_lab_router(engine, repo, token))
+    api.include_router(build_brain_router(engine, auth))
+    api.include_router(build_mode_router(engine, auth))
+    api.include_router(build_lab_router(engine, repo, auth))
+    api.include_router(build_privacy_router(engine, repo, claude, restarter, auth))
 
     @api.middleware("http")
     async def _only_by_address(request, call_next):
@@ -79,6 +83,36 @@ def create_app(
         return await call_next(request)
 
     @api.middleware("http")
+    async def _own_origin_only(request, call_next):
+        """A change that names an Origin must come from this page's own host.
+        Another web page cannot make the browser press buttons here (CSRF)."""
+        if request.method not in SAFE_METHODS:
+            origin = request.headers.get("origin")
+            if origin is not None and not same_origin(origin, request.headers.get("host", "")):
+                from fastapi.responses import PlainTextResponse
+
+                return PlainTextResponse("foreign origin", status_code=403)
+        return await call_next(request)
+
+    @api.middleware("http")
+    async def _first_visit(request, call_next):
+        """The link with ?token= logs in once: the password becomes an HttpOnly,
+        SameSite=Strict cookie and the address bar is cleaned by a redirect."""
+        if request.method == "GET" and request.url.path in ("/", "/index.html") and "token" in request.query_params:
+            if auth.first_visit(request):
+                from urllib.parse import urlencode
+
+                from fastapi.responses import RedirectResponse
+
+                rest = [(k, v) for k, v in request.query_params.multi_items() if k != "token"]
+                target = request.url.path + (f"?{urlencode(rest)}" if rest else "")
+                response = RedirectResponse(target, status_code=303)
+                response.set_cookie(COOKIE, auth.token, max_age=COOKIE_DAYS * 86400, httponly=True,
+                                    samesite="strict", path="/")
+                return response
+        return await call_next(request)
+
+    @api.middleware("http")
     async def _revalidate_static(request, call_next):
         """Make the browser check for a newer dashboard on every load.
 
@@ -91,8 +125,33 @@ def create_app(
             response.headers["Cache-Control"] = "no-cache, must-revalidate"
         return response
 
+    @api.middleware("http")
+    async def _safe_headers(request, call_next):
+        """Outermost: every answer, errors included, carries these."""
+        response = await call_next(request)
+        for name, value in SECURITY_HEADERS.items():
+            response.headers.setdefault(name, value)
+        return response
+
     api.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
     return api
+
+
+# The page loads only its own files. Styles may be inline (the screens set
+# widths and colours from data); scripts may not, so a script injected into a
+# page can run nowhere. Images may be data: or blob: (the screenshots you add).
+SECURITY_HEADERS = {
+    "Content-Security-Policy": (
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: blob:; connect-src 'self' ws: wss:; font-src 'self' data:; "
+        "object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+    ),
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
+    "Cross-Origin-Opener-Policy": "same-origin",
+}
 
 
 def _host_allowed(host: str) -> bool:
@@ -143,7 +202,8 @@ class WebServer:
             _wait_for_port(self.host, self.port, timeout=15.0)
         self._thread = threading.Thread(target=self._server.run, name="web-server", daemon=True)
         self._thread.start()
-        log.info("dashboard serving on %s (and on your LAN IP for phones)", self.local_url)
+        log.info("dashboard serving on %s %s", self.local_url,
+                 "(and on your LAN IP for phones)" if self.host in ("0.0.0.0", "::") else "(this PC only)")
 
     def stop(self) -> None:
         self._server.should_exit = True

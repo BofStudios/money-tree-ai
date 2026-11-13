@@ -1,0 +1,50 @@
+/* Privacy and data (desktop 10.1), in Settings. */
+.privacy-block h3 { margin: 26px 0 6px; font-size: 15px; }
+.priv-note { color: var(--accent); }
+.priv-ask { border: 1px solid rgba(255, 214, 10, 0.4); border-radius: 14px; padding: 12px 14px; margin: 8px 0; background: rgba(255, 214, 10, 0.05); }
+.priv-ask .actions { margin-top: 8px; }
+
+.priv-opts { display: grid; gap: 8px; margin: 8px 0 4px; }
+.priv-opt { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 14px; cursor: pointer;
+  border: 1px solid var(--line); background: rgba(255, 255, 255, 0.015); }
+.priv-opt input { margin-top: 4px; accent-color: var(--accent); }
+.priv-opt.on { border-color: rgba(255, 214, 10, 0.55); background: rgba(255, 214, 10, 0.06); }
+.priv-opt b { display: block; font-size: 14px; }
+.priv-opt small { display: block; color: var(--text-2); font-size: 12.5px; line-height: 1.45; margin-top: 2px; }
+
+.priv-table { overflow-x: auto; margin: 8px 0; }
+.priv-table table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.priv-table th, .priv-table td { text-align: left; padding: 9px 10px; border-top: 1px solid var(--line); vertical-align: top; }
+.priv-table th { white-space: nowrap; font-weight: 600; }
+.priv-table th small { display: block; color: var(--text-2); font-weight: 400; font-size: 11.5px; font-family: var(--mono, monospace); }
+.priv-table td { color: var(--text-2); line-height: 1.5; }
+.priv-table td a { color: var(--accent); }
+.priv-table td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.priv-table td.num small { display: block; color: var(--good); font-size: 11px; }
+.priv-when { font-size: 11.5px; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--line); white-space: nowrap; }
+.priv-when.w-keys { color: var(--accent); border-color: rgba(255, 214, 10, 0.4); }
+.priv-when.w-local { color: var(--good); border-color: rgba(50, 213, 131, 0.4); }
+.priv-secret { font-style: normal; font-size: 11px; color: var(--bad); border: 1px solid rgba(255, 90, 78, 0.4); border-radius: 8px; padding: 1px 6px; margin-left: 6px; }
+
+.priv-days { display: inline-flex; gap: 8px; align-items: center; color: var(--text-2); font-size: 13px; }
+.priv-days select { background: transparent; color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; }
+button.danger { border-color: rgba(255, 90, 78, 0.6); color: var(--bad); }
+.priv-all { margin: 16px 0 6px; padding: 14px; border-radius: 14px; border: 1px solid rgba(255, 90, 78, 0.3); }
+.priv-all b { display: block; }
+.priv-all small { display: block; color: var(--text-2); font-size: 12.5px; margin: 2px 0 8px; }
+.priv-all input { background: transparent; color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; min-width: 200px; }
+
+.priv-seen { margin: 6px 0; }
+.priv-seen > summary { cursor: pointer; color: var(--accent); font-size: 13.5px; padding: 6px 0; }
+.priv-sent { margin: 6px 0; border: 1px solid var(--line); border-radius: 12px; padding: 6px 12px; }
+.priv-sent summary { cursor: pointer; font-size: 12.5px; color: var(--text-2); }
+.priv-sent pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; max-height: 260px; overflow: auto; color: var(--text); }
+
+@media (max-width: 560px) {
+  .priv-table th { white-space: normal; }
+}
+
+.priv-fold { margin: 22px 0 6px; }
+.priv-fold > summary { cursor: pointer; font-size: 15px; font-weight: 600; padding: 6px 0; }
+.priv-about { margin-top: 18px; }
+.priv-about a { color: var(--accent); margin-left: 6px; }

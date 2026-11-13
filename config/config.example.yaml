@@ -104,5 +104,5 @@ telegram:
   daily_summary: true
 
 web:
-  host: 0.0.0.0          # 0.0.0.0 lets your phone reach it over the same Wi-Fi
+  host: 127.0.0.1        # ignored since 10.1: phone access is a switch in Settings > Security
   port: 8765

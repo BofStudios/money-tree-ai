@@ -204,6 +204,9 @@ class MainWindow(QMainWindow):
     def _copy_phone_link(self) -> None:
         from PySide6.QtWidgets import QApplication
 
+        if not self.lan_url:
+            self.tray.showMessage(APP_NAME, "Phone access is off. Turn it on in Settings > Security.", msecs=4000)
+            return
         QApplication.clipboard().setText(self.lan_url)
         self.tray.showMessage(APP_NAME, f"Phone link copied:\n{self.lan_url}", msecs=4000)
 

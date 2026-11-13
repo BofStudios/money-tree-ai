@@ -1,7 +1,7 @@
 """Build "Money Tree AI.exe" with PyInstaller, then the Windows installer.
 
-    python scripts/build_exe.py              # the build you sell: needs licence ids
-    python scripts/build_exe.py --personal   # your own copy: never asks for a key
+    python scripts/build_exe.py              # the app, in dist/
+    python scripts/build_exe.py --installer  # and the Windows installer
 
 Since 9.0 there is one Money Tree with two modes (Balanced and Ultra) picked in
 the app; there is no separate scalper build any more.
@@ -28,12 +28,10 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from app import __version__  # noqa: E402
-from app.common import licensing  # noqa: E402
 
 NAME = "Money Tree AI"
 DIST = ROOT / "dist"
 BUILD = ROOT / "build"
-FLAG = ROOT / "app" / "_build.py"
 ISS = ROOT / "installer" / "money-tree-ai.iss"
 ISCC = [
     Path.home() / "AppData/Local/Programs/Inno Setup 6/ISCC.exe",
@@ -44,29 +42,16 @@ ISCC = [
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--personal", action="store_true",
-                        help="build for your own PC: no licence check, no installer")
+    parser.add_argument("--installer", action="store_true", help="also build the Windows installer (needs Inno Setup)")
     args = parser.parse_args()
-
-    if not args.personal and not licensing.configured():
-        print("Licence ids are not set. Create the product on Lemon Squeezy, then put its\n"
-              "STORE_ID and PRODUCT_ID in app/common/licensing.py.\n"
-              "For a copy only you will use: python scripts/build_exe.py --personal")
-        raise SystemExit(1)
 
     icon = ROOT / "assets" / "logo.ico"
     if not icon.exists():
         print("assets/logo.ico is missing — run: python scripts/make_logo.py")
         raise SystemExit(1)
 
-    original = FLAG.read_text(encoding="utf-8")
-    FLAG.write_text(f'PERSONAL = {args.personal}\nSTYLE = "portfolio"\n', encoding="utf-8")
-    try:
-        build_exe()
-    finally:
-        FLAG.write_text(original, encoding="utf-8")
-
-    if not args.personal:
+    build_exe()
+    if args.installer:
         build_installer()
 
 
@@ -86,9 +71,6 @@ def build_exe() -> None:
         # PyInstaller cannot see these — they are reached dynamically at runtime.
         "--hidden-import", "app.data.alpaca_data",
         "--hidden-import", "app.execution.alpaca_executor",
-        "--hidden-import", "app.common.licensing",
-        "--hidden-import", "app.gui.license",
-        "--hidden-import", "app._build",
         # The swarm's bots run app.brain in their own processes.
         "--collect-submodules", "app.brain",
         # uvicorn picks its event loop and protocol implementations by name.
@@ -127,7 +109,7 @@ def build_exe() -> None:
     print(r"Keys go in the app: Settings -> Money & keys. Data home: %LOCALAPPDATA%\BofStudios\Money Tree AI")
 
 
-# Anything that would carry this machine's keys, licence or history to a buyer.
+# Anything that would carry this machine's keys or history into a build.
 PRIVATE = (".env", "keys.dat", "license.json", "config.yaml", "trading.db",
            "mentor_memory.json", "user_profile.json", "dashboard.token", "journal.json",
            "risk_day.json", "engine_state.json", "protections.json", "news_memory.json",

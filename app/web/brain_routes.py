@@ -6,9 +6,10 @@ this PC, or a device with the token — like keys and the money mode.
 """
 from __future__ import annotations
 
-from app import edition
+from app.brain.brain import MAX_BOTS
 
 import secrets as pysecrets
+from app.web.auth import Auth
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
@@ -20,18 +21,9 @@ SETTABLE = {"quality_mode", "news_check", "learning", "ai_check", "self_improve"
 def build_brain_router(engine, token: str) -> APIRouter:
     router = APIRouter(prefix="/api")
 
-    def require_token(t: str = Query(default="", alias="token")) -> None:
-        if token and not pysecrets.compare_digest(t, token):
-            raise HTTPException(status_code=401, detail="invalid token")
-
-    def require_owner(request: Request, t: str = Query(default="", alias="token")) -> None:
-        if token:
-            if pysecrets.compare_digest(t, token):
-                return
-            raise HTTPException(status_code=401, detail="invalid token")
-        host = request.client.host if request.client else ""
-        if host not in LOCAL_HOSTS:
-            raise HTTPException(status_code=403, detail="The brain's settings can only be changed on the PC running the bot.")
+    auth = token if isinstance(token, Auth) else Auth(token)
+    require_token = auth.guard()
+    require_owner = auth.owner("The brain's settings can only be changed on the PC running the bot.")
 
     guarded = [Depends(require_token)]
     owner = [Depends(require_owner)]
@@ -70,7 +62,7 @@ def build_brain_router(engine, token: str) -> APIRouter:
         b = brain()
         snap = b.swarm.snapshot()
         snap["settings"] = {"bots": b.settings.bots, "power": b.settings.power, "self_improve": b.settings.self_improve,
-                            "max_bots": edition.limits().max_bots}
+                            "max_bots": MAX_BOTS}
         return snap
 
     @router.post("/swarm/reset", dependencies=owner)

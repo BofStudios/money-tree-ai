@@ -11,7 +11,7 @@
   <a href="https://github.com/BofStudios/money-tree-ai/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/BofStudios/money-tree-ai?style=for-the-badge&color=ffd60a&labelColor=111&filter=desktop-*"></a>
   <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-ffd60a?style=for-the-badge&labelColor=111"></a>
   <img alt="Windows" src="https://img.shields.io/badge/Windows-10%20%7C%2011-ffd60a?style=for-the-badge&labelColor=111">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-403%20passing-32d583?style=for-the-badge&labelColor=111">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-415%20passing-32d583?style=for-the-badge&labelColor=111">
 </p>
 
 > [!WARNING]
@@ -74,6 +74,31 @@ Practice money stays because it is the only way to see the bot work before any
 money is at risk, and because a new Alpaca live account cannot trade until it
 is funded. (Midas signal mode was removed in 4.0: an old config that still says
 `signal` starts on practice money.)
+
+## Desktop 10.1: trust
+
+Money Tree is free and open source, and other people use it too, so the app now
+says plainly what it keeps and what leaves the PC, and the code is held to it.
+
+- **Privacy and data** (Settings): every server the app talks to, every file it
+  keeps, what the AI was last sent, an export (a zip without keys or the
+  password) and clear buttons. [PRIVACY.md](PRIVACY.md) is made from the same
+  lists by `scripts/gen_privacy.py`; a test fails if the policy and the code
+  disagree, and if the code names a server that is not on the list. No server
+  of ours, no ads, no tracking.
+- **What the AI sees:** everything, only percentages and symbols, or nothing
+  about your account. Chat memory can be turned off. Screenshots go to Groq;
+  they go to Google Gemini only if you allow it, because Google's free tier may
+  use and read what it gets.
+- **Dashboard security:** the link's password becomes an HttpOnly cookie and
+  leaves the address bar; the dashboard listens only on this PC unless you turn
+  phone access on (off for a new install; an older install is asked once);
+  five wrong tries lock an address; changes must come from the page's own
+  origin (CSRF); a Content-Security-Policy and the usual safe headers on every
+  answer; one place for all of this (`app/web/auth.py`).
+- **Free for everyone:** the licence key, the Pro edition and the Lemon Squeezy
+  connection are gone. One edition, MIT.
+- `build_exe.py` has no `--personal` flag any more (it was the only kind of build).
 
 ## Desktop 10.0: the Lab
 
@@ -334,39 +359,11 @@ active voice, simple tenses. A step says what the bot does, the line under it
 says what happened, and a finished step starts with "Done". The Turkish texts
 follow the same rules.
 
-**Two editions** (`app/edition.py`):
-
-| | Personal (your copy) | Pro (the copy you sell) |
-|---|---|---|
-| Built with | source, or `build_exe.py --personal` | `build_exe.py` |
-| Licence key | no | yes, checked against Lemon Squeezy |
-| Telegram | yes | no, nothing is pre-connected |
-| Risk per trade | your setting | at most 1% |
-| Daily loss limit | your setting | at most 3% |
-| Open positions | your setting | at most 5 |
-| One stock | your setting | at most 25% of the account |
-| Strategy bots | up to 10 | up to 4 |
-
-The Pro limits are applied when the app starts, so editing `config.yaml` can
-lower them but never raise them.
+**One edition.** Money Tree is free and open source (MIT). There is no licence key, no paid edition and no activation. Telegram and up to 10 strategy bots are always available; the safety limits are the ones you set.
 
 **Your keys never ship.** Alpaca, AI and Telegram keys live in `.env`, the
 encrypted key store and `data/`. The build copies none of them and stops with
 an error if one of those files ends up in the output.
-
-### Selling the Pro edition
-
-1. Create a product on [Lemon Squeezy](https://www.lemonsqueezy.com) with
-   licence keys turned on and an activation limit (for example 2 PCs).
-2. Put its store id and product id in `app/common/licensing.py`
-   (`STORE_ID`, `PRODUCT_ID`).
-3. Install Inno Setup once: `winget install JRSoftware.InnoSetup --scope user`.
-4. Run `.venv\Scripts\python scripts\build_exe.py`. It writes
-   `dist\MoneyTreeAI-Setup-<version>.exe`, the installer you sell.
-
-The licence check needs no secret, so nothing private is inside the exe. A
-buyer activates once per PC, and **Settings → Licence** frees the PC to move the
-key to another one.
 
 ## Desktop 3.0: the research desk and the swarm
 
@@ -445,7 +442,7 @@ If Alpaca refuses the saved keys at startup (say you regenerated them on the
 phone), the app does not crash: it runs on the simulation, says so in the Live
 tab, and marks the keys in red in Settings until you paste new ones.
 
-### Telegram (personal edition only)
+### Telegram
 
 1. Message [@BotFather](https://t.me/BotFather), send `/newbot`, follow the prompts.
 2. Put the token in `.env` as `TELEGRAM_BOT_TOKEN`.
@@ -867,7 +864,7 @@ app/
   strategy/    indicators, Strategy interface, EMA/RSI strategy
   risk/        sizing, stops, arm/disarm, daily loss kill switch
   engine/      the watchlist scanner, the Live feed's words, markets, backtester
-  edition.py   personal vs pro: licence, Telegram, fixed safety limits
+  privacy/     the list of servers, privacy choices, what the AI sees, your data
   brain/       reflex.py (news reflex), wires.py (feeds), ripples.py (ripple map),
                the five checks, SEC/news/alt-data sources, news radar, learning, the swarm
   common/      the Live step monitor, the encrypted key store, in-app restart

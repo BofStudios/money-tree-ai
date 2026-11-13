@@ -23,14 +23,11 @@ By installing or using Money Tree AI you agree to these terms.
    BofStudios is not liable for trading losses, lost profits or any other
    damage from using or not being able to use the software.
 
-5. Licence key. One licence key is for one person. Do not share or resell
-   your key. The app checks the key online at most once a day.
-
-6. Third parties. Alpaca, AI providers and data sources are independent
+5. Third parties. Alpaca, AI providers and data sources are independent
    companies with their own terms. Money Tree AI is not made, endorsed or
    sponsored by them.
 
-7. Open source. Money Tree AI's own source code is published under the MIT
+6. Open source. Money Tree AI's own source code is published under the MIT
    licence below. The program also includes third-party open-source parts
    under their own licences; see THIRD-PARTY-NOTICES.txt in the program folder.
 
@@ -61,15 +58,11 @@ Money Tree AI'ı kurarak ya da kullanarak bu şartları kabul edersin.
    kullanamamaktan doğan işlem zararlarından, kaçan kârlardan ya da diğer
    zararlardan sorumlu değildir.
 
-5. Lisans anahtarı. Bir lisans anahtarı bir kişi içindir. Anahtarını paylaşma
-   ya da satma. Uygulama anahtarı en fazla günde bir kez internetten kontrol
-   eder.
-
-6. Üçüncü taraflar. Alpaca, yapay zekâ sağlayıcıları ve veri kaynakları kendi
+5. Üçüncü taraflar. Alpaca, yapay zekâ sağlayıcıları ve veri kaynakları kendi
    şartları olan bağımsız şirketlerdir. Money Tree AI onlar tarafından
    yapılmamış, onaylanmamış ya da desteklenmemiştir.
 
-7. Açık kaynak. Money Tree AI'ın kendi kaynak kodu aşağıdaki MIT lisansıyla
+6. Açık kaynak. Money Tree AI'ın kendi kaynak kodu aşağıdaki MIT lisansıyla
    yayımlanır. Program ayrıca kendi lisansları olan üçüncü taraf açık kaynak
    parçalar içerir; program klasöründeki THIRD-PARTY-NOTICES.txt dosyasına bak.
 

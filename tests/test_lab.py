@@ -265,8 +265,15 @@ def test_vision_tries_groq_then_gemini_and_keeps_no_image(tmp_path, monkeypatch)
     calls = []
     monkeypatch.setattr(vision, "ask_groq", lambda *a: calls.append("groq") or None)
     monkeypatch.setattr(vision, "ask_gemini", lambda key, q, st, imgs, tr: calls.append(("gemini", q, len(imgs))) or "I see AAPL.")
+    from app.privacy.prefs import Prefs
+
     mentor = AIMentor(MentorConfig(enabled=False), keys={"groq": "g", "gemini": "m"}, memory_path=tmp_path / "m.json")
+    mentor.privacy = Prefs(tmp_path / "p.json")
     assert mentor.can_look()
+    # 10.1: Google's free tier may use and read what it gets, so screenshots go there only if allowed
+    assert mentor.look("is this good?", [("image/png", PNG)], {}) is None and calls == ["groq"]
+    calls.clear()
+    mentor.privacy.update({"gemini_images": True})
     assert mentor.look("is this good?", [("image/png", PNG)], {}) == "I see AAPL."
     assert calls == ["groq", ("gemini", "is this good?", 1)]
     saved = (tmp_path / "m.json").read_text(encoding="utf-8")

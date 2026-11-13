@@ -172,7 +172,6 @@ h1, .figure, .mv-figure, .boot-name, .now-head b, .ai-title b { font-family: var
   margin-left: 6px; padding: 3px 7px; border-radius: 6px; vertical-align: 2px;
   color: #000; background: linear-gradient(180deg, var(--accent-hot), var(--accent));
 }
-body[data-edition="personal"] .ed-badge { color: var(--accent); background: var(--accent-soft); border: 1px solid rgba(255, 214, 10, 0.35); }
 
 /* ------------------------------------------------------------- surfaces */
 

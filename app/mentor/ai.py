@@ -18,6 +18,7 @@ from pathlib import Path
 from app.config import MentorConfig
 from app.mentor.memory import MentorMemory
 from app.mentor.providers import build
+from app.privacy import minimize
 
 log = logging.getLogger(__name__)
 
@@ -97,6 +98,8 @@ class AIMentor:
             Path(memory_path or "data/mentor_memory.json"), config.memory_turns
         )
 
+        self.privacy = None            # app.privacy.prefs.Prefs, set by main (None = the defaults)
+        self.last_sent: list[dict] = []   # what the AI was last sent, newest first (10.1)
         self.provider = None
         self._keys = dict(keys or {})
         self._backups: dict[str, object] = {}
@@ -165,6 +168,7 @@ class AIMentor:
             tried.add(id(provider))
             reply = provider.chat(system, messages, max_tokens)
             if reply is not None:
+                self._note_sent(reply.provider, reply.model, system, messages)
                 return reply
             if provider.available():
                 return None       # an ordinary miss, not a dead provider
@@ -199,14 +203,17 @@ class AIMentor:
 
         # State goes in every turn because it moves between messages; the stored
         # history carries the thread of the conversation across restarts.
-        turns = self.memory.turns() + [
+        state = minimize.apply(state, self._level())
+        past = self.memory.turns() if self._remembers() else []
+        turns = past + [
             {"role": "user", "content": f"Current bot state:\n{_render(state)}\n\n{question}"}
         ]
         reply = self._send(turns, ANSWER_TOKENS)
         if reply is None:
             return None
 
-        self.memory.record(question, reply)
+        if self._remembers():
+            self.memory.record(question, reply)
         return reply
 
     def can_look(self) -> bool:
@@ -218,9 +225,15 @@ class AIMentor:
         kept; the memory keeps only the text of the question and the reply."""
         from app.mentor.vision import look
 
-        reply = look(self._keys, question, _render(state), images, turkish)
+        shown = _render(minimize.apply(state, self._level()))
+        keys = dict(self._keys)
+        if not (self.privacy.get("gemini_images") if self.privacy is not None else False):
+            keys.pop("gemini", None)       # Google's free tier may use and read what it is sent
+        reply = look(keys, question, shown, images, turkish)
         if reply:
-            self.memory.record(f"{question} [{len(images)} screenshot(s)]".strip(), reply)
+            self._note_sent("vision", "", f"{question}\n[{len(images)} screenshot(s), not shown here]\n\n{shown}", [])
+            if self._remembers():
+                self.memory.record(f"{question} [{len(images)} screenshot(s)]".strip(), reply)
         return reply
 
     def commentary(self, state: dict, force: bool = False) -> str | None:
@@ -237,7 +250,7 @@ class AIMentor:
             [{
                 "role": "user",
                 "content": (
-                    f"Here is the bot's current state.\n\n{_render(state)}\n\n"
+                    f"Here is the bot's current state.\n\n{_render(minimize.apply(state, self._level()))}\n\n"
                     "In two or three short paragraphs, tell me what is going on right "
                     "now: what the watchlist looks like, what the open positions are "
                     "doing, and whether the strategy is behaving as designed. Be "
@@ -250,6 +263,10 @@ class AIMentor:
     def explain_trade(self, trade: dict, state: dict) -> str | None:
         if not self.available:
             return None
+        level = self._level()
+        state = minimize.apply(state, level)
+        trade = minimize.scrub(trade) if level == "percent" else (
+            {k: trade.get(k) for k in ("symbol", "exit_reason")} if level == "none" else trade)
         return self._send(
             [{
                 "role": "user",
@@ -300,6 +317,24 @@ class AIMentor:
 
     def reset(self) -> None:
         self.memory.clear_history()
+
+    # ----------------------------------------------------------------- privacy
+
+    def _level(self) -> str:
+        return self.privacy.get("ai_level") if self.privacy is not None else "full"
+
+    def _remembers(self) -> bool:
+        return self.privacy.get("remember_chat") if self.privacy is not None else True
+
+    def _note_sent(self, provider: str, model: str, system: str, messages) -> None:
+        """Keep the last few things sent to an AI so the owner can read them.
+        Images are never kept, only that they were sent."""
+        text = "\n\n".join(f"[{m['role']}] {m['content']}" for m in (messages or []))
+        self.last_sent.insert(0, {
+            "at": time.strftime("%Y-%m-%d %H:%M:%S"), "provider": provider, "model": model,
+            "system": system[:6000], "text": text[:12000],
+        })
+        del self.last_sent[8:]
 
     # --------------------------------------------------------------- internals
 

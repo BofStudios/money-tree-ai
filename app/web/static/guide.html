@@ -92,8 +92,8 @@
     <a href="#ai">4. Connect a free AI</a><a href="#real">5. Practice and real money</a><a href="#arm">6. Arm, Stop and Start</a>
     <a href="#modes">7. Modes</a><a href="#tabs">8. The screens</a><a href="#news">9. How it trades on news</a>
     <a href="#learn">10. How it gets better</a><a href="#memory">11. Memory and your data</a><a href="#safety">12. Safety limits</a>
-    <a href="#phone">13. Phone access</a><a href="#license">14. Licence</a><a href="#trouble">15. Problems and fixes</a>
-    <a href="#privacy">16. Privacy</a><a href="#legal">17. Terms</a>
+    <a href="#phone">13. Phone access</a><a href="#trouble">14. Problems and fixes</a>
+    <a href="#privacy">15. Privacy</a><a href="#legal">16. Terms</a>
   </nav>
 
   <h2 id="install">1. Install</h2>
@@ -201,16 +201,9 @@
   <p>You can make these limits smaller in <code>config\config.yaml</code> in the data folder, never larger than the edition allows.</p>
 
   <h2 id="phone">13. Phone access</h2>
-  <p>On the same Wi-Fi, open the tray icon menu → <strong>Copy phone link</strong> and open it on your phone. The link holds a private password, so other people on the network cannot control the bot. Do not share the link.</p>
+  <p>Phone access is off for a new install. Turn it on in <strong>Settings → Privacy and data → Phone access</strong> and restart the app. Then, on the same Wi-Fi, open the tray icon menu → <strong>Copy phone link</strong> and open it on your phone. The link holds a private password, so other people on the network cannot control the bot. Do not share the link.</p>
 
-  <h2 id="license">14. Licence</h2>
-  <ul>
-    <li>At the first start, enter the licence key from your purchase e-mail.</li>
-    <li>To move to another PC: <strong>Settings → Licence → Deactivate</strong>, then activate on the new PC.</li>
-    <li>One licence is for one person. The app checks the licence online now and then.</li>
-  </ul>
-
-  <h2 id="trouble">15. Problems and fixes</h2>
+  <h2 id="trouble">14. Problems and fixes</h2>
   <table>
     <tr><th>Problem</th><th>Fix</th></tr>
     <tr><td>It never buys</td><td>Look at <strong>Is it trading?</strong> on Home. Most often: real money is not armed, Stop is on, "Ideas only" is chosen, the market is closed, or there is no free cash.</td></tr>
@@ -222,10 +215,16 @@
     <tr><td>Where are the logs?</td><td><span class="path">%LOCALAPPDATA%\BofStudios\Money Tree AI\logs</span>. Keys are removed from the logs.</td></tr>
   </table>
 
-  <h2 id="privacy">16. Privacy</h2>
-  <p>The app has no account with us and sends nothing to us. It talks only to: Alpaca (prices, news, your orders), the AI you connect (headlines and short facts about a trade, never your keys), public news feeds and government sites, SEC EDGAR, Wikipedia page views, Yahoo Finance (prices without Alpaca keys) and the licence server. Each of these services has its own privacy policy.</p>
+  <h2 id="privacy">15. Privacy</h2>
+  <p>The app has no account with us and no server of ours: <strong>nothing is sent to us</strong>. There are no ads, no tracking and no analytics. It talks only to the services you connect and to public news and price sources. Your keys are stored encrypted on this PC and are never sent to an AI.</p>
+  <ul>
+    <li><strong>Settings → Privacy and data</strong> shows every server the app talks to, every file it keeps, what the AI was last sent, and lets you export or clear your data.</li>
+    <li><strong>What the AI sees</strong>: everything, only percentages, or nothing about your account.</li>
+    <li><strong>Phone access</strong> is off for a new install: only this PC can open the dashboard.</li>
+  </ul>
+  <p>The full policy: <a href="/privacy.html">Privacy</a>.</p>
 
-  <h2 id="legal">17. Terms</h2>
+  <h2 id="legal">16. Terms</h2>
   <div class="card warn">
     <p><strong>No advice.</strong> Money Tree AI and BofStudios do not give investment, financial, tax or legal advice. Nothing in the app, the AI's answers or this guide is a recommendation to buy or sell anything.</p>
     <p><strong>Your decisions.</strong> You choose the account, the mode, the limits and whether to arm real money. You are responsible for all trades on your account and for following the laws of your country.</p>
@@ -248,8 +247,8 @@
     <a href="#tr-ai">4. Ücretsiz yapay zekâ</a><a href="#tr-real">5. Deneme ve gerçek para</a><a href="#tr-arm">6. Kur, Durdur, Başlat</a>
     <a href="#tr-modes">7. Modlar</a><a href="#tr-tabs">8. Ekranlar</a><a href="#tr-news">9. Haberle işlem</a>
     <a href="#tr-learn">10. Nasıl gelişir</a><a href="#tr-memory">11. Hafıza ve verilerin</a><a href="#tr-safety">12. Güvenlik sınırları</a>
-    <a href="#tr-phone">13. Telefondan erişim</a><a href="#tr-license">14. Lisans</a><a href="#tr-trouble">15. Sorunlar ve çözümler</a>
-    <a href="#tr-privacy">16. Gizlilik</a><a href="#tr-legal">17. Şartlar</a>
+    <a href="#tr-phone">13. Telefondan erişim</a><a href="#tr-trouble">14. Sorunlar ve çözümler</a>
+    <a href="#tr-privacy">15. Gizlilik</a><a href="#tr-legal">16. Şartlar</a>
   </nav>
 
   <h2 id="tr-install">1. Kurulum</h2>
@@ -357,16 +356,9 @@
   <p>Bu sınırları veri klasöründeki <code>config\config.yaml</code> içinde küçültebilirsin, sürümün izin verdiğinden büyütemezsin.</p>
 
   <h2 id="tr-phone">13. Telefondan erişim</h2>
-  <p>Aynı Wi-Fi'da, tepsi simgesi menüsü → <strong>Telefon bağlantısını kopyala</strong>'yı seç ve telefonunda aç. Bağlantı özel bir şifre taşır, böylece ağdaki başkaları botu kontrol edemez. Bağlantıyı paylaşma.</p>
+  <p>Telefondan erişim yeni kurulumda kapalı. <strong>Ayarlar → Gizlilik ve veri → Telefondan erişim</strong>'i aç ve uygulamayı yeniden başlat. Sonra aynı Wi-Fi'da, tepsi simgesi menüsü → <strong>Telefon bağlantısını kopyala</strong>'yı seç ve telefonunda aç. Bağlantı özel bir şifre taşır, böylece ağdaki başkaları botu kontrol edemez. Bağlantıyı paylaşma.</p>
 
-  <h2 id="tr-license">14. Lisans</h2>
-  <ul>
-    <li>İlk açılışta satın alma e-postandaki lisans anahtarını gir.</li>
-    <li>Başka bilgisayara geçmek için: <strong>Ayarlar → Lisans → Devre dışı bırak</strong>, sonra yeni bilgisayarda etkinleştir.</li>
-    <li>Bir lisans bir kişi içindir. Uygulama lisansı ara sıra çevrim içi kontrol eder.</li>
-  </ul>
-
-  <h2 id="tr-trouble">15. Sorunlar ve çözümler</h2>
+  <h2 id="tr-trouble">14. Sorunlar ve çözümler</h2>
   <table>
     <tr><th>Sorun</th><th>Çözüm</th></tr>
     <tr><td>Hiç almıyor</td><td>Ana Sayfa'daki <strong>İşlem yapıyor mu?</strong> kartına bak. En sık sebepler: gerçek para kurulu değil, STOP açık, "Sadece fikir" seçili, piyasa kapalı ya da boş nakit yok.</td></tr>
@@ -378,10 +370,16 @@
     <tr><td>Kayıtlar nerede?</td><td><span class="path">%LOCALAPPDATA%\BofStudios\Money Tree AI\logs</span>. Anahtarlar kayıtlardan silinir.</td></tr>
   </table>
 
-  <h2 id="tr-privacy">16. Gizlilik</h2>
-  <p>Uygulamanın bizde hesabı yoktur ve bize hiçbir şey göndermez. Sadece şunlarla konuşur: Alpaca (fiyatlar, haberler, emirlerin), bağladığın yapay zekâ (başlıklar ve bir işlem hakkında kısa bilgiler, asla anahtarların değil), açık haber kaynakları ve devlet siteleri, SEC EDGAR, Wikipedia sayfa görüntülemeleri, Yahoo Finance (Alpaca anahtarı yokken fiyatlar) ve lisans sunucusu. Bu hizmetlerin her birinin kendi gizlilik politikası vardır.</p>
+  <h2 id="tr-privacy">15. Gizlilik</h2>
+  <p>Uygulamanın bizde hesabı ve bizim sunucumuz yok: <strong>bize hiçbir şey gönderilmez</strong>. Reklam, izleme ve analitik yok. Sadece bağladığın servislerle ve herkese açık haber ve fiyat kaynaklarıyla konuşur. Anahtarların bu PC\'de şifreli saklanır ve yapay zekâya asla gönderilmez.</p>
+  <ul>
+    <li><strong>Ayarlar → Gizlilik ve veri</strong> uygulamanın konuştuğu her sunucuyu, tuttuğu her dosyayı ve yapay zekâya son gönderileni gösterir; verini dışa aktarmanı ya da silmeni sağlar.</li>
+    <li><strong>Yapay zekâ ne görüyor</strong>: her şey, sadece yüzdeler ya da hesabın hakkında hiçbir şey.</li>
+    <li><strong>Telefondan erişim</strong> yeni kurulumda kapalı: paneli sadece bu PC açabilir.</li>
+  </ul>
+  <p>Tam politika: <a href="/privacy.html">Gizlilik</a>.</p>
 
-  <h2 id="tr-legal">17. Şartlar</h2>
+  <h2 id="tr-legal">16. Şartlar</h2>
   <div class="card warn">
     <p><strong>Tavsiye değildir.</strong> Money Tree AI ve BofStudios yatırım, finans, vergi ya da hukuk tavsiyesi vermez. Uygulamadaki, yapay zekânın cevaplarındaki ya da bu kılavuzdaki hiçbir şey bir şeyi alma ya da satma önerisi değildir.</p>
     <p><strong>Kararlar senin.</strong> Hesabı, modu, sınırları ve gerçek parayı kurup kurmayacağını sen seçersin. Hesabındaki tüm işlemlerden ve ülkenin yasalarına uymaktan sen sorumlusun.</p>
@@ -393,22 +391,6 @@
 </div>
 </main>
 
-<script>
-  (function () {
-    var saved = null;
-    try { saved = localStorage.getItem("mt_guide_lang"); } catch (e) { /* none */ }
-    var lang = saved || ((navigator.language || "").toLowerCase().indexOf("tr") === 0 ? "tr" : "en");
-    function set(l) {
-      document.body.className = l;
-      document.documentElement.lang = l;
-      document.querySelectorAll("[data-set]").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-set") === l); });
-      try { localStorage.setItem("mt_guide_lang", l); } catch (e) { /* none */ }
-    }
-    document.querySelectorAll("[data-set]").forEach(function (b) {
-      b.addEventListener("click", function () { set(b.getAttribute("data-set")); });
-    });
-    set(lang);
-  })();
-</script>
+<script src="/guide.js"></script>
 </body>
 </html>

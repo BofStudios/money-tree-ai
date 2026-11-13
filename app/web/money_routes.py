@@ -14,13 +14,13 @@ from pathlib import Path
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
-from app import edition
 from app.common.keystore import KeyStore
 from app.common.restart import Restarter
 from app.config import Settings, set_config_value
 from app.engine.markets import MARKETS
 from app.engine.portfolio_engine import PortfolioEngine
 from app.storage.repository import Repository
+from app.web.auth import Auth
 
 log = logging.getLogger(__name__)
 
@@ -46,23 +46,9 @@ def build_money_router(
     # so the page can say so instead of showing them as fine.
     problems = dict(key_problems or {})
 
-    def require_token(t: str = Query(default="", alias="token")) -> None:
-        if token and not pysecrets.compare_digest(t, token):
-            raise HTTPException(status_code=401, detail="invalid token")
-
-    def require_owner(request: Request, t: str = Query(default="", alias="token")) -> None:
-        """This PC, or a device holding the dashboard token."""
-        if token:
-            if pysecrets.compare_digest(t, token):
-                return
-            raise HTTPException(status_code=401, detail="invalid token")
-        host = request.client.host if request.client else ""
-        if host not in LOCAL_HOSTS:
-            raise HTTPException(
-                status_code=403,
-                detail="Keys and the money mode can only be changed on the PC running the bot "
-                       "(or set DASHBOARD_TOKEN to allow your phone).",
-            )
+    auth = token if isinstance(token, Auth) else Auth(token)
+    require_token = auth.guard()
+    require_owner = auth.owner('Keys and the money mode can only be changed on the PC running the bot (or set DASHBOARD_TOKEN to allow your phone).')
 
     guarded = [Depends(require_token)]
     owner = [Depends(require_owner)]
@@ -231,32 +217,6 @@ def build_money_router(
     def markets() -> dict:
         return {"markets": MARKETS, "watchlist": list(engine.symbols)}
 
-    # ------------------------------------------------------- edition, licence
-
-    @router.get("/edition", dependencies=guarded)
-    def edition_info() -> dict:
-        info = {"edition": edition.NAME, "limits": edition.limits().to_dict(), "license": None}
-        if edition.PRO:
-            from app.common import licensing
-            from app.config import DATA_DIR
-
-            saved = licensing.License(DATA_DIR / "license.json")._load()
-            info["license"] = {"active": bool(saved.get("instance_id")), "customer": saved.get("customer", "")}
-        return info
-
-    @router.post("/license/deactivate", dependencies=owner)
-    def license_deactivate() -> dict:
-        """Free this PC's activation so the key works on another PC. The app
-        stops trading at once and asks for a key on its next start."""
-        if not edition.PRO:
-            raise HTTPException(status_code=400, detail="This copy has no licence.")
-        from app.common import licensing
-        from app.config import DATA_DIR
-
-        if not licensing.License(DATA_DIR / "license.json").deactivate():
-            raise HTTPException(status_code=503, detail="The licence server did not answer. Try again.")
-        engine.halt("licence moved")
-        return {"ok": True}
 
     return router
 

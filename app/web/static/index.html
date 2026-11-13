@@ -22,6 +22,7 @@
   <link rel="stylesheet" href="/evolve.css">
   <link rel="stylesheet" href="/aurora.css">
   <link rel="stylesheet" href="/lab.css">
+  <link rel="stylesheet" href="/privacy.css">
 </head>
 <body>
 
@@ -60,7 +61,7 @@
     <header class="ai-head">
       <span class="logo" aria-hidden="true"><img src="/mark.svg" alt=""></span>
       <div class="ai-title">
-        <b>Money Tree AI <em class="ed-badge" id="edBadge" hidden></em></b>
+        <b>Money Tree AI</b>
         <span id="aiState">thinking out loud</span>
       </div>
       <button class="icon" id="aiClose" aria-label="Close">
@@ -529,11 +530,6 @@
         </section>
 
         <!-- The licence of a sold copy; hidden on the owner's copy. -->
-        <section class="block" id="sLicenseBlock" hidden>
-          <div class="block-head"><h2 data-i18n="lic.title">Licence</h2></div>
-          <div id="sLicense"></div>
-        </section>
-
         <section class="block">
           <div class="block-head"><h2 data-i18n="settings.language"></h2></div>
           <div class="chips tagset" id="sLanguage"></div>
@@ -597,6 +593,10 @@
             <button class="ghost sm" data-goto="modes" data-i18n="port.advanced">Advanced controls</button>
           </div>
           <p class="note faint" data-i18n="settings.legal"></p>
+        </section>
+
+        <section class="block privacy-block" id="privacyBlock">
+          <div id="privacyBody"></div>
         </section>
 
         <section class="block">
@@ -683,13 +683,7 @@
 <script type="module" src="/modes.js"></script>
 <script type="module" src="/lab.js"></script>
 <script type="module" src="/shots.js"></script>
-<script>
-  // Service workers only run in a secure context: https, or localhost. Over
-  // plain http on the home Wi-Fi the phone still gets a home-screen icon from
-  // the manifest; this simply stays quiet instead of throwing.
-  if ("serviceWorker" in navigator && window.isSecureContext) {
-    navigator.serviceWorker.register("/sw.js").catch(() => {});
-  }
-</script>
+<script type="module" src="/privacy.js"></script>
+<script src="/sw-register.js"></script>
 </body>
 </html>

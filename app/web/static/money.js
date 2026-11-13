@@ -407,47 +407,6 @@ function waitForRestart() {
   }, 1000);
 }
 
-/* ------------------------------------------------- edition, licence */
-
-let edition = null;
-async function loadEdition() {
-  try { edition = await api("GET", "/api/edition"); } catch { return; }
-  document.body.dataset.edition = edition.edition;
-  const badge = $("edBadge");
-  if (badge) { badge.hidden = false; badge.textContent = edition.edition === "pro" ? "PRO" : t("lic.personal"); }
-  renderLicense();
-}
-
-function renderLicense() {
-  const block = $("sLicenseBlock");
-  if (!block || !edition) return;
-  block.hidden = edition.edition !== "pro";
-  if (block.hidden) return;
-  const lic = edition.license || {};
-  const lim = edition.limits || {};
-  $("sLicense").innerHTML = `
-    <div class="rows">
-      <div class="row"><span>${esc(t("lic.status"))}</span><b>${esc(t(lic.active ? "lic.active" : "lic.inactive"))}</b></div>
-      ${lic.customer ? `<div class="row"><span>${esc(t("lic.owner"))}</span><b>${esc(lic.customer)}</b></div>` : ""}
-      <div class="row"><span>${esc(t("lic.limits"))}</span><b>${esc(t("lic.limitsText", {
-        risk: lim.max_risk_per_trade_pct, day: lim.max_daily_loss_pct, pos: lim.max_open_positions, bots: lim.max_bots }))}</b></div>
-    </div>
-    <p class="note faint">${esc(t("lic.moveHint"))}</p>
-    <div class="actions"><button class="ghost sm" id="licMove">${esc(t("lic.move"))}</button></div>
-    <p class="note" id="licNote"></p>`;
-  $("licMove").onclick = async () => {
-    if (!confirm(t("lic.moveConfirm"))) return;
-    try {
-      await api("POST", "/api/license/deactivate");
-      $("licNote").className = "note good";
-      $("licNote").textContent = t("lic.moved");
-    } catch (err) {
-      $("licNote").className = "note bad";
-      $("licNote").textContent = err.message;
-    }
-  };
-}
-
 /* ---------------------------------------------------------- wiring */
 
 window.addEventListener("mt:status", () => {
@@ -467,7 +426,6 @@ window.addEventListener("mt:view", (e) => {
 });
 
 window.addEventListener("mt:lang", () => {
-  renderLicense();
   renderCard();
   renderView();
   renderSettings();
@@ -475,4 +433,3 @@ window.addEventListener("mt:lang", () => {
 
 loadMoney(true);
 loadKeys();
-loadEdition();

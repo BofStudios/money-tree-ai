@@ -85,7 +85,6 @@ from app.brain.brain import Brain
 from app.brain.sources import AlpacaNews, SecClient, Wikipedia, make_asset_check
 from app.brain.words import BrainWords
 from app.config import DATA_DIR
-from app import edition
 
 log = logging.getLogger(__name__)
 
@@ -221,7 +220,7 @@ def main() -> None:
     parser.add_argument("--headless", action="store_true", help="run without the desktop window")
     parser.add_argument("--mode", choices=["paper", "live"], default=None)
     parser.add_argument("--no-telegram", action="store_true")
-    parser.add_argument("--host", default=None, help="bind address (default from config: all interfaces)")
+    parser.add_argument("--host", default=None, help="bind address (default: this PC only; phone access is a switch in Settings)")
     parser.add_argument("--port", type=int, default=None, help="dashboard port (default from config)")
     args = parser.parse_args()
 
@@ -235,12 +234,16 @@ def main() -> None:
     if _boot.MIGRATED:
         log.info("copied %d files from the old folder into the data home", len(_boot.MIGRATED))
     settings = load_settings()
-    for change in edition.clamp_risk(settings.app.risk):
-        log.info("%s edition limit: %s", edition.NAME, change)
-    if not _licensed(settings, args.headless):
-        sys.exit(0)
     if args.mode:
         settings.app.mode = args.mode
+    # 10.1: the dashboard listens on this PC only, unless the owner turned phone
+    # access on (Settings > Security). The old `host:` line in config.yaml is ignored.
+    from app.privacy import data as mydata
+    from app.privacy.prefs import Prefs
+
+    prefs = Prefs(DATA_DIR / "privacy.json", existing_install=(DATA_DIR / "trading.db").exists())
+    settings.app.web.host = "0.0.0.0" if prefs.get("lan") else "127.0.0.1"
+    mydata.prune_logs(LOG_DIR, prefs.get("log_days"))
     if args.host:
         settings.app.web.host = args.host
     if args.port:
@@ -262,6 +265,7 @@ def main() -> None:
     claude = AIMentor(
         settings.app.mentor, settings.secrets.mentor_keys, settings.mentor_memory_path
     )
+    claude.privacy = prefs
 
     strategy_config = settings.app.strategy
     strategy = EmaRsiStrategy(
@@ -311,6 +315,7 @@ def main() -> None:
     news = NewsFeed(*(keys or ("", "")))
     engine.news = news
     engine.explainer = claude
+    engine.privacy = prefs
     _mark("engine built", "Waking the research desk")
     brain = build_brain(engine, data, keys, claude, monitor, events, risk, mentor)
     _mark("brain built", "Starting the dashboard")
@@ -341,8 +346,7 @@ def main() -> None:
         monitor.info(activity.WARN, notice(w_start))
 
     telegram = TelegramNotifier(
-        # The sold copy is never connected to anyone's Telegram.
-        token="" if args.no_telegram or not edition.limits().telegram else settings.secrets.telegram_bot_token,
+        token="" if args.no_telegram else settings.secrets.telegram_bot_token,
         allowed_chat_ids=settings.secrets.allowed_chat_ids,
         config=settings.app.telegram,
         engine=engine,
@@ -350,7 +354,7 @@ def main() -> None:
         claude=claude,
         catalysts=catalysts,
     )
-    if settings.app.telegram.enabled and edition.limits().telegram:
+    if settings.app.telegram.enabled:
         telegram.start()
 
     token = settings.secrets.dashboard_token or local_token(DATA_DIR / "dashboard.token")
@@ -364,7 +368,7 @@ def main() -> None:
     _mark("web serving", "Starting the bots")
 
     suffix = f"?token={token}" if token else ""
-    phone_url = f"http://{lan_ip()}:{settings.app.web.port}/{suffix}"
+    phone_url = f"http://{lan_ip()}:{settings.app.web.port}/{suffix}" if prefs.get("lan") else ""
     _print_banner(settings, executor, web.local_url + "/" + suffix, phone_url, telegram, claude, data)
 
     engine.start()
@@ -513,33 +517,6 @@ def _free_port(host: str, port: int) -> int:
     return port
 
 
-def _licensed(settings: Settings, headless: bool) -> bool:
-    """Only the sold (pro) exe asks for a key; the owner's copy never does."""
-    from app.common import licensing
-
-    if not edition.PRO:
-        return True
-    if not licensing.configured():
-        # scripts/build_exe.py refuses to make a pro build without the ids.
-        print("This build has no licence settings.", file=sys.stderr)
-        return False
-    lic = licensing.License(DATA_DIR / "license.json")
-    verdict = lic.check()
-    if verdict.ok:
-        return True
-    if headless:
-        print("This copy is not activated. Open the app once with its window to enter the licence key.",
-              file=sys.stderr)
-        return False
-    from app.common import startup
-    from app.gui.license import activate
-
-    startup.close()
-
-    turkish = ProfileStore(settings.user_profile_path).get().language == "tr"
-    return activate(lic, verdict, turkish)
-
-
 def build_reflex(engine, brain, data, keys, claude, monitor, events, journal=None):
     """The news reflex: official feeds with no key, plus Alpaca's wire when keys work.
     It keeps its own track record (news memory) and learns from it."""
@@ -634,7 +611,7 @@ def _print_banner(
     print(f"  Data     : {data.name}")
     print(f"  Watching : {', '.join(app.watchlist)}")
     print(f"  Desktop  : {desktop_url}")
-    print(f"  Phone    : {phone_url}")
+    print(f"  Phone    : {phone_url or 'off (Settings > Security > Phone access)'}")
     print(f"  Telegram : {'on' if telegram.enabled else 'off (set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_IDS)'}")
     ai = claude.backend
     print(f"  AI       : {ai['provider'] + ' · ' + ai['model'] if ai['available'] else 'rule-based (connect a free Groq key in Settings)'}")

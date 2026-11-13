@@ -1,14 +1,11 @@
-/* Launched from the phone's home screen, the app opens at the manifest's bare
-   start_url and the ?token= from the first visit is gone. So the token is
-   remembered on this device the first time it arrives in the URL. */
+/* 10.1: the page no longer keeps the password. The first visit with ?token= is
+   answered with an HttpOnly cookie and a redirect that cleans the address, and
+   every request after that carries the cookie. A password an older version
+   stored in this browser is removed here, before the other scripts run. */
 const TOKEN = (() => {
   const fromUrl = new URLSearchParams(location.search).get("token");
-  try {
-    if (fromUrl) localStorage.setItem("mt_token", fromUrl);
-    return fromUrl || localStorage.getItem("mt_token") || "";
-  } catch {
-    return fromUrl || "";
-  }
+  try { localStorage.removeItem("mt_token"); } catch { /* storage blocked */ }
+  return fromUrl || "";
 })();
 const q = (p) => (TOKEN ? `${p}${p.includes("?") ? "&" : "?"}token=${encodeURIComponent(TOKEN)}` : p);
 const $ = (id) => document.getElementById(id);

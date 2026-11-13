@@ -24,6 +24,7 @@ from app.research.user_profile import CHOICES as PROFILE_CHOICES
 from app.research.user_profile import ProfileStore
 from app.storage.repository import Repository
 from app.web.ws import WebSocketHub
+from app.web.auth import Auth
 
 log = logging.getLogger(__name__)
 
@@ -45,15 +46,8 @@ def build_router(
 ) -> APIRouter:
     router = APIRouter(prefix="/api")
 
-    def require_token(t: str = Query(default="", alias="token")) -> None:
-        """Blocks other devices on the network from driving the bot.
-
-        An empty configured token means local-only use with no check.
-        """
-        if not token:
-            return
-        if not secrets.compare_digest(t, token):
-            raise HTTPException(status_code=401, detail="invalid token")
+    auth = token if isinstance(token, Auth) else Auth(token)
+    require_token = auth.guard()
 
     guarded = [Depends(require_token)]
 
@@ -682,7 +676,7 @@ def build_router(
 
     @router.websocket("/ws")
     async def websocket(socket: WebSocket) -> None:
-        if token and not secrets.compare_digest(socket.query_params.get("token", ""), token):
+        if not auth.websocket_ok(socket):
             await socket.close(code=1008)
             return
         await hub.connect(socket)

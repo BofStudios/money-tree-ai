@@ -24,6 +24,7 @@ import secrets as pysecrets
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 
 from app.config import HOME
+from app.web.auth import Auth
 
 LOCAL_HOSTS = {"127.0.0.1", "::1", "localhost", "testclient"}
 
@@ -43,17 +44,9 @@ def mode_of(settings) -> str:
 def build_mode_router(engine, token: str) -> APIRouter:
     router = APIRouter(prefix="/api")
 
-    def require_token(t: str = Query(default="", alias="token")) -> None:
-        if token and not pysecrets.compare_digest(t, token):
-            raise HTTPException(status_code=401, detail="invalid token")
-
-    def require_owner(request: Request, t: str = Query(default="", alias="token")) -> None:
-        if token:
-            if pysecrets.compare_digest(t, token):
-                return
-            raise HTTPException(status_code=401, detail="invalid token")
-        if (request.client.host if request.client else "") not in LOCAL_HOSTS:
-            raise HTTPException(status_code=403, detail="Modes can only be changed on the PC running the bot.")
+    auth = token if isinstance(token, Auth) else Auth(token)
+    require_token = auth.guard()
+    require_owner = auth.owner('Modes can only be changed on the PC running the bot.')
 
     guarded = [Depends(require_token)]
     owner = [Depends(require_owner)]

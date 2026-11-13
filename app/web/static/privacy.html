@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Money Tree Privacy</title>
+<meta name="description" content="What Money Tree keeps on your PC, what leaves it, and who gets it.">
+<style>
+  :root {
+    --bg: #050403; --surface: #110e07; --line: rgba(255, 214, 10, 0.18); --text: #fffdf2; --text-2: #c9c2a8;
+    --text-3: #8a8268; --accent: #ffd60a; --good: #32d583; --bad: #ff5a4e;
+    --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    --mono: "Cascadia Mono", Consolas, "SF Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 var(--sans); }
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background: radial-gradient(900px 500px at 85% -10%, rgba(255, 214, 10, 0.12), transparent 60%);
+  }
+  header.top {
+    position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 14px; padding: 12px 16px;
+    background: rgba(5, 4, 3, 0.94); border-bottom: 1px solid var(--line);
+  }
+  header.top img { width: 30px; height: 30px; }
+  header.top b { color: var(--accent); font-size: 16px; }
+  header.top .sp { flex: 1; }
+  .lang button {
+    font: 600 13px/1 var(--sans); padding: 8px 12px; border-radius: 999px; cursor: pointer;
+    background: transparent; color: var(--text-2); border: 1px solid var(--line);
+  }
+  .lang button.on { background: var(--accent); color: #120d00; border-color: var(--accent); }
+  main { max-width: 860px; margin: 0 auto; padding: 28px 16px 80px; }
+  h1 { font-size: clamp(30px, 6vw, 44px); line-height: 1.1; margin: 10px 0 8px; letter-spacing: -0.02em; }
+  h1 em { color: var(--accent); font-style: normal; }
+  .lead { color: var(--text-2); font-size: 18px; margin: 0 0 22px; }
+  h2 {
+    margin: 46px 0 12px; font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent);
+    display: flex; align-items: center; gap: 10px;
+  }
+  h2::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  h3 { margin: 26px 0 6px; font-size: 18px; }
+  p, li { color: var(--text-2); }
+  strong { color: var(--text); }
+  a { color: var(--accent); }
+  code, .path { font-family: var(--mono); font-size: 14px; background: rgba(255, 214, 10, 0.08); padding: 1px 6px; border-radius: 6px; color: var(--text); word-break: break-all; }
+  ol, ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; margin: 14px 0; }
+  .warn { border-color: rgba(255, 90, 78, 0.45); background: rgba(255, 90, 78, 0.07); }
+  .warn strong { color: var(--bad); }
+  .tip { border-color: rgba(50, 213, 131, 0.35); background: rgba(50, 213, 131, 0.06); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+  .grid .card { margin: 0; }
+  .grid .card b { display: block; color: var(--accent); margin-bottom: 4px; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 15px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--text); font-weight: 600; }
+  td { color: var(--text-2); }
+  nav.toc { columns: 2; column-gap: 28px; font-size: 15px; }
+  nav.toc a { display: block; text-decoration: none; padding: 3px 0; color: var(--text-2); }
+  nav.toc a:hover { color: var(--accent); }
+  footer { margin-top: 60px; color: var(--text-3); font-size: 13.5px; border-top: 1px solid var(--line); padding-top: 18px; }
+  [data-lang] { display: none; }
+  body.en [data-lang="en"], body.tr [data-lang="tr"] { display: block; }
+  @media (max-width: 600px) { nav.toc { columns: 1; } }
+  @media print {
+    header.top { display: none; } body::before { display: none; }
+    html, body { background: #fff; color: #111; } p, li, td { color: #222; } h2, a, .grid .card b { color: #7a5a00; }
+    .card { background: #fff; }
+  }
+</style>
+</head>
+<body class="en">
+<header class="top">
+  <img src="/logo.png" alt="">
+  <b>Money Tree</b>
+  <span class="sp"></span>
+  <div class="lang"><button data-set="en" class="on">English</button> <button data-set="tr">Türkçe</button></div>
+</header>
+<main>
+<!-- Made by scripts/gen_privacy.py from app/privacy/docs.py. Do not edit by hand. -->
+<div data-lang="en">
+  <h1>Money Tree <em>Privacy</em></h1>
+  <p class="lead">Money Tree is a program on your PC. There is no account and no server of ours. This page says what is kept, what leaves the PC and who gets it. It is written from the code, and a test fails when the two disagree.</p>
+  <h2>The short version</h2>
+  <ul>
+    <li><strong>Nothing is sent to us.</strong> BofStudios has no server, no account system and no way to see your data.</li>
+    <li><strong>No ads, no tracking, no analytics, no crash reports, no selling of data.</strong></li>
+    <li><strong>Your keys</strong> are stored encrypted for your Windows user (DPAPI). They are sent only to the service they belong to, and never to an AI.</li>
+    <li><strong>Everything is in one folder</strong> on your PC. In Settings &gt; Privacy and data you can open it, export it, and clear what the bot keeps about you.</li>
+    <li><strong>The app talks to a short, public list of servers</strong> (below). A test fails if the code names a server that is not on the list.</li>
+    <li><strong>The code is open.</strong> Read it, or ask someone to read it, on GitHub.</li>
+  </ul>
+  <h2>What is kept on your PC</h2>
+  <p>The folder is <code>%LOCALAPPDATA%\BofStudios\Money Tree AI</code>. Files marked secret are never put in an export.</p>
+  <table>
+    <tr><th>File</th><th>What it is</th><th>Secret</th></tr>
+    <tr><td><code>data/keys.dat</code></td><td>Your Alpaca and AI keys, encrypted for this Windows user.</td><td>yes</td></tr>
+    <tr><td><code>.env</code></td><td>Keys you wrote by hand, if you did.</td><td>yes</td></tr>
+    <tr><td><code>data/dashboard.token</code></td><td>The password of the dashboard and the phone link.</td><td>yes</td></tr>
+    <tr><td><code>data/trading.db</code></td><td>Every trade, equity snapshot and saved candle (exported as a CSV).</td><td></td></tr>
+    <tr><td><code>data/user_profile.json</code></td><td>Your choices: language, who decides, watchlist.</td><td></td></tr>
+    <tr><td><code>data/mentor_memory.json</code></td><td>Your chat with the AI and the facts you asked it to remember.</td><td></td></tr>
+    <tr><td><code>data/mentor_feed.json</code></td><td>What the app said in the side chat.</td><td></td></tr>
+    <tr><td><code>data/brain</code></td><td>What the bot learned: news memory, strategy progress, the swarm.</td><td></td></tr>
+    <tr><td><code>data/lab.json</code></td><td>The last Lab replay and the edge switch.</td><td></td></tr>
+    <tr><td><code>data/privacy.json</code></td><td>These privacy choices.</td><td></td></tr>
+    <tr><td><code>data/journal.json</code></td><td>Counters: how long the app has run.</td><td></td></tr>
+    <tr><td><code>data/engine_state.json</code></td><td>Open positions and the stop flag, to survive a restart.</td><td></td></tr>
+    <tr><td><code>data/risk_day.json</code></td><td>Today&#x27;s loss count for the daily limit.</td><td></td></tr>
+    <tr><td><code>data/live_feed.json</code></td><td>The last lines of the live feed.</td><td></td></tr>
+    <tr><td><code>logs</code></td><td>Log files, with keys removed.</td><td></td></tr>
+  </table>
+  <h2>Who the app talks to</h2>
+  <p>This is the whole list. When a service appears twice, it has more than one address.</p>
+  <table>
+    <tr><th>Who</th><th>Address</th><th>What goes there</th><th>When</th><th>Their privacy page</th></tr>
+    <tr><td>Apple newsroom</td><td><code>www.apple.com</code></td><td>Public news and announcements are read. Nothing about you is sent, only the request itself.</td><td>Read as the app runs</td><td></td></tr>
+    <tr><td>Bank of England</td><td><code>www.bankofengland.co.uk</code></td><td>Public news and announcements are read. Nothing about you is sent, only the request itself.</td><td>Read as the app runs</td><td></td></tr>
+    <tr><td>Bank of Japan</td><td><code>www.boj.or.jp</code></td><td>Public news and announcements are read. Nothing about you is sent, only the request itself.</td><td>Read as the app runs</td><td></td></tr>
+    <tr><td>Business Wire</td><td><code>feed.businesswire.com</code></td><td>Public news and announcements are read. Nothing about you is sent, only the request itself.</td><td>Read as the app runs</td><td></td></tr>
+    <tr><td>European Central Bank</td><td><code>www.ecb.europa.eu</code></td><td>Public news and announcements are read. Nothing about you is sent, only the request itself.</td><td>Read as the app runs</td><td></td></tr>
+    <tr><td>Frankfurter</td><td><code>api.frankfurter.dev</code></td><td>Public exchange rates.</td><td>Read as the app runs</td><td></td></tr>
+    <tr><td>GlobeNewswire</td><td><code>www.globenewswire.com</code></td><td>Public news and announcements are read. Nothing about you is sent, only the request itself.</td><td>Read as the app runs</td><td></td></tr>
+    <tr><td>Google blog</td><td><code>blog.google</code></td><td>Public news and announcements are read. Nothing about you is sent, only the request itself.</td><td>Read as the app runs</td><td></td></tr>
+    <tr><td>Microsoft newsroom</td><td><code>news.microsoft.com</code></td><td>Public news and announcements are read. Nothing about you is sent, only the request itself.</td><td>Read as the app runs</td><td></td></tr>
+    <tr><td>NVIDIA newsroom</td><td><code>nvidianews.nvidia.com</code></td><td>Public news and announcements are read. Nothing about you is sent, only the request itself.</td><td>Read as the app runs</td><td></td></tr>
+    <tr><td>OpenAI news</td><td><code>openai.com</code></td><td>Public news and announcements are read. Nothing about you is sent, only the request itself.</td><td>Read as the app runs</td><td></td></tr>
+    <tr><td>PR Newswire</td><td><code>www.prnewswire.com</code></td><td>Public news and announcements are read. Nothing about you is sent, only the request itself.</td><td>Read as the app runs</td><td></td></tr>
+    <tr><td>The White House</td><td><code>www.whitehouse.gov</code></td><td>Public news and announcements are read. Nothing about you is sent, only the request itself.</td><td>Read as the app runs</td><td></td></tr>
+    <tr><td>US Dept. of Defense</td><td><code>www.defense.gov</code></td><td>Public news and announcements are read. Nothing about you is sent, only the request itself.</td><td>Read as the app runs</td><td></td></tr>
+    <tr><td>US Dept. of Energy</td><td><code>www.energy.gov</code></td><td>Public news and announcements are read. Nothing about you is sent, only the request itself.</td><td>Read as the app runs</td><td></td></tr>
+    <tr><td>US EIA</td><td><code>www.eia.gov</code></td><td>Public news and announcements are read. Nothing about you is sent, only the request itself.</td><td>Read as the app runs</td><td></td></tr>
+    <tr><td>US FDA</td><td><code>www.fda.gov</code></td><td>Public news and announcements are read. Nothing about you is sent, only the request itself.</td><td>Read as the app runs</td><td></td></tr>
+    <tr><td>US Federal Reserve</td><td><code>www.federalreserve.gov</code></td><td>Public news and announcements are read. Nothing about you is sent, only the request itself.</td><td>Read as the app runs</td><td></td></tr>
+    <tr><td>US SEC</td><td><code>www.sec.gov</code></td><td>Public press releases.</td><td>Read as the app runs</td><td><a href="https://www.sec.gov/privacy" target="_blank" rel="noopener noreferrer">privacy page</a></td></tr>
+    <tr><td>US SEC (EDGAR)</td><td><code>data.sec.gov</code></td><td>Public company filings.</td><td>Read as the app runs</td><td><a href="https://www.sec.gov/privacy" target="_blank" rel="noopener noreferrer">privacy page</a></td></tr>
+    <tr><td>US SEC (EDGAR)</td><td><code>efts.sec.gov</code></td><td>Search of public filings.</td><td>Read as the app runs</td><td><a href="https://www.sec.gov/privacy" target="_blank" rel="noopener noreferrer">privacy page</a></td></tr>
+    <tr><td>US Trade Representative</td><td><code>ustr.gov</code></td><td>Public news and announcements are read. Nothing about you is sent, only the request itself.</td><td>Read as the app runs</td><td></td></tr>
+    <tr><td>Wikimedia</td><td><code>en.wikipedia.org</code></td><td>A company&#x27;s page name, for the page-views signal.</td><td>Read as the app runs</td><td><a href="https://foundation.wikimedia.org/wiki/Policy:Privacy_policy" target="_blank" rel="noopener noreferrer">privacy page</a></td></tr>
+    <tr><td>Wikimedia</td><td><code>wikimedia.org</code></td><td>Public page-view counts.</td><td>Read as the app runs</td><td><a href="https://foundation.wikimedia.org/wiki/Policy:Privacy_policy" target="_blank" rel="noopener noreferrer">privacy page</a></td></tr>
+    <tr><td>Alpaca</td><td><code>api.alpaca.markets</code></td><td>Your orders, positions and account; prices and news. Your Alpaca keys sign each request.</td><td>Only after you enter that service's key</td><td><a href="https://alpaca.markets/disclosures" target="_blank" rel="noopener noreferrer">privacy page</a></td></tr>
+    <tr><td>Alpaca</td><td><code>data.alpaca.markets</code></td><td>Prices, one-minute candles and news.</td><td>Only after you enter that service's key</td><td><a href="https://alpaca.markets/disclosures" target="_blank" rel="noopener noreferrer">privacy page</a></td></tr>
+    <tr><td>Alpaca</td><td><code>paper-api.alpaca.markets</code></td><td>The same, for the practice (paper) account.</td><td>Only after you enter that service's key</td><td><a href="https://alpaca.markets/disclosures" target="_blank" rel="noopener noreferrer">privacy page</a></td></tr>
+    <tr><td>Google (Gemini)</td><td><code>generativelanguage.googleapis.com</code></td><td>The same as Groq. On Google&#x27;s free tier, Google may use what you send to improve its products and people may read it. Screenshots go there only if you allow it in Settings.</td><td>Only after you enter that service's key</td><td><a href="https://aistudio.google.com/docs/terms" target="_blank" rel="noopener noreferrer">privacy page</a></td></tr>
+    <tr><td>Groq</td><td><code>api.groq.com</code></td><td>Your question, a short bot state (symbols, prices, positions, depending on the AI privacy level), and screenshots you add. Never your keys. Groq says it does not keep inference data by default, but may log it for up to 30 days.</td><td>Only after you enter that service's key</td><td><a href="https://groq.com/privacy-policy" target="_blank" rel="noopener noreferrer">privacy page</a></td></tr>
+    <tr><td>GitHub</td><td><code>api.github.com</code></td><td>Asks for the newest release number of this app. Sends nothing about you.</td><td>Only when you ask</td><td><a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener noreferrer">privacy page</a></td></tr>
+    <tr><td>Alpaca</td><td><code>alpaca.markets</code></td><td>A link to Alpaca&#x27;s pages.</td><td>A link you may click; the app does not connect</td><td><a href="https://alpaca.markets/disclosures" target="_blank" rel="noopener noreferrer">privacy page</a></td></tr>
+    <tr><td>Alpaca</td><td><code>app.alpaca.markets</code></td><td>A link to open an account or create keys.</td><td>A link you may click; the app does not connect</td><td><a href="https://alpaca.markets/disclosures" target="_blank" rel="noopener noreferrer">privacy page</a></td></tr>
+    <tr><td>GitHub</td><td><code>github.com</code></td><td>A link to the app&#x27;s source code.</td><td>A link you may click; the app does not connect</td><td><a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener noreferrer">privacy page</a></td></tr>
+    <tr><td>Groq</td><td><code>console.groq.com</code></td><td>A link to create a free key.</td><td>A link you may click; the app does not connect</td><td><a href="https://groq.com/privacy-policy" target="_blank" rel="noopener noreferrer">privacy page</a></td></tr>
+    <tr><td>This PC</td><td><code>127.0.0.1</code></td><td>The app&#x27;s own window and an AI you run yourself (Ollama). Never leaves the PC.</td><td>This PC only</td><td></td></tr>
+    <tr><td>Anthropic (Claude)</td><td><code>api.anthropic.com</code></td><td>The same as Groq, only if you entered a Claude key.</td><td>Used by a bundled part when you use that service</td><td><a href="https://www.anthropic.com/legal/privacy" target="_blank" rel="noopener noreferrer">privacy page</a></td></tr>
+    <tr><td>Telegram</td><td><code>api.telegram.org</code></td><td>Alerts you asked for, to your own chat, only if you entered a bot token.</td><td>Used by a bundled part when you use that service</td><td><a href="https://telegram.org/privacy" target="_blank" rel="noopener noreferrer">privacy page</a></td></tr>
+    <tr><td>Yahoo Finance</td><td><code>query1.finance.yahoo.com</code></td><td>Prices and candles when no Alpaca key is set or Alpaca is resting, and the one-minute bars of the Lab&#x27;s replay (symbols only).</td><td>Used by a bundled part when you use that service</td><td><a href="https://legal.yahoo.com/us/en/yahoo/privacy/index.html" target="_blank" rel="noopener noreferrer">privacy page</a></td></tr>
+  </table>
+  <h2>What goes to an AI</h2>
+  <ul>
+    <li>Only if you connect one: Groq, Google Gemini or Claude with a key you entered, or Ollama, which runs on your PC and sends nothing out.</li>
+    <li>What is sent: the question you type; a short note about the bot (symbols, prices, positions; amounts depend on the level you choose below); headlines the bot read; facts you asked it to remember; screenshots you add to a question.</li>
+    <li>What is never sent: your keys, the dashboard password, your account numbers, your name or e-mail (the app does not hold them).</li>
+    <li>Screenshots go to Groq. They go to Google Gemini only if you allow it in Settings, because on Google's free tier Google may use what it gets to improve its products and people may read it.</li>
+    <li>Groq says it does not keep inference data by default, but it may log it for up to 30 days. Read each company's page for what it does with data; the links are in the table above.</li>
+    <li>Settings &gt; Privacy and data shows exactly what the AI was last sent.</li>
+  </ul>
+  <h2>Your choices</h2>
+  <ul>
+    <li><strong>What the AI sees:</strong> everything, only percentages and symbols, or nothing about your account.</li>
+    <li><strong>Remember the chat:</strong> off means the conversation is not saved on your PC and earlier messages are not sent.</li>
+    <li><strong>Phone access:</strong> off by default for a new install. Off means only this PC can open the dashboard.</li>
+    <li><strong>Screenshots to Gemini:</strong> off by default.</li>
+    <li><strong>Log files:</strong> how long they are kept (1 to 90 days). They have keys removed.</li>
+    <li><strong>Export:</strong> a zip of your data without keys and without the password.</li>
+    <li><strong>Clear:</strong> the chat and memory, what the bot learned, Lab results, logs, or all four. Your trades and keys are not cleared there: remove keys under Money and keys, or close the app and delete the folder.</li>
+  </ul>
+  <h2>How the dashboard is protected</h2>
+  <ul>
+    <li>It needs a password. The first visit with the link logs the browser in with an HttpOnly cookie and removes the password from the address bar.</li>
+    <li>It listens only on this PC, unless you turn on phone access.</li>
+    <li>Five wrong tries lock that address for a minute, then longer.</li>
+    <li>A change must come from the page's own address, so another web page cannot press buttons here.</li>
+    <li>Real money is never armed by the app itself. Stop is checked right before every order.</li>
+  </ul>
+  <h2>Children</h2>
+  <p>Trading real money needs a brokerage account in an adult's name; that is the broker's rule, not ours. The app asks for no age, name or identity.</p>
+  <h2>Not financial advice</h2>
+  <p>Money Tree is software. Nothing in it is a recommendation to buy or sell. Read the terms in the guide and in TERMS.txt.</p>
+  <h2>Changes and questions</h2>
+  <p>This page changes only with the code, so every change is in the public history on GitHub. Questions: open an issue there. A security problem: use the private report described in SECURITY.md.</p>
+</div>
+
+<div data-lang="tr">
+  <h1>Money Tree <em>Gizlilik</em></h1>
+  <p class="lead">Money Tree senin bilgisayarında çalışan bir programdır. Hesap yok, bizim sunucumuz yok. Bu sayfa neyin saklandığını, neyin PC'den çıktığını ve kime gittiğini söyler. Koddan üretilir; ikisi uyuşmazsa bir test kırılır.</p>
+  <h2>Kısaca</h2>
+  <ul>
+    <li><strong>Bize hiçbir şey gönderilmez.</strong> BofStudios'un sunucusu, hesap sistemi ve verini görme yolu yok.</li>
+    <li><strong>Reklam yok, izleme yok, analitik yok, çökme raporu yok, veri satışı yok.</strong></li>
+    <li><strong>Anahtarların</strong> Windows kullanıcın için şifreli saklanır (DPAPI). Sadece ait oldukları servise gider, yapay zekâya asla.</li>
+    <li><strong>Her şey tek klasörde</strong>, PC'nde. Ayarlar &gt; Gizlilik ve veri'den açabilir, dışa aktarabilir ve botun senin hakkında tuttuklarını silebilirsin.</li>
+    <li><strong>Uygulama kısa ve açık bir sunucu listesiyle konuşur</strong> (aşağıda). Kod listede olmayan bir sunucuyu anarsa test kırılır.</li>
+    <li><strong>Kod açık.</strong> GitHub'da oku ya da birine okut.</li>
+  </ul>
+  <h2>PC'nde neler saklanır</h2>
+  <p>Klasör <code>%LOCALAPPDATA%\BofStudios\Money Tree AI</code>. Gizli işaretli dosyalar dışa aktarmaya asla girmez.</p>
+  <table>
+    <tr><th>Dosya</th><th>Ne olduğu</th><th>Gizli</th></tr>
+    <tr><td><code>data/keys.dat</code></td><td>Alpaca ve yapay zekâ anahtarların, bu Windows kullanıcısı için şifreli.</td><td>evet</td></tr>
+    <tr><td><code>.env</code></td><td>Elle yazdıysan anahtarların.</td><td>evet</td></tr>
+    <tr><td><code>data/dashboard.token</code></td><td>Panelin ve telefon bağlantısının şifresi.</td><td>evet</td></tr>
+    <tr><td><code>data/trading.db</code></td><td>Tüm işlemler, hesap değeri kayıtları ve kaydedilen mumlar (CSV olarak verilir).</td><td></td></tr>
+    <tr><td><code>data/user_profile.json</code></td><td>Seçimlerin: dil, kararı kimin verdiği, izleme listesi.</td><td></td></tr>
+    <tr><td><code>data/mentor_memory.json</code></td><td>Yapay zekâyla sohbetin ve hatırlamasını istediğin bilgiler.</td><td></td></tr>
+    <tr><td><code>data/mentor_feed.json</code></td><td>Uygulamanın yan sohbette söyledikleri.</td><td></td></tr>
+    <tr><td><code>data/brain</code></td><td>Botun öğrendikleri: haber hafızası, strateji ilerlemesi, sürü.</td><td></td></tr>
+    <tr><td><code>data/lab.json</code></td><td>Son Lab tekrarı ve avantaj filtresi anahtarı.</td><td></td></tr>
+    <tr><td><code>data/privacy.json</code></td><td>Bu gizlilik seçimleri.</td><td></td></tr>
+    <tr><td><code>data/journal.json</code></td><td>Sayaçlar: uygulamanın ne kadar çalıştığı.</td><td></td></tr>
+    <tr><td><code>data/engine_state.json</code></td><td>Açık pozisyonlar ve durdurma bayrağı, yeniden başlatmaya dayanmak için.</td><td></td></tr>
+    <tr><td><code>data/risk_day.json</code></td><td>Günlük sınır için bugünkü zarar sayacı.</td><td></td></tr>
+    <tr><td><code>data/live_feed.json</code></td><td>Canlı akışın son satırları.</td><td></td></tr>
+    <tr><td><code>logs</code></td><td>Kayıt dosyaları, anahtarlar temizlenmiş.</td><td></td></tr>
+  </table>
+  <h2>Uygulama kimlerle konuşuyor</h2>
+  <p>Listenin tamamı bu. Bir servis iki kez görünüyorsa birden fazla adresi var.</p>
+  <table>
+    <tr><th>Kim</th><th>Adres</th><th>Oraya ne gider</th><th>Ne zaman</th><th>Gizlilik sayfaları</th></tr>
+    <tr><td>Apple newsroom</td><td><code>www.apple.com</code></td><td>Herkese açık haber ve duyurular okunur. Senin hakkında bir şey gönderilmez, yalnızca istek.</td><td>Uygulama çalışırken okunur</td><td></td></tr>
+    <tr><td>Bank of England</td><td><code>www.bankofengland.co.uk</code></td><td>Herkese açık haber ve duyurular okunur. Senin hakkında bir şey gönderilmez, yalnızca istek.</td><td>Uygulama çalışırken okunur</td><td></td></tr>
+    <tr><td>Bank of Japan</td><td><code>www.boj.or.jp</code></td><td>Herkese açık haber ve duyurular okunur. Senin hakkında bir şey gönderilmez, yalnızca istek.</td><td>Uygulama çalışırken okunur</td><td></td></tr>
+    <tr><td>Business Wire</td><td><code>feed.businesswire.com</code></td><td>Herkese açık haber ve duyurular okunur. Senin hakkında bir şey gönderilmez, yalnızca istek.</td><td>Uygulama çalışırken okunur</td><td></td></tr>
+    <tr><td>European Central Bank</td><td><code>www.ecb.europa.eu</code></td><td>Herkese açık haber ve duyurular okunur. Senin hakkında bir şey gönderilmez, yalnızca istek.</td><td>Uygulama çalışırken okunur</td><td></td></tr>
+    <tr><td>Frankfurter</td><td><code>api.frankfurter.dev</code></td><td>Herkese açık döviz kurları.</td><td>Uygulama çalışırken okunur</td><td></td></tr>
+    <tr><td>GlobeNewswire</td><td><code>www.globenewswire.com</code></td><td>Herkese açık haber ve duyurular okunur. Senin hakkında bir şey gönderilmez, yalnızca istek.</td><td>Uygulama çalışırken okunur</td><td></td></tr>
+    <tr><td>Google blog</td><td><code>blog.google</code></td><td>Herkese açık haber ve duyurular okunur. Senin hakkında bir şey gönderilmez, yalnızca istek.</td><td>Uygulama çalışırken okunur</td><td></td></tr>
+    <tr><td>Microsoft newsroom</td><td><code>news.microsoft.com</code></td><td>Herkese açık haber ve duyurular okunur. Senin hakkında bir şey gönderilmez, yalnızca istek.</td><td>Uygulama çalışırken okunur</td><td></td></tr>
+    <tr><td>NVIDIA newsroom</td><td><code>nvidianews.nvidia.com</code></td><td>Herkese açık haber ve duyurular okunur. Senin hakkında bir şey gönderilmez, yalnızca istek.</td><td>Uygulama çalışırken okunur</td><td></td></tr>
+    <tr><td>OpenAI news</td><td><code>openai.com</code></td><td>Herkese açık haber ve duyurular okunur. Senin hakkında bir şey gönderilmez, yalnızca istek.</td><td>Uygulama çalışırken okunur</td><td></td></tr>
+    <tr><td>PR Newswire</td><td><code>www.prnewswire.com</code></td><td>Herkese açık haber ve duyurular okunur. Senin hakkında bir şey gönderilmez, yalnızca istek.</td><td>Uygulama çalışırken okunur</td><td></td></tr>
+    <tr><td>The White House</td><td><code>www.whitehouse.gov</code></td><td>Herkese açık haber ve duyurular okunur. Senin hakkında bir şey gönderilmez, yalnızca istek.</td><td>Uygulama çalışırken okunur</td><td></td></tr>
+    <tr><td>US Dept. of Defense</td><td><code>www.defense.gov</code></td><td>Herkese açık haber ve duyurular okunur. Senin hakkında bir şey gönderilmez, yalnızca istek.</td><td>Uygulama çalışırken okunur</td><td></td></tr>
+    <tr><td>US Dept. of Energy</td><td><code>www.energy.gov</code></td><td>Herkese açık haber ve duyurular okunur. Senin hakkında bir şey gönderilmez, yalnızca istek.</td><td>Uygulama çalışırken okunur</td><td></td></tr>
+    <tr><td>US EIA</td><td><code>www.eia.gov</code></td><td>Herkese açık haber ve duyurular okunur. Senin hakkında bir şey gönderilmez, yalnızca istek.</td><td>Uygulama çalışırken okunur</td><td></td></tr>
+    <tr><td>US FDA</td><td><code>www.fda.gov</code></td><td>Herkese açık haber ve duyurular okunur. Senin hakkında bir şey gönderilmez, yalnızca istek.</td><td>Uygulama çalışırken okunur</td><td></td></tr>
+    <tr><td>US Federal Reserve</td><td><code>www.federalreserve.gov</code></td><td>Herkese açık haber ve duyurular okunur. Senin hakkında bir şey gönderilmez, yalnızca istek.</td><td>Uygulama çalışırken okunur</td><td></td></tr>
+    <tr><td>US SEC</td><td><code>www.sec.gov</code></td><td>Herkese açık basın bildirileri.</td><td>Uygulama çalışırken okunur</td><td><a href="https://www.sec.gov/privacy" target="_blank" rel="noopener noreferrer">gizlilik sayfası</a></td></tr>
+    <tr><td>US SEC (EDGAR)</td><td><code>data.sec.gov</code></td><td>Şirketlerin herkese açık bildirimleri.</td><td>Uygulama çalışırken okunur</td><td><a href="https://www.sec.gov/privacy" target="_blank" rel="noopener noreferrer">gizlilik sayfası</a></td></tr>
+    <tr><td>US SEC (EDGAR)</td><td><code>efts.sec.gov</code></td><td>Herkese açık bildirimlerde arama.</td><td>Uygulama çalışırken okunur</td><td><a href="https://www.sec.gov/privacy" target="_blank" rel="noopener noreferrer">gizlilik sayfası</a></td></tr>
+    <tr><td>US Trade Representative</td><td><code>ustr.gov</code></td><td>Herkese açık haber ve duyurular okunur. Senin hakkında bir şey gönderilmez, yalnızca istek.</td><td>Uygulama çalışırken okunur</td><td></td></tr>
+    <tr><td>Wikimedia</td><td><code>en.wikipedia.org</code></td><td>Sayfa görüntülenme sinyali için şirketin sayfa adı.</td><td>Uygulama çalışırken okunur</td><td><a href="https://foundation.wikimedia.org/wiki/Policy:Privacy_policy" target="_blank" rel="noopener noreferrer">gizlilik sayfası</a></td></tr>
+    <tr><td>Wikimedia</td><td><code>wikimedia.org</code></td><td>Herkese açık sayfa görüntülenme sayıları.</td><td>Uygulama çalışırken okunur</td><td><a href="https://foundation.wikimedia.org/wiki/Policy:Privacy_policy" target="_blank" rel="noopener noreferrer">gizlilik sayfası</a></td></tr>
+    <tr><td>Alpaca</td><td><code>api.alpaca.markets</code></td><td>Emirlerin, pozisyonların ve hesabın; fiyatlar ve haberler. Alpaca anahtarların her isteği imzalar.</td><td>Sadece o servisin anahtarını girince</td><td><a href="https://alpaca.markets/disclosures" target="_blank" rel="noopener noreferrer">gizlilik sayfası</a></td></tr>
+    <tr><td>Alpaca</td><td><code>data.alpaca.markets</code></td><td>Fiyatlar, 1 dakikalık mumlar ve haberler.</td><td>Sadece o servisin anahtarını girince</td><td><a href="https://alpaca.markets/disclosures" target="_blank" rel="noopener noreferrer">gizlilik sayfası</a></td></tr>
+    <tr><td>Alpaca</td><td><code>paper-api.alpaca.markets</code></td><td>Aynısı, deneme (paper) hesabı için.</td><td>Sadece o servisin anahtarını girince</td><td><a href="https://alpaca.markets/disclosures" target="_blank" rel="noopener noreferrer">gizlilik sayfası</a></td></tr>
+    <tr><td>Google (Gemini)</td><td><code>generativelanguage.googleapis.com</code></td><td>Groq ile aynı. Google&#x27;ın ücretsiz katmanında Google gönderdiklerini ürünlerini geliştirmek için kullanabilir ve insanlar okuyabilir. Ekran görüntüsü buraya sadece Ayarlar&#x27;dan izin verirsen gider.</td><td>Sadece o servisin anahtarını girince</td><td><a href="https://aistudio.google.com/docs/terms" target="_blank" rel="noopener noreferrer">gizlilik sayfası</a></td></tr>
+    <tr><td>Groq</td><td><code>api.groq.com</code></td><td>Sorun, kısa bir bot durumu (gizlilik düzeyine göre hisse, fiyat, pozisyon) ve eklediğin ekran görüntüleri. Anahtarların asla. Groq varsayılan olarak veriyi saklamadığını söylüyor ama en çok 30 gün kayıt tutabilir.</td><td>Sadece o servisin anahtarını girince</td><td><a href="https://groq.com/privacy-policy" target="_blank" rel="noopener noreferrer">gizlilik sayfası</a></td></tr>
+    <tr><td>GitHub</td><td><code>api.github.com</code></td><td>Uygulamanın en yeni sürüm numarasını sorar. Senin hakkında bir şey göndermez.</td><td>Sadece sen istersen</td><td><a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener noreferrer">gizlilik sayfası</a></td></tr>
+    <tr><td>Alpaca</td><td><code>alpaca.markets</code></td><td>Alpaca sayfalarına bağlantı.</td><td>Tıklayabileceğin bağlantı; uygulama bağlanmaz</td><td><a href="https://alpaca.markets/disclosures" target="_blank" rel="noopener noreferrer">gizlilik sayfası</a></td></tr>
+    <tr><td>Alpaca</td><td><code>app.alpaca.markets</code></td><td>Hesap açmak ya da anahtar üretmek için bağlantı.</td><td>Tıklayabileceğin bağlantı; uygulama bağlanmaz</td><td><a href="https://alpaca.markets/disclosures" target="_blank" rel="noopener noreferrer">gizlilik sayfası</a></td></tr>
+    <tr><td>GitHub</td><td><code>github.com</code></td><td>Uygulamanın kaynak koduna bağlantı.</td><td>Tıklayabileceğin bağlantı; uygulama bağlanmaz</td><td><a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement" target="_blank" rel="noopener noreferrer">gizlilik sayfası</a></td></tr>
+    <tr><td>Groq</td><td><code>console.groq.com</code></td><td>Ücretsiz anahtar üretmek için bağlantı.</td><td>Tıklayabileceğin bağlantı; uygulama bağlanmaz</td><td><a href="https://groq.com/privacy-policy" target="_blank" rel="noopener noreferrer">gizlilik sayfası</a></td></tr>
+    <tr><td>This PC</td><td><code>127.0.0.1</code></td><td>Uygulamanın kendi penceresi ve kendin çalıştırdığın yapay zekâ (Ollama). PC&#x27;nden çıkmaz.</td><td>Sadece bu PC</td><td></td></tr>
+    <tr><td>Anthropic (Claude)</td><td><code>api.anthropic.com</code></td><td>Groq ile aynı, sadece Claude anahtarı girdiysen.</td><td>O servisi kullanınca gömülü bir parça kullanır</td><td><a href="https://www.anthropic.com/legal/privacy" target="_blank" rel="noopener noreferrer">gizlilik sayfası</a></td></tr>
+    <tr><td>Telegram</td><td><code>api.telegram.org</code></td><td>İstediğin uyarılar, kendi sohbetine, sadece bot anahtarı girdiysen.</td><td>O servisi kullanınca gömülü bir parça kullanır</td><td><a href="https://telegram.org/privacy" target="_blank" rel="noopener noreferrer">gizlilik sayfası</a></td></tr>
+    <tr><td>Yahoo Finance</td><td><code>query1.finance.yahoo.com</code></td><td>Alpaca anahtarı yokken ya da Alpaca dinlenirken fiyat ve mumlar, ve Lab tekrarının 1 dakikalık mumları (sadece hisse adları).</td><td>O servisi kullanınca gömülü bir parça kullanır</td><td><a href="https://legal.yahoo.com/us/en/yahoo/privacy/index.html" target="_blank" rel="noopener noreferrer">gizlilik sayfası</a></td></tr>
+  </table>
+  <h2>Yapay zekâya ne gider</h2>
+  <ul>
+    <li>Sadece sen bağlarsan: girdiğin anahtarla Groq, Google Gemini ya da Claude; ya da PC'nde çalışan ve dışarı hiçbir şey göndermeyen Ollama.</li>
+    <li>Gidenler: yazdığın soru; bot hakkında kısa bir not (hisse adları, fiyatlar, pozisyonlar; tutarlar aşağıda seçtiğin düzeye göre); botun okuduğu haber başlıkları; hatırlamasını istediğin bilgiler; soruna eklediğin ekran görüntüleri.</li>
+    <li>Asla gitmeyenler: anahtarların, panel şifresi, hesap numaraların, adın ya da e-postan (uygulama bunları tutmaz).</li>
+    <li>Ekran görüntüleri Groq'a gider. Google Gemini'ye sadece Ayarlar'dan izin verirsen gider; çünkü Google'ın ücretsiz katmanında Google gelenleri ürünlerini geliştirmek için kullanabilir ve insanlar okuyabilir.</li>
+    <li>Groq varsayılan olarak çıkarım verisini saklamadığını söylüyor ama en çok 30 gün kayıt tutabilir. Her şirketin veriyle ne yaptığı için kendi sayfasını oku; bağlantılar yukarıdaki tabloda.</li>
+    <li>Ayarlar &gt; Gizlilik ve veri, yapay zekâya en son ne gönderildiğini aynen gösterir.</li>
+  </ul>
+  <h2>Seçimlerin</h2>
+  <ul>
+    <li><strong>Yapay zekâ ne görüyor:</strong> her şey, sadece yüzdeler ve hisse adları ya da hesabın hakkında hiçbir şey.</li>
+    <li><strong>Sohbeti hatırla:</strong> kapalıysa sohbet PC'ne kaydedilmez ve eski mesajlar gönderilmez.</li>
+    <li><strong>Telefondan erişim:</strong> yeni kurulumda varsayılan kapalı. Kapalıysa paneli sadece bu PC açabilir.</li>
+    <li><strong>Ekran görüntüsü Gemini'ye:</strong> varsayılan kapalı.</li>
+    <li><strong>Kayıt dosyaları:</strong> ne kadar tutulacağı (1 ile 90 gün). Anahtarlar temizlenmiştir.</li>
+    <li><strong>Dışa aktar:</strong> anahtarsız ve şifresiz bir zip.</li>
+    <li><strong>Temizle:</strong> sohbet ve hafıza, botun öğrendikleri, Lab sonuçları, kayıtlar ya da dördü birden. İşlemlerin ve anahtarların orada silinmez: anahtarları Para ve anahtarlar'dan sil ya da uygulamayı kapatıp klasörü sil.</li>
+  </ul>
+  <h2>Panel nasıl korunur</h2>
+  <ul>
+    <li>Şifre ister. Bağlantıyla ilk ziyaret tarayıcıyı HttpOnly bir çerezle içeri alır ve şifreyi adres çubuğundan siler.</li>
+    <li>Sadece bu PC'de dinler; telefondan erişimi sen açmadıkça.</li>
+    <li>Beş yanlış deneme o adresi bir dakika, sonra daha uzun süre kilitler.</li>
+    <li>Bir değişiklik sayfanın kendi adresinden gelmeli; başka bir web sayfası buradaki düğmelere basamaz.</li>
+    <li>Gerçek parayı uygulamanın kendisi asla kurmaz. Durdur, her emirden hemen önce kontrol edilir.</li>
+  </ul>
+  <h2>Çocuklar</h2>
+  <p>Gerçek para ile işlem için yetişkin adına bir aracı kurum hesabı gerekir; bu bizim değil, aracı kurumun kuralı. Uygulama yaş, ad ya da kimlik sormaz.</p>
+  <h2>Finansal tavsiye değildir</h2>
+  <p>Money Tree bir yazılımdır. İçindeki hiçbir şey al ya da sat önerisi değildir. Şartları kılavuzda ve TERMS.txt içinde oku.</p>
+  <h2>Değişiklikler ve sorular</h2>
+  <p>Bu sayfa sadece kodla birlikte değişir; yani her değişiklik GitHub'daki herkese açık geçmişte durur. Sorular için orada bir issue aç. Güvenlik sorunu için SECURITY.md'deki özel bildirimi kullan.</p>
+</div>
+</main>
+<script src="/guide.js"></script>
+</body>
+</html>

@@ -484,6 +484,14 @@ class Lab:
             return False
         return self.start()
 
+    def clear(self) -> None:
+        """Forget the last replay and its skip list (the edge switch stays)."""
+        with self._lock:
+            self._load()
+            self._report = None
+            self._blocked = set()
+            self._save()
+
     def status(self) -> dict:
         self._load()
         nxt = None
