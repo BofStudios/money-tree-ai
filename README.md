@@ -11,7 +11,7 @@
   <a href="https://github.com/BofStudios/money-tree-ai/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/BofStudios/money-tree-ai?style=for-the-badge&color=ffd60a&labelColor=111&filter=desktop-*"></a>
   <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-ffd60a?style=for-the-badge&labelColor=111"></a>
   <img alt="Windows" src="https://img.shields.io/badge/Windows-10%20%7C%2011-ffd60a?style=for-the-badge&labelColor=111">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-387%20passing-32d583?style=for-the-badge&labelColor=111">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-403%20passing-32d583?style=for-the-badge&labelColor=111">
 </p>
 
 > [!WARNING]
@@ -74,6 +74,43 @@ Practice money stays because it is the only way to see the bot work before any
 money is at risk, and because a new Alpaca live account cannot trade until it
 is funded. (Midas signal mode was removed in 4.0: an old config that still says
 `signal` starts on practice money.)
+
+## Desktop 10.0: the Lab
+
+Ideas taken from the open-source trading bots, built into Money Tree:
+[Freqtrade](https://www.freqtrade.io/en/stable/) (backtesting, Edge,
+[lookahead analysis](https://www.freqtrade.io/en/stable/lookahead-analysis/))
+and [Jesse](https://docs.jesse.trade/docs/backtest) (metrics and charts).
+
+- **The Lab tab.** Ultra's rules replayed on the last 7 days of real
+  one-minute bars for all 24 Ultra symbols, with the same code the live bot
+  runs. 8.0's old dip rule and 9.0's vote side by side: trades, win rate,
+  average per trade, profit factor, the account through the replay with
+  Ultra's money rules, max drawdown, Sharpe, Sortino, how trades ended,
+  every symbol. It runs by itself about every 18 hours (its own thread,
+  about 40 seconds) or when you press Run. Saved in `data/lab.json`.
+- **No peeking.** A decision reads only the bars up to that minute; the
+  trade starts at the next minute's open; inside one minute the stop is
+  checked before the target; 0.03% cost a trip. A test cuts the future off
+  and checks that no decision changes.
+- **Edge filter.** A symbol the replay lost on (8+ trades, -0.15% a trade or
+  worse) is skipped by Ultra until the next run. On by default, one switch
+  to turn it off. It only removes buys.
+- **Your real trades.** Net profit, profit factor, expectancy, average win
+  and loss, max drawdown, Sharpe and Sortino, streaks, and the breakdown by
+  book, New York hour, weekday and symbol, plus a calendar of days.
+- **Screenshots in the chat.** The paperclip, Ctrl+V or drag and drop: up to
+  three images (Midas, a chart, a news page) go with that one question to a
+  free vision model (Groq, then Gemini). They are not saved. Typing stop
+  still stops the bot at once, before anything goes to an AI.
+- **A faster vote.** The confluence indicators run without Python loops:
+  the same numbers, about 11 times faster on every ten-second look.
+
+The honest result (replay of 28 Oct - 5 Nov 2026): the 9.0 rule lost
+0.08% a trade (307 trades, 49.5% wins, profit factor 0.65); 8.0 lost 0.11%.
+Learning the edge list on the first four days and testing on the last three
+changed the loss from -0.120% to -0.117% a trade: almost nothing. The Lab
+shows these numbers as they are. It is a way to see the truth, not a promise.
 
 ## Desktop 9.0.1: calm start, one buy at a time
 

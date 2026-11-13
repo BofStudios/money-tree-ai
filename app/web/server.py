@@ -15,6 +15,7 @@ from app.mentor.ai import AIMentor
 from app.mentor.narrator import Narrator
 from app.storage.repository import Repository
 from app.web.brain_routes import build_brain_router
+from app.web.lab_routes import build_lab_router
 from app.web.mode_routes import build_mode_router
 from app.web.money_routes import build_money_router
 from app.web.routes import build_router
@@ -61,6 +62,7 @@ def create_app(
     )
     api.include_router(build_brain_router(engine, token))
     api.include_router(build_mode_router(engine, token))
+    api.include_router(build_lab_router(engine, repo, token))
 
     @api.middleware("http")
     async def _only_by_address(request, call_next):

@@ -22,3 +22,11 @@ def _no_pace(request, monkeypatch):
 
     monkeypatch.setattr(PE, "CALM_SECONDS", 0)
     monkeypatch.setattr(PE, "BUY_GAP", {"portfolio": 0, "scalp": 0})
+
+
+@pytest.fixture(autouse=True)
+def _lab_in_tmp(tmp_path, monkeypatch):
+    """The Lab's file lives in the test's own folder, never in data/."""
+    from app.engine import lab
+
+    monkeypatch.setattr(lab, "default_path", lambda: tmp_path / "lab.json")

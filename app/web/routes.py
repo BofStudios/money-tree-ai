@@ -383,7 +383,7 @@ def build_router(
         return {"ok": startup.request_focus()}
 
     @router.post("/ask", dependencies=guarded)
-    def ask(question: str = Body(..., embed=True)) -> dict:
+    def ask(question: str = Body("", embed=True), images: list | None = Body(None, embed=True)) -> dict:
         # Stop and Start never go to the AI: they are done here, at once.
         command = commands.command(question)
         w = engine.words()
@@ -393,6 +393,24 @@ def build_router(
         if command == "start":
             engine.resume("chat")
             return {"answer": w.chat_started(), "action": "resumed"}
+        if images:
+            # 10.0: screenshots go to a free vision model with this question only.
+            from app.mentor.vision import ImageError, clean_images
+
+            try:
+                pics = clean_images(images)
+            except ImageError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from None
+            if not claude.can_look():
+                raise HTTPException(status_code=503, detail=(
+                    "Reading screenshots needs a free GROQ_API_KEY or GEMINI_API_KEY (Settings > AI)."))
+            answer = claude.look(question.strip(), pics, engine.mentor_context(),
+                                 turkish=getattr(engine, "language", "en") == "tr")
+            if answer is None:
+                raise HTTPException(status_code=503, detail="The image model did not answer. Try again in a minute.")
+            return {"answer": answer}
+        if not question.strip():
+            raise HTTPException(status_code=400, detail="Type a question.")
         answer = claude.answer(question, engine.mentor_context())
         if answer is None:
             raise HTTPException(

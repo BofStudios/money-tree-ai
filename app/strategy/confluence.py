@@ -70,32 +70,43 @@ def rsi(close: np.ndarray, n: int = 14) -> np.ndarray:
     return out
 
 
+def _windows(x: np.ndarray, n: int) -> np.ndarray:
+    """Every run of n values ending at index n-1, n, ... (10.0: no Python loops)."""
+    return np.lib.stride_tricks.sliding_window_view(np.asarray(x, float), n)
+
+
 def stoch_rsi(close: np.ndarray, n: int = 14, k: int = 3, d: int = 3) -> tuple[np.ndarray, np.ndarray]:
     r = rsi(close, n)
     raw = np.full(len(r), np.nan)
-    for i in range(n * 2 - 1, len(r)):
-        w = r[i - n + 1:i + 1]
-        lo, hi = np.nanmin(w), np.nanmax(w)
-        raw[i] = 50.0 if hi - lo <= 0 else (r[i] - lo) / (hi - lo) * 100
+    start = n * 2 - 1
+    if len(r) > start:
+        w = _windows(r[start - n + 1:], n)
+        lo, hi = np.min(w, axis=1), np.max(w, axis=1)   # RSI is set from index n-1 on
+        span = hi - lo
+        with np.errstate(invalid="ignore", divide="ignore"):
+            raw[start:] = np.where(span > 0, (r[start:] - lo) / np.where(span > 0, span, 1) * 100, 50.0)
     kk = _sma(raw, k)
     return kk, _sma(kk, d)
 
 
 def _sma(x: np.ndarray, n: int) -> np.ndarray:
     out = np.full(len(x), np.nan)
-    for i in range(n - 1, len(x)):
-        w = x[i - n + 1:i + 1]
-        if not np.any(np.isnan(w)):
-            out[i] = w.mean()
+    if len(x) < n:
+        return out
+    w = _windows(x, n)
+    out[n - 1:] = np.where(np.isnan(w).any(axis=1), np.nan, w.mean(axis=1))
     return out
 
 
 def bollinger_pctb(close: np.ndarray, n: int = 20, width: float = 2.0) -> np.ndarray:
     out = np.full(len(close), np.nan)
-    for i in range(n - 1, len(close)):
-        w = close[i - n + 1:i + 1]
-        mid, sd = w.mean(), w.std()
-        out[i] = 0.5 if sd == 0 else (close[i] - (mid - width * sd)) / (2 * width * sd)
+    if len(close) < n:
+        return out
+    w = _windows(close, n)
+    mid, sd = w.mean(axis=1), w.std(axis=1)
+    c = np.asarray(close, float)[n - 1:]
+    with np.errstate(invalid="ignore", divide="ignore"):
+        out[n - 1:] = np.where(sd == 0, 0.5, (c - (mid - width * sd)) / (2 * width * np.where(sd == 0, 1, sd)))
     return out
 
 
@@ -122,19 +133,25 @@ def mfi(high: np.ndarray, low: np.ndarray, close: np.ndarray, vol: np.ndarray, n
 
 def williams_r(high: np.ndarray, low: np.ndarray, close: np.ndarray, n: int = 14) -> np.ndarray:
     out = np.full(len(close), np.nan)
-    for i in range(n - 1, len(close)):
-        hi, lo = high[i - n + 1:i + 1].max(), low[i - n + 1:i + 1].min()
-        out[i] = -50.0 if hi == lo else (hi - close[i]) / (hi - lo) * -100
+    if len(close) < n:
+        return out
+    hi, lo = _windows(high, n).max(axis=1), _windows(low, n).min(axis=1)
+    c = np.asarray(close, float)[n - 1:]
+    span = hi - lo
+    out[n - 1:] = np.where(span == 0, -50.0, (hi - c) / np.where(span == 0, 1, span) * -100)
     return out
 
 
 def cci(high: np.ndarray, low: np.ndarray, close: np.ndarray, n: int = 20) -> np.ndarray:
-    tp = (high + low + close) / 3
+    tp = (np.asarray(high, float) + low + close) / 3
     out = np.full(len(tp), np.nan)
-    for i in range(n - 1, len(tp)):
-        w = tp[i - n + 1:i + 1]
-        dev = np.abs(w - w.mean()).mean()
-        out[i] = 0.0 if dev == 0 else (tp[i] - w.mean()) / (0.015 * dev)
+    if len(tp) < n:
+        return out
+    w = _windows(tp, n)
+    mean = w.mean(axis=1)
+    dev = np.abs(w - mean[:, None]).mean(axis=1)
+    t = tp[n - 1:]
+    out[n - 1:] = np.where(dev == 0, 0.0, (t - mean) / (0.015 * np.where(dev == 0, 1, dev)))
     return out
 
 

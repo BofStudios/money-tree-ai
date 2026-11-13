@@ -187,6 +187,9 @@ class PortfolioEngine:
         # 15-minute strategy. Balanced is the portfolio. set_ultra() switches.
         self.style = STYLE
         self.scalper = Scalper(self)
+        from app.engine.lab import Lab
+
+        self.lab = Lab(self)            # 10.0: the replay of Ultra's rules, and the edge filter
         self.history_bars = SCALP_BARS if STYLE == "scalp" else HISTORY_BARS
         self._live: dict[str, float] = {}             # symbol -> latest trade price, scalp style
 
@@ -942,6 +945,10 @@ class PortfolioEngine:
             except Exception as exc:
                 self._last_error = str(exc)
                 log.exception("scan failed")
+            try:
+                self.lab.maybe_run()        # its own thread, about every 18 hours
+            except Exception:
+                log.exception("the lab could not start")
                 self.mentor.error("Scan", str(exc))
                 self.monitor.info(activity.WARN, self.words().cycle_failed(), _short(exc))
                 self.events.publish("error", {"message": str(exc)})

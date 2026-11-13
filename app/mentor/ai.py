@@ -209,6 +209,20 @@ class AIMentor:
         self.memory.record(question, reply)
         return reply
 
+    def can_look(self) -> bool:
+        """A free model that reads images has a key (Groq or Gemini)."""
+        return bool(self._keys.get("groq") or self._keys.get("gemini"))
+
+    def look(self, question: str, images: list[tuple[str, str]], state: dict, turkish: bool = False) -> str | None:
+        """10.0: a question with screenshots. The images are sent once and not
+        kept; the memory keeps only the text of the question and the reply."""
+        from app.mentor.vision import look
+
+        reply = look(self._keys, question, _render(state), images, turkish)
+        if reply:
+            self.memory.record(f"{question} [{len(images)} screenshot(s)]".strip(), reply)
+        return reply
+
     def commentary(self, state: dict, force: bool = False) -> str | None:
         """A periodic read of the whole book. Rate limited to keep costs sane."""
         if not self.available:

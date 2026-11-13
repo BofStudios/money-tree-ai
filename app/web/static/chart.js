@@ -1069,13 +1069,23 @@ const REMEMBER = /^(remember|hatirla|hatırla)\b[:,]?\s*(that\s+)?/i;
 $("askForm").onsubmit = async (e) => {
   e.preventDefault();
   const question = $("askInput").value.trim();
-  if (!question) return;
+  const shots = window.mtShots ? window.mtShots.count() : 0;
+  if (!question && !shots) return;
+  const images = shots ? window.mtShots.take() : [];
   $("askInput").value = "";
-  addMessage({ text: question, from: "you" });
+  addMessage({ text: question || "🖼", from: "you" });
+  if (images.length) {
+    // The thumbnails stay in this window only; nothing is saved.
+    const row = document.createElement("div");
+    row.className = "msg-shots";
+    for (const src of images) { const img = document.createElement("img"); img.src = src; img.alt = ""; row.appendChild(img); }
+    const last = $("chat").lastElementChild;
+    if (last) last.querySelector(".bubble").appendChild(row);
+  }
   $("askButton").disabled = true;
 
   const asFact = question.replace(REMEMBER, "");
-  if (REMEMBER.test(question) && asFact) {
+  if (!images.length && REMEMBER.test(question) && asFact) {
     try {
       const { memory } = await post("/api/mentor/memory", { text: asFact });
       aiMemory = memory;
@@ -1089,7 +1099,7 @@ $("askForm").onsubmit = async (e) => {
 
   showTyping(true);
   try {
-    const { answer } = await post("/api/ask", { question });
+    const { answer } = await post("/api/ask", images.length ? { question, images } : { question });
     showTyping(false);
     addMessage({ text: answer, level: "answer" });
   } catch (err) {

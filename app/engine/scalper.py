@@ -241,8 +241,11 @@ class Scalper:
                                        else f"{why} · {result}"))
 
         tipped = {s for s, (until, _) in self.tips.items() if until > time.time()}
+        lab = getattr(eng, "lab", None)
         ranked = []
         for symbol, c in charts.items():
+            if lab is not None and lab.edge_blocked(symbol):
+                continue     # 10.0: the Lab's replay lost on this symbol; skipped until the next run
             got = score(c, symbol in tipped)
             if got is not None:
                 ranked.append((got[0], symbol, got[1], c))
@@ -418,7 +421,15 @@ class Scalper:
                       "rsi": RSI_MAX, "dip": DIP_ATR,
                       "max_hold": MAX_HOLD_MIN, "seconds": eng.config.scan_interval_seconds},
             "universe": len(self.symbols()),
+            "edge_skipped": self._edge_skipped(),
         }
+
+    def _edge_skipped(self) -> list[str]:
+        lab = getattr(self.engine, "lab", None)
+        try:
+            return sorted(s for s in self.symbols() if lab is not None and lab.edge_blocked(s))
+        except Exception:
+            return []
 
 
 def _ny_date(iso: str) -> str:
