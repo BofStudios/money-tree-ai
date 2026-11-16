@@ -15,6 +15,7 @@ from app.mentor.ai import AIMentor
 from app.mentor.narrator import Narrator
 from app.storage.repository import Repository
 from app.web.auth import COOKIE, COOKIE_DAYS, SAFE_METHODS, Auth, same_origin
+from app.web.bot_routes import build_bot_router
 from app.web.brain_routes import build_brain_router
 from app.web.lab_routes import build_lab_router
 from app.web.privacy_routes import build_privacy_router
@@ -66,6 +67,7 @@ def create_app(
     api.include_router(build_brain_router(engine, auth))
     api.include_router(build_mode_router(engine, auth))
     api.include_router(build_lab_router(engine, repo, auth))
+    api.include_router(build_bot_router(engine, repo, events, auth))
     api.include_router(build_privacy_router(engine, repo, claude, restarter, auth))
 
     @api.middleware("http")

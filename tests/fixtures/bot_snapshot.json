@@ -1,0 +1,162 @@
+{
+ "name": "Money Bot",
+ "version": "10.1.0",
+ "account": {
+  "mode": "paper",
+  "armed": false,
+  "halted": false,
+  "engine": "running",
+  "book": "balanced"
+ },
+ "market": {
+  "open": true,
+  "label": "The market is open. It closes at Mon 16:00 NY.",
+  "next_change_at": 1794862800000
+ },
+ "tiles": {
+  "fills": {
+   "closed": 0,
+   "max": 0,
+   "opened": 0
+  },
+  "positions": {
+   "open": 0,
+   "max": 3
+  },
+  "net": {
+   "today": 0,
+   "today_pct": 0.0,
+   "unrealized": 0,
+   "week": 0,
+   "all": 0,
+   "fees_today": 0.0,
+   "since": null
+  },
+  "capital": {
+   "start_today": null,
+   "equity": 10000.0,
+   "cash": 0.0,
+   "budget": null
+  }
+ },
+ "crew": [
+  {
+   "id": "orion",
+   "name": "Orion",
+   "role": "planner",
+   "role_label": "Plans",
+   "state": "idle",
+   "last": "The bot examines 8 stocks.: Done. There are no trade signals.",
+   "last_at": 1794855088667,
+   "today": {
+    "lines": 5,
+    "acted": 0
+   }
+  },
+  {
+   "id": "atlas",
+   "name": "Atlas",
+   "role": "scout",
+   "role_label": "Scans",
+   "state": "idle",
+   "last": "The bot gets 15-minute prices for 8 stocks.: Done. Prices are ready for 8 of 8 stocks.",
+   "last_at": 1794855088647,
+   "today": {
+    "lines": 6,
+    "acted": 0
+   }
+  },
+  {
+   "id": "vega",
+   "name": "Vega",
+   "role": "news",
+   "role_label": "Reads the news",
+   "state": "idle",
+   "last": null,
+   "last_at": null,
+   "today": {
+    "lines": 0,
+    "acted": 0
+   }
+  },
+  {
+   "id": "titan",
+   "name": "Titan",
+   "role": "trader",
+   "role_label": "Trades",
+   "state": "idle",
+   "last": "Done. Positions: 0. Next check in 60 seconds.",
+   "last_at": 1794855088764,
+   "today": {
+    "lines": 4,
+    "acted": 0
+   }
+  },
+  {
+   "id": "luna",
+   "name": "Luna",
+   "role": "exits",
+   "role_label": "Exits",
+   "state": "idle",
+   "last": "The bot examines the positions and the open orders.: Positions: 0.",
+   "last_at": 1794855087909,
+   "today": {
+    "lines": 4,
+    "acted": 0
+   }
+  },
+  {
+   "id": "nova",
+   "name": "Nova",
+   "role": "risk",
+   "role_label": "Guards",
+   "state": "idle",
+   "last": "The bot reads your account.: Equity: $10,000.00. Cash: $10,000.00.",
+   "last_at": 1794855087906,
+   "today": {
+    "lines": 8,
+    "acted": 0
+   }
+  },
+  {
+   "id": "rigel",
+   "name": "Rigel",
+   "role": "research",
+   "role_label": "Researches",
+   "state": "idle",
+   "last": "The bot reads the SEC filings of 4 companies (8-K events, insider trades).: 0/4",
+   "last_at": 1794855089389,
+   "today": {
+    "lines": 5,
+    "acted": 0
+   }
+  }
+ ],
+ "queue": [],
+ "funnel": {
+  "day": "2026-11-16",
+  "steps": [],
+  "blocked": []
+ },
+ "focus": null,
+ "risk": {
+  "budget": null,
+  "per_trade_pct": null,
+  "daily_loss": null,
+  "max_positions": 3,
+  "daily_loss_used": 0.0,
+  "paused": null,
+  "pace": "balanced"
+ },
+ "proof": {
+  "rule": "ultra-9.0",
+  "state": "untested",
+  "per_trade_pct": null,
+  "profit_factor": null,
+  "trades": 0,
+  "days": 0,
+  "ran_at": null
+ },
+ "log_head": 32,
+ "at": 1794855101812
+}

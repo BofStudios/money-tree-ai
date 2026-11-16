@@ -30,3 +30,11 @@ def _lab_in_tmp(tmp_path, monkeypatch):
     from app.engine import lab
 
     monkeypatch.setattr(lab, "default_path", lambda: tmp_path / "lab.json")
+
+
+@pytest.fixture(autouse=True)
+def _bot_log_in_tmp(tmp_path, monkeypatch):
+    """The agent log lives in the test's own folder, never in data/."""
+    from app.bot import log as botlog
+
+    monkeypatch.setattr(botlog, "default_path", lambda: tmp_path / "bot" / "log.jsonl")
