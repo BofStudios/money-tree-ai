@@ -112,7 +112,7 @@ class Narrator:
 
     def boot(self, mode: str, symbols: list[str], timeframe: str, executor: str) -> None:
         opening = {
-            "paper": "The bot started with practice money. The prices are real. The money is not real.",
+            "paper": "The bot is waiting for your real Alpaca account. Nothing is traded with your money yet.",
             "live": f"The bot started with REAL money. It trades through {executor}.",
         }.get(mode, f"The bot started in {mode} mode.")
         self.say(THINK, opening)
