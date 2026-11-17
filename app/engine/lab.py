@@ -385,6 +385,20 @@ def default_path() -> Path:
 
 
 class Lab:
+    def _say(self, report: dict) -> None:
+        """One line in the console for Sirius: the replay's verdict on today's rules."""
+        monitor = getattr(self.engine, "monitor", None)
+        if monitor is None:
+            return
+        try:
+            r = report["rules"]["9.0"]
+            tr = getattr(self.engine, "language", "en") == "tr"
+            title = (f"Lab tekrarı: {r['trades']} işlem, işlem başına {(r.get('avg') or 0):+.3f}%" if tr else
+                     f"Lab replay: {r['trades']} trades, {(r.get('avg') or 0):+.3f}% a trade")
+            monitor.info("lab", title, ", ".join(report.get("blocked") or []) or None)
+        except Exception:
+            log.debug("could not tell the console about the replay", exc_info=True)
+
     def __init__(self, engine=None, path: Path | None = None, fetch=None) -> None:
         self.engine = engine
         self._path = path
@@ -486,6 +500,7 @@ class Lab:
             log.info("lab: %s trades on %s symbols in %ss; skipped by edge: %s",
                      report["rules"]["9.0"]["trades"], report["symbols_n"], report["took_s"],
                      ", ".join(report["blocked"]) or "none")
+            self._say(report)
             return {"ok": True}
         except Exception as exc:
             self.error = str(exc)

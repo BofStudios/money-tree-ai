@@ -150,3 +150,18 @@ def test_setup_walks_keys_then_live_then_amount_then_arm():
     e.bot_settings.update({"budget": 300}, equity=1_000, live=True)
     assert setup_of(e, {"mode": "live"})["next"] == "arm"
     assert setup_of(e, {"mode": "live", "risk": {"armed": True}})["next"] is None
+
+
+def test_ten_agents_and_each_new_one_owns_real_work():
+    from pathlib import Path
+
+    from app.bot.crew import IDS, STEP_OWNER
+    from app.bot.log import from_event
+
+    assert len(IDS) == 10 and {"lyra", "sirius", "polaris"} <= set(IDS)
+    assert STEP_OWNER["swarm"][0] == "lyra" and STEP_OWNER["lab"][0] == "sirius" and STEP_OWNER["account"][0] == "polaris"
+    line = from_event({"type": "step", "step": {"kind": "lab", "title": "Lab replay: 250 trades", "state": "info"}})
+    assert line and line["agent"] == "sirius"
+    main = Path("app/main.py").read_text(encoding="utf-8")
+    assert "power_warning(" not in main                      # no "Full power / Light - 2 bots" question
+    assert '"ultra": True, "power": "full"' in main          # one way of working, every start

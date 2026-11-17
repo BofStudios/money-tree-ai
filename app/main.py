@@ -318,6 +318,11 @@ def main() -> None:
     engine.privacy = prefs
     _mark("engine built", "Waking the research desk")
     brain = build_brain(engine, data, keys, claude, monitor, events, risk, mentor)
+    # 12.0: one way of working, no modes. Ultra (a strategy bot per core, the
+    # one-minute book) at full power, every start; the owner's amount and limits
+    # are what hold it back, and real money still starts disarmed.
+    if not brain.settings.ultra or brain.settings.power != "full" or not brain.settings.warned:
+        brain.apply_settings({"ultra": True, "power": "full", "warned": True})
     _mark("brain built", "Starting the dashboard")
 
     # Company research runs off its own free provider and its own daily candles,
@@ -418,20 +423,7 @@ def main() -> None:
     qt_app.setWindowIcon(_app_icon())
 
     from app.common import startup
-    from app.gui.warning import power_warning
-    if not brain.settings.warned and not relaunched():
-        startup.close()
-        choice = power_warning(brain.settings.bots, chosen.language == "tr")
-        if choice is None:
-            reflex.stop()
-            brain.stop()
-            engine.stop()
-            keeper.stop()
-            telegram.stop()
-            web.stop()
-            sys.exit(0)
-        bots, power, remember = choice
-        brain.apply_settings({"bots": bots, "power": power, "warned": remember})
+    # 12.0: no "Full power / Light - 2 bots" question at the start (see above).
 
     window = MainWindow(engine, f"{web.local_url}/{suffix}", phone_url, events)
     startup.focus_hook = window.focus_requested.emit
@@ -533,7 +525,7 @@ def build_reflex(engine, brain, data, keys, claude, monitor, events, journal=Non
                    f"average {st['avg']:+.2f}% in a day.",
                    f"{kind_label(kind, True)} hakkında öğrendi: {st['n']} olay, %{st['hit'] * 100:.0f} beklenen yöne "
                    f"gitti, günde ortalama %{st['avg']:+.2f}.")
-        monitor.info("learn", text)
+        monitor.info("swarm", text)
         if journal is not None:
             journal.event("lesson", text)
 
@@ -572,7 +564,7 @@ def build_brain(engine, data, keys, claude, monitor, events, risk, mentor) -> Br
 
     def promoted(p) -> None:
         w = BrainWords(engine.language == "tr")
-        monitor.info("learn", w.promotion_title(p), None, w.promotion_text(p).splitlines())
+        monitor.info("swarm", w.promotion_title(p), None, w.promotion_text(p).splitlines())
         events.publish("brain_promotion", {"title": w.promotion_title(p), "text": w.promotion_text(p)})
         if engine.journal is not None:
             engine.journal.event("promotion", w.promotion_title(p), w.promotion_text(p).splitlines()[0]
