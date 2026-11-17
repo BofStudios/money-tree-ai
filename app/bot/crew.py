@@ -1,7 +1,8 @@
-"""The crew: seven names for seven jobs the bot does.
+"""The crew: ten names for ten jobs the bot really does (12.0).
 
-Six of them are the desk's agents (app/engine/desk.py); Rigel is new and owns
-the research: Lab runs, the edge list, what the swarm learned.
+Each one owns a kind of work that already happens; nobody is decoration.
+Lyra owns the strategy swarm, Sirius the Lab's replays, Polaris the account
+and the books; Rigel keeps the research (filings, the edge list, lessons).
 """
 from __future__ import annotations
 
@@ -14,6 +15,9 @@ CREW: tuple[tuple[str, str, str, tuple[str, str]], ...] = (
     ("luna", "Luna", "exits", ("Exits", "Çıkışı yönetir")),
     ("nova", "Nova", "risk", ("Guards", "Korur")),
     ("rigel", "Rigel", "research", ("Researches", "Araştırır")),
+    ("lyra", "Lyra", "swarm", ("Breeds strategies", "Strateji üretir")),
+    ("sirius", "Sirius", "lab", ("Replays", "Tekrar oynatır")),
+    ("polaris", "Polaris", "books", ("Keeps the books", "Defteri tutar")),
 )
 IDS = tuple(c[0] for c in CREW)
 
@@ -39,9 +43,11 @@ STEP_OWNER: dict[str, tuple[str, str]] = {
     "positions": ("luna", "note"),
     "ai": ("orion", "plan"),
     "warn": ("nova", "note"),
-    "clock": ("nova", "note"),
-    "account": ("nova", "note"),
+    "clock": ("polaris", "note"),
+    "account": ("polaris", "note"),
     "learn": ("rigel", "learn"),
     "research": ("rigel", "lab"),
+    "swarm": ("lyra", "learn"),
+    "lab": ("sirius", "lab"),
     "info": ("orion", "note"),
 }

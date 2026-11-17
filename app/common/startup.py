@@ -110,23 +110,26 @@ def _show_splash() -> None:
     base = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, "frozen", False) else __file__))
     candidates = [os.path.join(getattr(sys, "_MEIPASS", base), "assets", "logo.png"),
                   os.path.join(base, "..", "..", "assets", "logo.png")]
-    canvas = QPixmap(460, 300)
-    canvas.fill(QColor("#050403"))
+    # 12.0: black and white, the Money Bot mark, nothing yellow left from Money Tree.
+    w, h = 480, 300
+    canvas = QPixmap(w, h)
+    canvas.fill(QColor("#000000"))
     painter = QPainter(canvas)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     for path in candidates:
         if os.path.exists(path):
-            logo = QPixmap(path).scaled(132, 132, Qt.AspectRatioMode.KeepAspectRatio,
+            logo = QPixmap(path).scaled(104, 104, Qt.AspectRatioMode.KeepAspectRatio,
                                         Qt.TransformationMode.SmoothTransformation)
-            painter.drawPixmap((460 - logo.width()) // 2, 34, logo)
+            painter.drawPixmap((w - logo.width()) // 2, 60, logo)
             break
-    painter.setPen(QColor("#ffd60a"))
-    font = QFont("Segoe UI", 17)
-    font.setBold(True)
+    painter.setPen(QColor("#ffffff"))
+    font = QFont("Cascadia Mono", 15)
+    font.setStyleHint(QFont.StyleHint.Monospace)
+    font.setWeight(QFont.Weight.DemiBold)
     painter.setFont(font)
-    painter.drawText(canvas.rect().adjusted(0, 180, 0, 0), Qt.AlignmentFlag.AlignHCenter, APP_NAME)
-    painter.setPen(QColor("#ffd60a"))
-    painter.drawRect(0, 0, 459, 299)
+    painter.drawText(canvas.rect().adjusted(0, 184, 0, 0), Qt.AlignmentFlag.AlignHCenter, "money-bot")
+    painter.setPen(QColor("#1f1f1f"))
+    painter.drawRect(0, 0, w - 1, h - 1)
     painter.end()
     _splash = QSplashScreen(canvas, Qt.WindowType.WindowStaysOnTopHint)
     _splash.show()
@@ -139,7 +142,7 @@ def message(text: str) -> None:
     from PySide6.QtCore import Qt
     from PySide6.QtGui import QColor
 
-    _splash.showMessage(f"{text}…", Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom, QColor("#b8b19a"))
+    _splash.showMessage(f"{text}…", Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignBottom, QColor("#8a8a8a"))
     _app.processEvents()
 
 

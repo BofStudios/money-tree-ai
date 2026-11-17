@@ -130,6 +130,45 @@
     "lines": 5,
     "acted": 0
    }
+  },
+  {
+   "id": "lyra",
+   "name": "Lyra",
+   "role": "swarm",
+   "role_label": "Breeds strategies",
+   "state": "idle",
+   "last": null,
+   "last_at": null,
+   "today": {
+    "lines": 0,
+    "acted": 0
+   }
+  },
+  {
+   "id": "sirius",
+   "name": "Sirius",
+   "role": "lab",
+   "role_label": "Replays",
+   "state": "idle",
+   "last": null,
+   "last_at": null,
+   "today": {
+    "lines": 0,
+    "acted": 0
+   }
+  },
+  {
+   "id": "polaris",
+   "name": "Polaris",
+   "role": "books",
+   "role_label": "Keeps the books",
+   "state": "idle",
+   "last": null,
+   "last_at": null,
+   "today": {
+    "lines": 0,
+    "acted": 0
+   }
   }
  ],
  "queue": [],
