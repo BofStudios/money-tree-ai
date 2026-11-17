@@ -18,7 +18,9 @@
    seven cards would be too narrow to read, so they take their own row. */
 .mb-amount { grid-column: 1 / -1; grid-row: 2; }
 .mb-tiles  { grid-column: 1 / -1; grid-row: 3; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s3); }
-.mb-crew   { grid-column: 1 / -1; grid-row: 4; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--s2); position: relative; }
+.mb-crew   { grid-column: 1 / -1; grid-row: 4; display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: var(--s2); position: relative; }
+/* Ten cards in one row: the role moves to the tooltip below 1600 px. */
+@media (max-width: 1599px) and (min-width: 1100px) { .mb-card-head small { display: none; } }
 .mb-logbox { grid-column: 1 / 8; grid-row: 5; }
 .mb-side   { grid-column: 8 / 13; grid-row: 5; }
 .mb-queue  { grid-column: 1 / 8; grid-row: 6; }
@@ -226,7 +228,7 @@ button.mb-tile:hover:not(:disabled) { border-color: var(--line-2); background: v
 
 @media (min-width: 1600px) {
   .mb-tiles { grid-column: 1 / 7; }
-  .mb-crew { grid-column: 7 / 13; grid-row: 3; }
+  .mb-crew { grid-column: 7 / 13; grid-row: 3; grid-template-columns: repeat(5, minmax(0, 1fr)); }
 }
 
 /* ------------------------------------------------- phone: one column */

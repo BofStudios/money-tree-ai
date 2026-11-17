@@ -95,8 +95,7 @@ function planner() {
 function html(h) {
   if (!store.snap) return `<p class="mb-dim">${esc(T("err.load"))}</p>`;
   const vals = { ...current(), ...(draft || {}) };
-  const active = (paces && paces.pace) || (store.snap.risk && store.snap.risk.pace);
-  const list = paces && Array.isArray(paces.paces) ? paces.paces : PACES.map((id) => ({ id }));
+  // 12.0: no pace picker; the bot always runs at full power (owner's decision).
   return `<div class="mb-risk">
     <h3>${esc(T("risk.title"))}</h3>
     <form class="mb-rf-grid" data-risk-form novalidate>${FIELDS.map((f) => field(f, vals)).join("").replaceAll("%H", h)}
@@ -108,8 +107,6 @@ function html(h) {
     </form>
     ${msg ? `<p class="mb-note ${msg.tone === "ok" ? "ok" : ""}">${esc(msg.text)}</p>` : ""}
     ${usage()}
-    <h3>${esc(T("risk.pace.title"))}</h3>
-    <div class="mb-paces" role="radiogroup" aria-label="${esc(T("risk.pace.title"))}">${list.map((p) => paceRow(p, p.id === active)).join("")}</div>
     ${planner()}
   </div>`;
 }

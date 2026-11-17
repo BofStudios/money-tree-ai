@@ -10,14 +10,14 @@
  *            a stale cache.
  */
 
-const CACHE = "mt-shell-v10";
+const CACHE = "mt-shell-v11";
 const SHELL = [
   "/", "/index.html", "/dashboard.css", "/research.css", "/live.css",
   "/chart.js", "/research.js", "/home.js", "/home.css", "/i18n.js", "/logo.png",
   "/live.js", "/money.js", "/brain.js", "/brain.css", "/theme.css", "/mark.svg", "/ultra.js",
   "/modes.js", "/evolve.css", "/aurora.css", "/lab.js", "/lab.css", "/shots.js", "/sw-register.js", "/privacy.js", "/privacy.css",
   "/vendor/lightweight-charts.js",
-  "/bot/tokens.css", "/bot/shell.css", "/bot/bot.css", "/bot/glyphs.svg", "/bot/shell.js", "/bot/bot.js",
+  "/bot/tokens.css", "/bot/shell.css", "/bot/bot.css", "/mono.css", "/bot/glyphs.svg", "/bot/shell.js", "/bot/bot.js",
   "/bot/util.js", "/bot/store.js", "/bot/tiles.js", "/bot/crew.js", "/bot/log.js", "/bot/ledger.js",
   "/bot/side.js", "/bot/queue.js", "/bot/funnel.js", "/bot/risk.js", "/bot/amount.js",
 ];
