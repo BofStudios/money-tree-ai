@@ -110,8 +110,9 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 
 /* -------------------------------------------------------------- the boot */
 
-.boot { background: radial-gradient(600px 400px at 50% 45%, rgba(255, 214, 10, 0.16), transparent 70%), var(--bg); }
-.boot-mark { filter: drop-shadow(0 0 22px rgba(255, 214, 10, 0.7)); }
+/* 12.0: the boot glows in the Money Bot mark's green; the app's accent stays yellow (green means profit). */
+.boot { background: radial-gradient(600px 400px at 50% 45%, rgba(34, 229, 132, 0.12), transparent 70%), var(--bg); }
+.boot-mark { filter: drop-shadow(0 0 22px rgba(34, 229, 132, 0.45)); }
 .boot-name { color: var(--accent); letter-spacing: 0.02em; }
 
 /* The emblem: spun in on boot, then breathing light. */

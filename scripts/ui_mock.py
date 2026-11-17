@@ -22,10 +22,14 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures"
 
 
-def build(static: Path, fixture: str = "open") -> FastAPI:
+def build(static: Path, fixture: str = "open", live: bool = False) -> FastAPI:
     app = FastAPI()
     tail = "" if fixture == "open" else f"_{fixture}"
     snap = json.loads((FIXTURES / f"bot_snapshot{tail}.json").read_text(encoding="utf-8"))
+    if live:   # a connected real account with an amount set: the console as the owner sees it
+        snap["account"].update(mode="live", armed=True)
+        snap["setup"] = {"keys": True, "live": True, "amount": True, "armed": True, "next": None}
+        snap["risk"]["budget"] = snap["tiles"]["capital"]["budget"] = 500.0
     lines = [json.loads(r) for r in (FIXTURES / f"bot_log{tail}.jsonl").read_text(encoding="utf-8").splitlines() if r.strip()]
     start = max(0, len(lines) - 60)          # the first part is already "there", the rest is played
     played = {"n": start}
@@ -79,5 +83,6 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=8820)
     parser.add_argument("--fixture", choices=["open", "closed"], default="open",
                         help="open: market open, no trades; closed: market closed, Ultra on, the Lab's proof says lost")
+    parser.add_argument("--live", action="store_true", help="pretend a real account is connected, armed, with $500 set")
     args = parser.parse_args()
-    uvicorn.run(build(Path(args.static), args.fixture), host="127.0.0.1", port=args.port, log_level="warning")
+    uvicorn.run(build(Path(args.static), args.fixture, args.live), host="127.0.0.1", port=args.port, log_level="warning")

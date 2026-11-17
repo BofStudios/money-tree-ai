@@ -1,69 +1,29 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Money Tree AI · fear-light emblem (2026). An original mark: a money tree inside a
-       burning yellow ring, sixteen blades of light around it. -->
+  <!-- Money Bot (12.0). An original mark: one line draws an M and leaves it as a rising arrow. -->
   <defs>
-    <radialGradient id="bg" cx="50%" cy="48%" r="64%">
-      <stop offset="0" stop-color="#3a2d05"/>
-      <stop offset="0.5" stop-color="#0d0a03"/>
-      <stop offset="1" stop-color="#000000"/>
-    </radialGradient>
-    <radialGradient id="halo" cx="50%" cy="50%" r="50%">
-      <stop offset="0.5" stop-color="#ffd60a" stop-opacity="0.65"/>
-      <stop offset="0.72" stop-color="#ffb800" stop-opacity="0.2"/>
-      <stop offset="1" stop-color="#ffb800" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="core" cx="50%" cy="42%" r="60%">
-      <stop offset="0" stop-color="#2b2104"/>
-      <stop offset="1" stop-color="#050402"/>
-    </radialGradient>
-    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#fff8b8"/>
-      <stop offset="0.42" stop-color="#ffd60a"/>
-      <stop offset="1" stop-color="#c98a00"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#121815"/>
+      <stop offset="1" stop-color="#050706"/>
     </linearGradient>
-    <linearGradient id="blade" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#fff6b0"/>
-      <stop offset="1" stop-color="#ffb000"/>
+    <radialGradient id="glow" cx="62%" cy="38%" r="55%">
+      <stop offset="0" stop-color="#1fe07f" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#1fe07f" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ink" x1="0.1" y1="0.9" x2="0.9" y2="0.1">
+      <stop offset="0" stop-color="#f2fff8"/>
+      <stop offset="0.55" stop-color="#b9ffd9"/>
+      <stop offset="1" stop-color="#22e584"/>
     </linearGradient>
   </defs>
-
   <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-  <circle cx="256" cy="256" r="240" fill="url(#halo)"/>
-  <g fill="url(#blade)">
-        <path d="M256.0 6.0 L275.6 107.3 L256.0 92.0 L236.4 107.3 Z"/>
-    <path d="M327.2 84.2 L324.1 122.3 L318.8 104.5 L302.4 113.3 Z"/>
-    <path d="M407.3 104.7 L372.6 161.6 L372.0 140.0 L350.4 139.4 Z"/>
-    <path d="M427.8 184.8 L398.7 209.6 L407.5 193.2 L389.7 187.9 Z"/>
-    <path d="M506.0 256.0 L404.7 275.6 L420.0 256.0 L404.7 236.4 Z"/>
-    <path d="M427.8 327.2 L389.7 324.1 L407.5 318.8 L398.7 302.4 Z"/>
-    <path d="M407.3 407.3 L350.4 372.6 L372.0 372.0 L372.6 350.4 Z"/>
-    <path d="M327.2 427.8 L302.4 398.7 L318.8 407.5 L324.1 389.7 Z"/>
-    <path d="M256.0 506.0 L236.4 404.7 L256.0 420.0 L275.6 404.7 Z"/>
-    <path d="M184.8 427.8 L187.9 389.7 L193.2 407.5 L209.6 398.7 Z"/>
-    <path d="M104.7 407.3 L139.4 350.4 L140.0 372.0 L161.6 372.6 Z"/>
-    <path d="M84.2 327.2 L113.3 302.4 L104.5 318.8 L122.3 324.1 Z"/>
-    <path d="M6.0 256.0 L107.3 236.4 L92.0 256.0 L107.3 275.6 Z"/>
-    <path d="M84.2 184.8 L122.3 187.9 L104.5 193.2 L113.3 209.6 Z"/>
-    <path d="M104.7 104.7 L161.6 139.4 L140.0 140.0 L139.4 161.6 Z"/>
-    <path d="M184.8 84.2 L209.6 113.3 L193.2 104.5 L187.9 122.3 Z"/>
-  </g>
-
-  <circle cx="256" cy="256" r="152" fill="url(#core)"/>
-  <circle cx="256" cy="256" r="152" fill="none" stroke="url(#gold)" stroke-width="26"/>
-  <circle cx="256" cy="256" r="133" fill="none" stroke="#000" stroke-opacity="0.7" stroke-width="5"/>
-  <circle cx="256" cy="256" r="126" fill="none" stroke="#ffd60a" stroke-opacity="0.5" stroke-width="2.5"/>
-
-  <!-- the tree, filling the ring -->
-  <path d="M241 352 C243 318 248 294 249 268 L263 268 C264 294 269 318 271 352 Z" fill="url(#gold)"/>
-  <path d="M220 352 H292" stroke="url(#gold)" stroke-width="11" stroke-linecap="round"/>
-  <g fill="#b47c00">
-    <circle cx="207" cy="246" r="40"/><circle cx="305" cy="246" r="40"/><circle cx="256" cy="260" r="43"/>
-  </g>
-  <g fill="url(#gold)">
-    <circle cx="212" cy="226" r="36"/><circle cx="300" cy="226" r="36"/><circle cx="256" cy="200" r="43"/>
-  </g>
-  <path d="M273 184 C273 174 265 168 256 168 C247 168 239 173 239 183 C239 192 247 196 256 200
-           C265 204 273 208 273 217 C273 227 265 232 256 232 C247 232 239 227 239 216"
-        fill="none" stroke="#000" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M256 160 V240" stroke="#000" stroke-width="8" stroke-linecap="round"/>
+  <rect width="512" height="512" rx="112" fill="url(#glow)"/>
+  <rect x="6" y="6" width="500" height="500" rx="106" fill="none" stroke="#25332c" stroke-width="4"/>
+  <!-- soft light under the line -->
+  <path d="M132 372 V168 L256 300 L366 190" fill="none" stroke="#22e584" stroke-opacity="0.07"
+        stroke-width="84" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M132 372 V168 L256 300 L366 190" fill="none" stroke="url(#ink)"
+        stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M418 138 L401 229 L327 155 Z" fill="#22e584" stroke="#22e584" stroke-width="10" stroke-linejoin="round"/>
+  <!-- the bot's eye -->
+  <circle cx="384" cy="372" r="22" fill="#22e584"/>
 </svg>

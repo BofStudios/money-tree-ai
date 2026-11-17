@@ -159,6 +159,11 @@ body[data-group="bot"] .view.active > * { animation: none; }
 @media (max-width: 640px) {
   .mb-market #mbMarket { display: none; }
   .mb-market-short { display: inline; }
-  .mb-market { flex: 0 0 auto; }
+  .mb-market { flex: 0 1 auto; }
   .mb-proof { display: none; }
+  .mb-account { flex: 0 0 auto; letter-spacing: 0.02em; }   /* "REAL · ARMED" is never cut */
+  .mb-top .mb-chip { padding: 0 6px; }
+  .mb-top .top-right { gap: 4px; }
+  .mb-top .halt-btn, .mb-top .halt-btn[data-state="on"], .mb-top .halt-btn[data-state="off"] { padding: 0 10px; letter-spacing: 0.06em; }
+  .mb-top .mb-limits { padding: 0 10px; }
 }

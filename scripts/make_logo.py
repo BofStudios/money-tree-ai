@@ -1,9 +1,9 @@
-"""Render the Money Tree AI fear-light emblem everywhere it is needed.
+"""Render the Money Bot mark everywhere it is needed.
 
     python scripts/make_logo.py
 
-assets/mark.svg is the source: a money tree inside a burning yellow ring with
-sixteen blades of light (an original mark, 3.0). This writes:
+assets/mark.svg is the source: one line draws an M and leaves it as a rising
+arrow, with the bot's green eye (an original mark, 12.0). This writes:
 
   assets/logo.png        640 px, the app and Telegram avatar
   assets/logo.ico        Windows exe and shortcut icon (several sizes)

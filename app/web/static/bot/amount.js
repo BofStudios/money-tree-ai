@@ -74,7 +74,23 @@ function draw() {
         : budget == null ? T("amount.none")
           : T("amount.of", { v: money(budget), e: money(equity) }))}</p>
       ${note ? `<p class="mb-note ${note.tone === "ok" ? "ok" : ""}">${esc(note.text)}</p>` : ""}
-    </form>`;
+    </form>${st.live ? "" : intro(s)}`;
+}
+
+/** Before the real account: what the bot is, in four plain lines, and the Lab's honest number. */
+function intro(s) {
+  const p = s.proof || {};
+  const pct = typeof p.per_trade_pct === "number" ? `${p.per_trade_pct >= 0 ? "+" : ""}${p.per_trade_pct.toFixed(3)}%` : null;
+  const lab = pct && (p.state === "lost" || p.state === "passed")
+    ? `<p class="mb-intro-lab" data-state="${esc(p.state)}">${esc(T(`intro.${p.state}`, { v: pct }))}</p>` : "";
+  return `<section class="mb-intro" aria-label="Money Bot">
+      <h2>${esc(T("intro.title"))}</h2>
+      <ul>
+        <li>${esc(T("intro.crew"))}</li>
+        <li>${esc(T("intro.amount"))}</li>
+        <li>${esc(T("intro.stop"))}</li>
+      </ul>${lab}
+    </section>`;
 }
 
 async function save(body) {
