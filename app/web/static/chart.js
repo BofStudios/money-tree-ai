@@ -1056,7 +1056,9 @@ $("btnScan").onclick = () => act(() => post("/api/engine/scan"));
 $("btnArm").onclick = () => {
   if (state.risk && state.risk.armed) return act(() => post("/api/disarm"));
   if (confirm("Arm live trading?\n\nThe bot will place real orders with real money.\nIt disarms on the daily loss limit and on every restart."))
-    act(() => post("/api/arm", { confirm: true }));
+    act(() => post("/api/arm", { confirm: true }).then((r) => {
+      if (r && r.warning) showAlert({ tone: "warn", title: tr("bot.proof.armTitle", null, "Lab warning"), body: r.warning });
+    }));
 };
 
 $("addForm").onsubmit = (e) => {

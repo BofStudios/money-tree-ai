@@ -81,7 +81,11 @@ export async function api(method, path, body) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : res.statusText);
+  if (!res.ok) {
+    const err = new Error(typeof data.detail === "string" ? data.detail : res.statusText);
+    err.status = res.status;
+    throw err;
+  }
   return data;
 }
 

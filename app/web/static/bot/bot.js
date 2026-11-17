@@ -14,6 +14,7 @@ import "./ledger.js";
 import "./side.js";
 import "./queue.js";
 import "./funnel.js";
+import "./risk.js";
 
 /* ------------------------------------------------------------- top bar */
 
@@ -30,10 +31,23 @@ function accountChip(a) {
   el.title = [T(`account.${kind}Tip`), book].filter(Boolean).join(" · ");
 }
 
+function proofChip(p) {
+  const el = $("mbProof");
+  if (!el) return;
+  el.hidden = !p;
+  if (!p) return;
+  const state = ["passed", "lost", "untested", "stale"].includes(p.state) ? p.state : "untested";
+  el.dataset.state = state;
+  el.textContent = T(`proof.${state}`);
+  el.title = p.trades ? T("proof.tip", { n: p.trades, d: p.days, f: p.profit_factor ?? "—" }) : T("proof.tipNone");
+}
+
 function marketChip(m) {
   const el = $("mbMarket");
   if (!el) return;
   el.textContent = m && m.label ? m.label : "…";
+  const short = $("mbMarketShort");
+  if (short) short.textContent = m ? T(m.open ? "market.open" : "market.closed") : "";
   const led = $("marketLed");
   if (led && m) led.className = `dot ${m.open ? "open" : ""}`;
 }
@@ -43,6 +57,7 @@ window.addEventListener("bot:update", ({ detail: { changed } }) => {
   const s = store.snap;
   accountChip(s && s.account);
   marketChip(s && s.market);
+  proofChip(s && s.proof);
 });
 
 /* --------------------------------------------------------------- live */
@@ -72,6 +87,18 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden) load
 loadSnap();
 loadLog();
 loadToday();
+
+/* Phone: one of Log / Chart / Queue / Why at a time (B3.6). */
+$("mbMTabs")?.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-mtab]");
+  if (!b) return;
+  document.querySelector(".mb-console").dataset.mtab = b.dataset.mtab;
+  document.querySelectorAll("#mbMTabs [data-mtab]").forEach((x) => {
+    x.classList.toggle("on", x === b);
+    x.setAttribute("aria-selected", String(x === b));
+  });
+  if (b.dataset.mtab === "chart") window.dispatchEvent(new Event("resize"));
+});
 
 // The empty state's buttons and anything else that only needs a known endpoint.
 document.addEventListener("click", (e) => {

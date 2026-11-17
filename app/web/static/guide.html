@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Money Tree AI Guide</title>
-<meta name="description" content="How to install, set up and use Money Tree AI, the desktop stock-trading bot for Alpaca.">
+<title>Money Bot Guide</title>
+<meta name="description" content="How to install, set up and use Money Bot, the desktop stock-trading bot for Alpaca.">
 <style>
   :root {
     --bg: #050403; --surface: #110e07; --line: rgba(255, 214, 10, 0.18); --text: #fffdf2; --text-2: #c9c2a8;
@@ -74,7 +74,7 @@
 <body class="en">
 <header class="top">
   <img src="/logo.png" alt="">
-  <b>Money Tree AI</b>
+  <b>Money Bot</b>
   <span class="sp"></span>
   <div class="lang"><button data-set="en" class="on">English</button> <button data-set="tr">Türkçe</button></div>
 </header>
@@ -82,15 +82,15 @@
 <main>
 <!-- ================================================================ ENGLISH -->
 <div data-lang="en">
-  <h1>Money Tree AI <em>User guide</em></h1>
+  <h1>Money Bot <em>User guide</em></h1>
   <p class="lead">A desktop bot that watches US stocks, reads the news, learns from its own results and trades through your own Alpaca account, inside the limits you set.</p>
 
-  <div class="card warn"><strong>Read this first.</strong> Money Tree AI is software, not financial advice. Trading stocks can lose money, also more than you expect. Past results, including the bot's own tests, do not promise future results. Start with practice money. Only use money you can afford to lose. You are responsible for every trade the bot makes on your account.</div>
+  <div class="card warn"><strong>Read this first.</strong> Money Bot is software, not financial advice. Trading stocks can lose money, also more than you expect. Past results, including the bot's own tests, do not promise future results. Start with practice money. Only use money you can afford to lose. You are responsible for every trade the bot makes on your account.</div>
 
   <nav class="toc">
     <a href="#install">1. Install</a><a href="#first">2. First start</a><a href="#alpaca">3. Connect Alpaca</a>
     <a href="#ai">4. Connect a free AI</a><a href="#real">5. Practice and real money</a><a href="#arm">6. Arm, Stop and Start</a>
-    <a href="#modes">7. Modes</a><a href="#tabs">8. The screens</a><a href="#news">9. How it trades on news</a>
+    <a href="#modes">7. Modes</a><a href="#tabs">8. The screens</a><a href="#console">The Bot console</a><a href="#news">9. How it trades on news</a>
     <a href="#learn">10. How it gets better</a><a href="#memory">11. Memory and your data</a><a href="#safety">12. Safety limits</a>
     <a href="#phone">13. Phone access</a><a href="#trouble">14. Problems and fixes</a>
     <a href="#privacy">15. Privacy</a><a href="#legal">16. Terms</a>
@@ -100,7 +100,7 @@
   <ol>
     <li>Run <code>MoneyTreeAI-Setup.exe</code>. Windows 10 or 11, 64-bit. About 1 GB free space and 8 GB of memory are enough.</li>
     <li>If Windows SmartScreen shows "Windows protected your PC", click <strong>More info</strong>, then <strong>Run anyway</strong>. This shows for new programs that are not yet widely downloaded.</li>
-    <li>Open <strong>Money Tree AI</strong> from the Start menu or the desktop. The logo shows at once; the window opens after 5 to 15 seconds.</li>
+    <li>Open <strong>Money Bot</strong> from the Start menu or the desktop. The logo shows at once; the window opens after 5 to 15 seconds.</li>
     <li>Only one copy runs at a time. If you click the icon again, the open window comes to the front.</li>
   </ol>
 
@@ -113,7 +113,7 @@
   <ol>
     <li>Make an Alpaca account. Its <strong>paper</strong> (practice) account is free and ready at once.</li>
     <li>In Alpaca, open <strong>API Keys</strong> and make a key pair. Copy the key and the secret.</li>
-    <li>In Money Tree AI open <strong>Settings → Money &amp; keys</strong>, paste them, and press Save. The app checks them with Alpaca first.</li>
+    <li>In Money Bot open <strong>Settings → Money &amp; keys</strong>, paste them, and press Save. The app checks them with Alpaca first.</li>
   </ol>
   <div class="card tip">Keys are stored encrypted on this PC for your Windows user only. The screen never shows them again, only the last four characters. Without keys the app still runs on simulated money with free public prices.</div>
 
@@ -133,7 +133,7 @@
     <tr><td>Real money</td><td>Your Alpaca live account. Needs live keys, a typed confirmation, and arming.</td></tr>
   </table>
   <p>Run on practice money first and look at the results in <strong>Home</strong>. To switch, open <strong>Modes → Money</strong> or <strong>Settings → Money &amp; keys</strong>. The app restarts on the other account.</p>
-  <p>Money moves in and out only in Alpaca's own app or website. Money Tree AI never asks for bank details and never moves money.</p>
+  <p>Money moves in and out only in Alpaca's own app or website. Money Bot never asks for bank details and never moves money.</p>
 
   <h2 id="arm">6. Arm, Stop and Start</h2>
   <div class="grid">
@@ -154,14 +154,26 @@
   </table>
 
   <h2 id="tabs">8. The screens</h2>
+  <p>Six groups, on the left on a computer and at the bottom on a phone:</p>
   <ul>
-    <li><strong>Home</strong>: your money, whether it is trading, what it holds, today's result.</li>
-    <li><strong>Live</strong>: every step the bot takes, as it happens.</li>
-    <li><strong>Brain</strong>: news decisions (Reflex), company checks (Picks), the news radar, what it learned, and <strong>Memory</strong>.</li>
-    <li><strong>Swarm</strong>: the strategy bots and the strategy the account trades with.</li>
-    <li><strong>Research</strong>, <strong>Chart</strong>, <strong>Market</strong>, <strong>News</strong>, <strong>Catalysts</strong>, <strong>Activity</strong>: look up any stock and follow events.</li>
-    <li><strong>Settings</strong>: getting started, keys, AI, language, where your data lives.</li>
-    <li>The <strong>AI panel</strong> on the left: ask anything, for example "why no trades?".</li>
+    <li><strong>Bot</strong>: the console (below). It opens first.</li>
+    <li><strong>Market</strong>: Chart, Market, News, Catalysts and Research.</li>
+    <li><strong>Portfolio</strong>: your money (practice or real), the books and what they hold, the score against simply holding SPY, and Money.</li>
+    <li><strong>Lab</strong>: the Lab, Swarm, Brain (news decisions, company checks, Memory) and Modes.</li>
+    <li><strong>Chat</strong>: ask the AI anything, for example "why no trades?".</li>
+    <li><strong>Settings</strong>: getting started, keys, AI, language, limits and pace, privacy and data.</li>
+  </ul>
+  <p><strong>STOP</strong> is in the top right on every screen. It stops the bot at once; the server refuses every later order until you press START.</p>
+
+  <h2 id="console">How to read the Bot console</h2>
+  <ul>
+    <li><strong>Four numbers.</strong> Fills today (closed trades out of the daily cap), open positions, the net result (click it for this week and all time; money in open trades is shown apart) and your equity.</li>
+    <li><strong>The crew.</strong> Seven agents, each one part of the bot: Atlas scans, Vega reads the news, Orion plans, Titan trades, Luna handles exits, Nova guards the limits and Rigel researches. A card says what the agent is doing in a word (idle, work, wait, veto, off, error) and its last line. Click a card to see only its lines; press <kbd>i</kbd> or hold it to read how it works. Nova always has the last word and no agent can arm real money.</li>
+    <li><strong>agent.log.</strong> Every line is a real event from the bot: number, time (hover for New York time), agent, a verb such as scan, signal, order, fill, exit, stop, target or veto, and the text. Green is a gain, red a loss or error, orange a veto or warning. The <em>orders</em> and <em>risk</em> tabs filter it; <em>ledger</em> lists closed trades. Click a symbol to chart it. If the connection drops, a thin strip says so and the log fills the gap when it is back.</li>
+    <li><strong>Right panel.</strong> The open position (or the next idea in the queue, or the last trade) with its entry, stop and target lines, and the trades closed today. Close sells the position after a second click.</li>
+    <li><strong>Queue and Why.</strong> The queue holds ideas waiting for the right price or for your approval. Why counts the day: charts read, signals, what passed every check, orders and fills, and which checks stopped the rest.</li>
+    <li><strong>Limits and pace.</strong> Under <em>Limits</em> (top bar, and in Settings) you set a budget, the risk per trade, a daily loss limit and the most positions at once; empty means no limit of your own. The pace is calm, balanced or aggressive, each shown with its Lab result. On a real account loosening a limit asks for a second click.</li>
+    <li><strong>Lab badge.</strong> Next to the account: whether the rule that is running now made or lost money when the Lab replayed it on recent days. A lost result is shown plainly; it is a reason to look, not a promise either way.</li>
   </ul>
 
   <h2 id="news">9. How it trades on news</h2>
@@ -226,26 +238,26 @@
 
   <h2 id="legal">16. Terms</h2>
   <div class="card warn">
-    <p><strong>No advice.</strong> Money Tree AI and BofStudios do not give investment, financial, tax or legal advice. Nothing in the app, the AI's answers or this guide is a recommendation to buy or sell anything.</p>
+    <p><strong>No advice.</strong> Money Bot and BofStudios do not give investment, financial, tax or legal advice. Nothing in the app, the AI's answers or this guide is a recommendation to buy or sell anything.</p>
     <p><strong>Your decisions.</strong> You choose the account, the mode, the limits and whether to arm real money. You are responsible for all trades on your account and for following the laws of your country.</p>
     <p><strong>Risk.</strong> Trading can lose some or all of the money you trade with. Software can have errors; brokers, data and AI services can fail or be late. The software is provided "as is", without warranty of any kind, and to the extent the law allows, BofStudios is not liable for trading losses or other damages from its use.</p>
-    <p><strong>Third parties.</strong> Alpaca, AI providers and data sources are independent companies with their own terms. Money Tree AI is not made by, endorsed by or connected with them.</p>
+    <p><strong>Third parties.</strong> Alpaca, AI providers and data sources are independent companies with their own terms. Money Bot is not made by, endorsed by or connected with them.</p>
   </div>
 
-  <footer>Money Tree AI by BofStudios. Open-source parts and their licences are listed in <code>THIRD-PARTY-NOTICES.txt</code> in the program folder.</footer>
+  <footer>Money Bot by BofStudios. Open-source parts and their licences are listed in <code>THIRD-PARTY-NOTICES.txt</code> in the program folder.</footer>
 </div>
 
 <!-- ================================================================ TÜRKÇE -->
 <div data-lang="tr">
-  <h1>Money Tree AI <em>Kullanım kılavuzu</em></h1>
+  <h1>Money Bot <em>Kullanım kılavuzu</em></h1>
   <p class="lead">ABD hisselerini izleyen, haberleri okuyan, kendi sonuçlarından öğrenen ve senin belirlediğin sınırlar içinde kendi Alpaca hesabın üzerinden işlem yapan bir masaüstü botu.</p>
 
-  <div class="card warn"><strong>Önce bunu oku.</strong> Money Tree AI bir yazılımdır, yatırım tavsiyesi değildir. Hisse işlemi para kaybettirebilir, beklediğinden fazlasını da. Geçmiş sonuçlar, botun kendi testleri dahil, gelecek sonuç vaat etmez. Deneme parasıyla başla. Sadece kaybetmeyi göze alabileceğin parayı kullan. Botun hesabında yaptığı her işlemden sen sorumlusun.</div>
+  <div class="card warn"><strong>Önce bunu oku.</strong> Money Bot bir yazılımdır, yatırım tavsiyesi değildir. Hisse işlemi para kaybettirebilir, beklediğinden fazlasını da. Geçmiş sonuçlar, botun kendi testleri dahil, gelecek sonuç vaat etmez. Deneme parasıyla başla. Sadece kaybetmeyi göze alabileceğin parayı kullan. Botun hesabında yaptığı her işlemden sen sorumlusun.</div>
 
   <nav class="toc">
     <a href="#tr-install">1. Kurulum</a><a href="#tr-first">2. İlk açılış</a><a href="#tr-alpaca">3. Alpaca bağlantısı</a>
     <a href="#tr-ai">4. Ücretsiz yapay zekâ</a><a href="#tr-real">5. Deneme ve gerçek para</a><a href="#tr-arm">6. Kur, Durdur, Başlat</a>
-    <a href="#tr-modes">7. Modlar</a><a href="#tr-tabs">8. Ekranlar</a><a href="#tr-news">9. Haberle işlem</a>
+    <a href="#tr-modes">7. Modlar</a><a href="#tr-tabs">8. Ekranlar</a><a href="#tr-console">Bot konsolu</a><a href="#tr-news">9. Haberle işlem</a>
     <a href="#tr-learn">10. Nasıl gelişir</a><a href="#tr-memory">11. Hafıza ve verilerin</a><a href="#tr-safety">12. Güvenlik sınırları</a>
     <a href="#tr-phone">13. Telefondan erişim</a><a href="#tr-trouble">14. Sorunlar ve çözümler</a>
     <a href="#tr-privacy">15. Gizlilik</a><a href="#tr-legal">16. Şartlar</a>
@@ -255,7 +267,7 @@
   <ol>
     <li><code>MoneyTreeAI-Setup.exe</code> dosyasını çalıştır. Windows 10 ya da 11, 64 bit. Yaklaşık 1 GB boş alan ve 8 GB bellek yeterli.</li>
     <li>Windows SmartScreen "Windows bilgisayarınızı korudu" derse <strong>Ek bilgi</strong>, sonra <strong>Yine de çalıştır</strong>'a tıkla. Bu, henüz çok indirilmemiş yeni programlarda çıkar.</li>
-    <li><strong>Money Tree AI</strong>'ı Başlat menüsünden ya da masaüstünden aç. Logo hemen görünür; pencere 5–15 saniyede açılır.</li>
+    <li><strong>Money Bot</strong>'ı Başlat menüsünden ya da masaüstünden aç. Logo hemen görünür; pencere 5–15 saniyede açılır.</li>
     <li>Aynı anda tek kopya çalışır. Simgeye tekrar tıklarsan açık pencere öne gelir.</li>
   </ol>
 
@@ -268,7 +280,7 @@
   <ol>
     <li>Alpaca hesabı aç. <strong>Paper</strong> (deneme) hesabı ücretsizdir ve hemen hazırdır.</li>
     <li>Alpaca'da <strong>API Keys</strong> kısmını açıp bir anahtar çifti oluştur. Anahtarı ve gizli anahtarı kopyala.</li>
-    <li>Money Tree AI'da <strong>Ayarlar → Para ve anahtarlar</strong>'ı aç, yapıştır ve Kaydet'e bas. Uygulama önce Alpaca ile kontrol eder.</li>
+    <li>Money Bot'ta <strong>Ayarlar → Para ve anahtarlar</strong>'ı aç, yapıştır ve Kaydet'e bas. Uygulama önce Alpaca ile kontrol eder.</li>
   </ol>
   <div class="card tip">Anahtarlar bu bilgisayarda, sadece senin Windows kullanıcın için şifreli saklanır. Ekran onları bir daha göstermez, sadece son dört karakteri. Anahtar olmadan uygulama ücretsiz açık fiyatlarla simüle parayla çalışır.</div>
 
@@ -288,7 +300,7 @@
     <tr><td>Gerçek para</td><td>Alpaca canlı hesabın. Canlı anahtar, yazarak onay ve kurmak gerekir.</td></tr>
   </table>
   <p>Önce deneme parasıyla çalıştır ve sonuçlara <strong>Ana Sayfa</strong>'dan bak. Geçmek için <strong>Modlar → Para</strong> ya da <strong>Ayarlar → Para ve anahtarlar</strong>'ı aç. Uygulama diğer hesapla yeniden başlar.</p>
-  <p>Para sadece Alpaca'nın kendi uygulamasında ya da sitesinde girer ve çıkar. Money Tree AI asla banka bilgisi istemez ve asla para taşımaz.</p>
+  <p>Para sadece Alpaca'nın kendi uygulamasında ya da sitesinde girer ve çıkar. Money Bot asla banka bilgisi istemez ve asla para taşımaz.</p>
 
   <h2 id="tr-arm">6. Kur, Durdur, Başlat</h2>
   <div class="grid">
@@ -309,14 +321,26 @@
   </table>
 
   <h2 id="tr-tabs">8. Ekranlar</h2>
+  <p>Altı grup; bilgisayarda solda, telefonda altta:</p>
   <ul>
-    <li><strong>Ana Sayfa</strong>: paran, işlem yapıp yapmadığı, elindekiler, günün sonucu.</li>
-    <li><strong>Canlı</strong>: botun attığı her adım, anında.</li>
-    <li><strong>Beyin</strong>: haber kararları (Refleks), şirket kontrolleri, haber radarı, öğrendikleri ve <strong>Hafıza</strong>.</li>
-    <li><strong>Sürü</strong>: strateji botları ve hesabın kullandığı strateji.</li>
-    <li><strong>Araştırma</strong>, <strong>Grafik</strong>, <strong>Piyasa</strong>, <strong>Haberler</strong>, <strong>Katalizörler</strong>, <strong>Etkinlik</strong>: herhangi bir hisseye bak ve olayları takip et.</li>
-    <li><strong>Ayarlar</strong>: başlarken, anahtarlar, yapay zekâ, dil, verilerin nerede.</li>
-    <li>Soldaki <strong>yapay zekâ paneli</strong>: istediğini sor, örneğin "neden işlem yok?".</li>
+    <li><strong>Bot</strong>: konsol (aşağıda). İlk o açılır.</li>
+    <li><strong>Piyasa</strong>: Grafik, Piyasa, Haberler, Katalizörler ve Araştırma.</li>
+    <li><strong>Portföy</strong>: paran (deneme ya da gerçek), defterler ve içindekiler, sadece SPY tutmakla kıyas ve Para.</li>
+    <li><strong>Lab</strong>: Lab, Sürü, Beyin (haber kararları, şirket kontrolleri, Hafıza) ve Modlar.</li>
+    <li><strong>Sohbet</strong>: yapay zekâya istediğini sor, örneğin "neden işlem yok?".</li>
+    <li><strong>Ayarlar</strong>: başlarken, anahtarlar, yapay zekâ, dil, sınırlar ve tempo, gizlilik ve veri.</li>
+  </ul>
+  <p><strong>DURDUR</strong> her ekranda sağ üsttedir. Botu hemen durdurur; BAŞLAT'a basana kadar sunucu sonraki her emri reddeder.</p>
+
+  <h2 id="tr-console">Bot konsolu nasıl okunur</h2>
+  <ul>
+    <li><strong>Dört sayı.</strong> Bugün dolan (günlük sınırdan kapanan işlem), açık pozisyonlar, net sonuç (tıklayınca bu hafta ve tüm zamanlar; açık işlemlerdeki para ayrı gösterilir) ve öz sermayen.</li>
+    <li><strong>Ekip.</strong> Yedi ajan, her biri botun bir parçası: Atlas tarar, Vega haberleri okur, Orion plan yapar, Titan işlem yapar, Luna çıkışları yönetir, Nova sınırları korur, Rigel araştırır. Kart ajanın ne yaptığını tek kelimeyle (boşta, çalışıyor, bekliyor, veto, kapalı, hata) ve son satırını gösterir. Karta tıklayınca sadece onun satırları kalır; <kbd>i</kbd>'ye basınca ya da basılı tutunca nasıl çalıştığını okursun. Son söz her zaman Nova'nındır ve hiçbir ajan gerçek parayı silahlandıramaz.</li>
+    <li><strong>agent.log.</strong> Her satır bottaki gerçek bir olaydır: numara, saat (üzerine gelince New York saati), ajan, scan, signal, order, fill, exit, stop, target ya da veto gibi bir fiil ve metin. Yeşil kazanç, kırmızı kayıp ya da hata, turuncu veto ya da uyarıdır. <em>orders</em> ve <em>risk</em> sekmeleri süzer; <em>ledger</em> kapanan işlemleri listeler. Sembole tıklayınca grafiği açılır. Bağlantı koparsa ince bir şerit bunu söyler; geri gelince log aradaki satırları tamamlar.</li>
+    <li><strong>Sağ panel.</strong> Açık pozisyon (yoksa kuyruktaki sıradaki fikir ya da son işlem) giriş, stop ve hedef çizgileriyle; altında bugün kapananlar. Kapat, ikinci tıklamada pozisyonu satar.</li>
+    <li><strong>Kuyruk ve Neden.</strong> Kuyrukta doğru fiyatı ya da onayını bekleyen fikirler durur. Neden günü sayar: okunan grafik, sinyal, tüm kontrolleri geçen, emir ve dolum; kalanları hangi kontrolün durdurduğu.</li>
+    <li><strong>Sınırlar ve tempo.</strong> <em>Sınırlar</em>'da (üst çubukta ve Ayarlar'da) bütçe, işlem başı risk, günlük zarar sınırı ve en çok açık pozisyonu belirlersin; boş bırakmak kendi sınırın yok demektir. Tempo temkinli, dengeli ya da agresiftir; her birinin yanında Lab sonucu durur. Gerçek hesapta bir sınırı gevşetmek ikinci tıklama ister.</li>
+    <li><strong>Lab rozeti.</strong> Hesabın yanında: şu an çalışan kural Lab'da son günler üzerinde yeniden oynatıldığında kazandı mı kaybetti mi. Kaybettiyse bu açıkça yazılır; bakmak için bir nedendir, iki yönde de söz değildir.</li>
   </ul>
 
   <h2 id="tr-news">9. Haberle nasıl işlem yapar</h2>
@@ -381,13 +405,13 @@
 
   <h2 id="tr-legal">16. Şartlar</h2>
   <div class="card warn">
-    <p><strong>Tavsiye değildir.</strong> Money Tree AI ve BofStudios yatırım, finans, vergi ya da hukuk tavsiyesi vermez. Uygulamadaki, yapay zekânın cevaplarındaki ya da bu kılavuzdaki hiçbir şey bir şeyi alma ya da satma önerisi değildir.</p>
+    <p><strong>Tavsiye değildir.</strong> Money Bot ve BofStudios yatırım, finans, vergi ya da hukuk tavsiyesi vermez. Uygulamadaki, yapay zekânın cevaplarındaki ya da bu kılavuzdaki hiçbir şey bir şeyi alma ya da satma önerisi değildir.</p>
     <p><strong>Kararlar senin.</strong> Hesabı, modu, sınırları ve gerçek parayı kurup kurmayacağını sen seçersin. Hesabındaki tüm işlemlerden ve ülkenin yasalarına uymaktan sen sorumlusun.</p>
     <p><strong>Risk.</strong> İşlem yapmak, işlem yaptığın paranın bir kısmını ya da tamamını kaybettirebilir. Yazılımda hata olabilir; aracı kurumlar, veri ve yapay zekâ hizmetleri çalışmayabilir ya da gecikebilir. Yazılım "olduğu gibi", hiçbir garanti olmadan sunulur ve yasaların izin verdiği ölçüde BofStudios, kullanımından doğan işlem zararlarından ya da diğer zararlardan sorumlu değildir.</p>
-    <p><strong>Üçüncü taraflar.</strong> Alpaca, yapay zekâ sağlayıcıları ve veri kaynakları kendi şartları olan bağımsız şirketlerdir. Money Tree AI onlar tarafından yapılmamıştır, onaylanmamıştır ve onlarla bağlantılı değildir.</p>
+    <p><strong>Üçüncü taraflar.</strong> Alpaca, yapay zekâ sağlayıcıları ve veri kaynakları kendi şartları olan bağımsız şirketlerdir. Money Bot onlar tarafından yapılmamıştır, onaylanmamıştır ve onlarla bağlantılı değildir.</p>
   </div>
 
-  <footer>Money Tree AI, BofStudios. Açık kaynak parçalar ve lisansları program klasöründeki <code>THIRD-PARTY-NOTICES.txt</code> dosyasında listelenir.</footer>
+  <footer>Money Bot, BofStudios. Açık kaynak parçalar ve lisansları program klasöründeki <code>THIRD-PARTY-NOTICES.txt</code> dosyasında listelenir.</footer>
 </div>
 </main>
 
