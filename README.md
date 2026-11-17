@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/logo.png" width="120" alt="Money Tree AI logo">
+  <img src="assets/logo.png" width="120" alt="Money Bot logo">
 </p>
 
-<h1 align="center">Money Tree AI</h1>
+<h1 align="center">Money Bot</h1>
 
 <p align="center"><b>A free, open-source desktop bot that watches US stocks, reads breaking news,<br>learns from its own results and shows you every reason behind every move.</b></p>
 
@@ -11,7 +11,7 @@
   <a href="https://github.com/BofStudios/money-tree-ai/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/BofStudios/money-tree-ai?style=for-the-badge&color=ffd60a&labelColor=111&filter=desktop-*"></a>
   <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-ffd60a?style=for-the-badge&labelColor=111"></a>
   <img alt="Windows" src="https://img.shields.io/badge/Windows-10%20%7C%2011-ffd60a?style=for-the-badge&labelColor=111">
-  <img alt="Tests" src="https://img.shields.io/badge/tests-415%20passing-32d583?style=for-the-badge&labelColor=111">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-474%20passing-32d583?style=for-the-badge&labelColor=111">
 </p>
 
 > [!WARNING]
@@ -40,7 +40,7 @@
 
 ### Quick start
 
-1. Download the zip from the [latest release](https://github.com/BofStudios/money-tree-ai/releases/latest), unpack it and run `Money Tree AI.exe`.
+1. Download the zip from the [latest release](https://github.com/BofStudios/money-tree-ai/releases/latest), unpack it and run `Money Bot.exe`.
 2. Practice money works at once, with no keys. Add free [Alpaca](https://alpaca.markets) keys in *Settings* to use their paper or live account.
 3. Read the step-by-step tutorial (Alpaca setup, every mode, every screen): [English](docs/TUTORIAL.md) · [Türkçe](docs/TUTORIAL.tr.md). The same short guide is in the app: *Settings → User guide*.
 
@@ -74,6 +74,39 @@ Practice money stays because it is the only way to see the bot work before any
 money is at risk, and because a new Alpaca live account cannot trade until it
 is funded. (Midas signal mode was removed in 4.0: an old config that still says
 `signal` starts on practice money.)
+
+## Desktop 12.0: Money Bot
+
+Money Tree is now **Money Bot**: the same engine with a trading console for a
+home screen. Your keys, trades and learning stay where they were
+(`%LOCALAPPDATA%\BofStudios\Money Tree AI`). Nothing has to be set up again.
+
+- **The console:** seven named agents (Orion plans, Atlas scouts, Vega reads
+  news, Titan trades, Luna exits, Nova checks risk, Rigel researches) with a
+  live log of what each one does and why, the open trade in focus, a queue of
+  what is next, and a funnel from *scanned* to *filled* that shows which gate
+  stopped the rest.
+- **Your limits:** a budget, the most a trade may risk, a daily loss limit
+  and the most open positions. All optional. They can only refuse or shrink a
+  buy, never enlarge one. On real money, loosening a limit needs a second
+  click.
+- **Pace:** calm, balanced (exactly the 9.0 rules) or aggressive. The Lab
+  replays each pace and shows its last result next to it, including a *lost*
+  badge when it lost.
+- **Orion's planning round** (off by default): every ten minutes at most, the AI
+  may say *keep*, *shrink* or *skip* for the setups on the list. It never
+  starts a trade and never makes one bigger. At most 60 calls a day; none
+  when *What the AI sees* is set to nothing.
+- **The ledger:** today, the week or all time, with P&L, profit factor and
+  minutes held. Telegram sends the same numbers once after the close on days
+  with trades.
+
+**Honest numbers.** The faster rules do not have an edge yet. In the Lab's
+replay before this release, the balanced (9.0) rules lost: 250 trades in seven
+days, −0.012% a trade, profit factor 0.93. Longer one-minute replays came out
+near −0.08% a trade. Money Bot trades all day if you let it, but trading more
+does not mean making money. Start on practice money, and set a budget and a
+daily loss limit before you arm real money.
 
 ## Desktop 10.1: trust
 
