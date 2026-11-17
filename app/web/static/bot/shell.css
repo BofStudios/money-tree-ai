@@ -144,3 +144,21 @@ body[data-group="bot"] .view.active > * { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   .mb *, .mb *::before, .mb *::after { transition: none !important; animation: none !important; }
 }
+
+/* ------------------------------------------- Lab badge, limits, market (M3) */
+
+.mb-proof { cursor: pointer; letter-spacing: 0.02em; }
+.mb-proof[data-state="passed"] { color: var(--good); border-color: rgba(50, 213, 131, 0.45); }
+.mb-proof[data-state="lost"] { color: var(--warn); border-color: rgba(255, 159, 10, 0.45); }
+.mb-proof[data-state="untested"], .mb-proof[data-state="stale"] { color: var(--text-3); }
+.mb-proof:hover:not(:disabled) { background: var(--panel-2); }
+.mb-top .mb-limits { height: 32px; }
+.mb-top .mb-limits[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
+.mb-market-short { display: none; }
+
+@media (max-width: 640px) {
+  .mb-market #mbMarket { display: none; }
+  .mb-market-short { display: inline; }
+  .mb-market { flex: 0 0 auto; }
+  .mb-proof { display: none; }
+}

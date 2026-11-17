@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="dark">
-  <title>Money Tree AI</title>
+  <title>Money Bot</title>
   <link rel="icon" href="/logo.png">
   <link rel="apple-touch-icon" href="/icon-192.png">
   <link rel="manifest" href="/manifest.webmanifest">
@@ -12,7 +12,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="Money Tree">
+  <meta name="apple-mobile-web-app-title" content="Money Bot">
   <link rel="stylesheet" href="/dashboard.css">
   <link rel="stylesheet" href="/research.css">
   <link rel="stylesheet" href="/home.css">
@@ -33,7 +33,7 @@
      seen half-drawn or full of dashes. -->
 <div class="boot" id="boot">
   <span class="boot-mark" aria-hidden="true"><img src="/mark.svg" alt=""></span>
-  <b class="boot-name">Money Tree AI</b>
+  <b class="boot-name">Money Bot</b>
   <span class="boot-step" id="bootStep">connecting…</span>
 </div>
 
@@ -53,7 +53,7 @@
 <!-- Shown while the app restarts on new keys or another money mode. -->
 <div class="boot restart-overlay" id="restartOverlay" hidden>
   <span class="restart-spin" aria-hidden="true"></span>
-  <b class="boot-name">Money Tree AI</b>
+  <b class="boot-name">Money Bot</b>
   <span class="boot-step" id="restartText"></span>
 </div>
 
@@ -64,7 +64,7 @@
     <header class="ai-head">
       <span class="logo" aria-hidden="true"><img src="/mark.svg" alt=""></span>
       <div class="ai-title">
-        <b>Money Tree AI</b>
+        <b>Money Bot</b>
         <span id="aiState">thinking out loud</span>
       </div>
       <button class="icon" id="aiClose" aria-label="Close">
@@ -104,17 +104,21 @@
         <img src="/mark.svg" alt="" width="18" height="18"><span>money-bot</span>
       </button>
       <span class="mb-chip mb-account" id="mbAccount" data-kind="none">—</span>
+      <!-- The Lab result of the rule that is running now (B3.5); opens the Lab. -->
+      <button class="mb-chip mb-proof" id="mbProof" type="button" hidden data-mb-go="lab"></button>
       <button class="ready-pill" id="readyPill" hidden data-fix="modes"></button>
       <button class="ultra-badge" id="ultraBadge" hidden title="Ultra">ULTRA</button>
       <span class="mb-chip mb-market" id="mbMarketChip">
         <i class="dot" id="marketLed"></i>
         <span id="mbMarket">…</span>
+        <span class="mb-market-short" id="mbMarketShort"></span>
         <span class="top-clock" id="clockNY">--:--</span>
       </span>
       <!-- Filled by chart.js from /api/status; the chips above read /api/bot. -->
       <span hidden><span id="marketHeadline"></span><span id="marketDetail"></span><span id="modeChip"></span></span>
       <span class="mb-top-gap"></span>
       <div class="top-right">
+        <button class="mb-btn mb-limits" id="mbRiskOpen" type="button" aria-expanded="false" aria-controls="mbRiskDrawer" data-i18n="bot.risk.open">Limits</button>
         <button id="btnArm" class="danger mb-arm" hidden>Arm live</button>
         <!-- The bot's one switch. Stop wins at once; the server refuses every
              later order. Always on screen, on every tab; no keyboard shortcut. -->
@@ -174,8 +178,17 @@
             <div id="proposalList"></div>
           </section>
         </div>
+        <!-- Limits and pace (risk.js), the same component as in Settings. -->
+        <section class="mb-drawer" id="mbRiskDrawer" hidden aria-label="Limits"></section>
         <div class="mb-tiles" id="mbTiles" aria-label="Today"></div>
         <div class="mb-crew" id="mbCrew" role="group" aria-label="Crew"></div>
+        <!-- Phone only: one of the four areas at a time (B3.6). -->
+        <div class="mb-mtabs" id="mbMTabs" role="tablist">
+          <button class="mb-tab on" role="tab" aria-selected="true" data-mtab="log" data-i18n="bot.m.log">Log</button>
+          <button class="mb-tab" role="tab" aria-selected="false" data-mtab="chart" data-i18n="bot.m.chart">Chart</button>
+          <button class="mb-tab" role="tab" aria-selected="false" data-mtab="queue" data-i18n="bot.m.queue">Queue</button>
+          <button class="mb-tab" role="tab" aria-selected="false" data-mtab="why" data-i18n="bot.m.why">Why</button>
+        </div>
         <section class="mb-logbox" id="mbLogBox">
           <div class="mb-logbar">
             <div class="mb-tabs" role="tablist" id="mbLogTabs">
@@ -567,6 +580,7 @@
 
       <!-- ========================================================= settings -->
       <section class="view" data-view="settings">
+        <section class="block mb mb-settings-risk"><div id="mbRiskSettings"></div></section>
         <div class="block-head standalone"><h2 data-i18n="settings.title"></h2></div>
 
         <!-- Getting started (was the Setup tab): the steps to real money, the

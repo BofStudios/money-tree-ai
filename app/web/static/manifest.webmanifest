@@ -1,6 +1,6 @@
 {
-  "name": "Money Tree AI",
-  "short_name": "Money Tree",
+  "name": "Money Bot",
+  "short_name": "Money Bot",
   "description": "Your personal trading bot and market research, on your phone.",
   "start_url": "/",
   "scope": "/",

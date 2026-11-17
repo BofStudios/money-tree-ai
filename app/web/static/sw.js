@@ -1,4 +1,4 @@
-/* Money Tree service worker.
+/* Money Bot service worker.
  *
  * Its main job is to make the dashboard installable as a phone app. It is
  * deliberately conservative about caching, because a trading screen showing
@@ -19,7 +19,7 @@ const SHELL = [
   "/vendor/lightweight-charts.js",
   "/bot/tokens.css", "/bot/shell.css", "/bot/bot.css", "/bot/glyphs.svg", "/bot/shell.js", "/bot/bot.js",
   "/bot/util.js", "/bot/store.js", "/bot/tiles.js", "/bot/crew.js", "/bot/log.js", "/bot/ledger.js",
-  "/bot/side.js", "/bot/queue.js", "/bot/funnel.js",
+  "/bot/side.js", "/bot/queue.js", "/bot/funnel.js", "/bot/risk.js",
 ];
 
 self.addEventListener("install", (event) => {
