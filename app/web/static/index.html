@@ -23,6 +23,9 @@
   <link rel="stylesheet" href="/aurora.css">
   <link rel="stylesheet" href="/lab.css">
   <link rel="stylesheet" href="/privacy.css">
+  <link rel="stylesheet" href="/bot/tokens.css">
+  <link rel="stylesheet" href="/bot/shell.css">
+  <link rel="stylesheet" href="/bot/bot.css">
 </head>
 <body>
 
@@ -92,28 +95,36 @@
   <!-- ================================================================= main -->
   <div class="main">
 
-    <header class="top">
+    <header class="top mb mb-top">
       <button class="icon only-phone" id="aiOpen" aria-label="Open AI">
         <svg viewBox="0 0 20 20"><path d="M4 4.5h12v9H8.5L4 16.5v-12Z"/></svg>
         <i class="ping" id="aiPing" hidden></i>
       </button>
-      <div class="top-state">
+      <button class="mb-brand" type="button" data-group-go="bot" aria-label="money-bot">
+        <img src="/mark.svg" alt="" width="18" height="18"><span>money-bot</span>
+      </button>
+      <span class="mb-chip mb-account" id="mbAccount" data-kind="none">—</span>
+      <button class="ready-pill" id="readyPill" hidden data-fix="modes"></button>
+      <button class="ultra-badge" id="ultraBadge" hidden title="Ultra">ULTRA</button>
+      <span class="mb-chip mb-market" id="mbMarketChip">
         <i class="dot" id="marketLed"></i>
-        <span id="marketHeadline">…</span>
-        <span class="top-detail" id="marketDetail"></span>
-      </div>
-      <div class="top-right">
+        <span id="mbMarket">…</span>
         <span class="top-clock" id="clockNY">--:--</span>
-        <button class="ready-pill" id="readyPill" hidden data-fix="modes"></button>
-        <span class="top-mode" id="modeChip">—</span>
+      </span>
+      <!-- Filled by chart.js from /api/status; the chips above read /api/bot. -->
+      <span hidden><span id="marketHeadline"></span><span id="marketDetail"></span><span id="modeChip"></span></span>
+      <span class="mb-top-gap"></span>
+      <div class="top-right">
+        <button id="btnArm" class="danger mb-arm" hidden>Arm live</button>
         <!-- The bot's one switch. Stop wins at once; the server refuses every
-             later order. Always on screen, on every tab. -->
-        <button class="ultra-badge" id="ultraBadge" hidden title="Ultra">ULTRA</button>
+             later order. Always on screen, on every tab; no keyboard shortcut. -->
         <button class="halt-btn" id="haltBtn" data-state="on" aria-live="polite">
           <i class="halt-led"></i><span id="haltLabel">STOP</span>
         </button>
       </div>
     </header>
+    <!-- Shown only while the live connection is down (bot.js). -->
+    <div class="mb mb-wsbar" id="mbWsBar" hidden data-i18n="bot.ws.down">Connection lost, retrying…</div>
 
     <!-- One important thing at a time, sliding down from the top. Not a log —
          the chat panel and Activity tab already are that. This is only for
@@ -123,34 +134,76 @@
 
     <main class="page">
 
-      <!-- ============================================================= home -->
-      <section class="view active" data-view="home">
+      <!-- The groups that hold more than one view show their views here (bot/shell.js). -->
+      <nav class="mb mb-sub" id="mbSub" aria-label="Views">
+        <div class="mb-subset" data-sub="market" hidden>
+          <button class="sub" data-tab="chart" data-i18n="nav.chart">Chart</button>
+          <button class="sub" data-tab="market" data-i18n="nav.market">Market</button>
+          <button class="sub" data-tab="news"><span data-i18n="section.news">News</span><i class="tab-dot" id="newsDot" hidden></i></button>
+          <button class="sub" data-tab="catalysts"><span data-i18n="nav.catalysts">Catalysts</span><i class="tab-dot" id="catalystDot" hidden></i></button>
+          <button class="sub" data-tab="research" data-i18n="nav.research">Research</button>
+        </div>
+        <div class="mb-subset" data-sub="portfolio" hidden>
+          <button class="sub" data-tab="portfolio" data-i18n="nav.portfolio">Portfolio</button>
+          <button class="sub" data-tab="money" data-i18n="bot.nav.money">Money</button>
+        </div>
+        <div class="mb-subset" data-sub="lab" hidden>
+          <button class="sub" data-tab="lab" data-i18n="nav.lab">Lab</button>
+          <button class="sub" data-tab="swarm"><span data-i18n="nav.swarm">Swarm</span><i class="tab-dot live-dot" id="swarmTabDot" hidden></i></button>
+          <button class="sub" data-tab="brain" data-i18n="nav.brain">Brain</button>
+          <button class="sub" data-tab="modes" data-i18n="bot.nav.modes">Modes</button>
+        </div>
+        <div class="mb-subset" data-sub="settings" hidden>
+          <button class="sub" data-tab="settings" data-i18n="nav.settings">Settings</button>
+          <a class="sub" href="/guide.html" target="_blank" rel="noopener" data-i18n="modes.guide">User guide</a>
+        </div>
+        <i id="liveTabDot" hidden></i>
+      </nav>
 
-        <!-- Whose money this is comes first, every time: real, practice or
-             simulated. Drawn by money.js; the number itself by chart.js. -->
-        <section class="hero moneycard" id="moneyCard">
-          <div class="mc-top">
-            <span class="mc-tag" id="mcTag"><i></i>…</span>
-            <span class="hero-state" id="heroMode"></span>
+      <!-- ============================================================== bot -->
+      <!-- The console. Every number and line comes from /api/bot, /api/bot/log
+           and the live socket (bot/*.js); nothing here is drawn from a guess. -->
+      <section class="view active mb mb-console" data-view="bot">
+        <!-- Shown only when something needs the owner (B1.3). -->
+        <div class="mb-strips" id="mbStrips">
+          <!-- Is it trading, and if not why, with the fix (modes.js). -->
+          <div id="homeReady"></div>
+          <!-- Buys waiting for a tap (semi-auto) or ideas it will not act on (manual). -->
+          <section class="proposals" id="proposalBox" hidden>
+            <div class="block-head"><h2 id="proposalTitle"></h2></div>
+            <div id="proposalList"></div>
+          </section>
+        </div>
+        <div class="mb-tiles" id="mbTiles" aria-label="Today"></div>
+        <div class="mb-crew" id="mbCrew" role="group" aria-label="Crew"></div>
+        <section class="mb-logbox" id="mbLogBox">
+          <div class="mb-logbar">
+            <div class="mb-tabs" role="tablist" id="mbLogTabs">
+              <button class="mb-tab on" role="tab" aria-selected="true" data-logtab="agent">agent.log</button>
+              <button class="mb-tab" role="tab" aria-selected="false" data-logtab="orders">orders</button>
+              <button class="mb-tab" role="tab" aria-selected="false" data-logtab="risk">risk</button>
+              <button class="mb-tab" role="tab" aria-selected="false" data-logtab="ledger">ledger</button>
+            </div>
+            <span class="mb-filter" id="mbLogFilter" hidden></span>
+            <input class="mb-search" id="mbLogSearch" type="search" autocomplete="off" data-i18n-placeholder="bot.log.search" data-i18n-label="bot.log.search">
+            <button id="btnScan" class="mb-btn" data-i18n="bot.log.scan">Scan now</button>
           </div>
-          <div class="figure skeleton" id="heroEquity">$0.00</div>
-          <div class="mc-empty" id="mcEmpty" hidden>
-            <b data-i18n="mc.empty"></b>
-            <p data-i18n="mc.emptyBody"></p>
-          </div>
-          <div class="hero-change" id="heroChange"></div>
-          <p class="mc-sub" id="mcSub"></p>
-          <div class="mc-result" id="mcResult" hidden></div>
-          <div class="spark" id="equitySpark"></div>
-          <div class="mc-actions" id="mcActions"></div>
+          <div class="mb-lines" id="mbLines" role="log" aria-live="off" tabindex="0"></div>
+          <div class="mb-ledger" id="mbLedger" hidden></div>
+          <button class="mb-newlines" id="mbNewLines" hidden></button>
         </section>
+        <aside class="mb-side" id="mbSide"></aside>
+        <section class="mb-queue" id="mbQueue" aria-label="Queue"></section>
+        <section class="mb-funnel" id="mbFunnel" aria-label="Why"></section>
+      </section>
+
+
+      <!-- ============================================================= home -->
+      <!-- 12.0: replaced by the Bot console; kept so the old modules keep their targets. -->
+      <section class="view" data-view="home">
 
         <!-- What the bot is doing right now, in words — the phone's version of
              the chat rail, which is tucked away behind a button on a small screen. -->
-        <!-- Is it trading, and if not why, with the fix (modes.js). -->
-        <div id="homeReady"></div>
-        <!-- Did the bot beat simply holding SPY? (modes.js) -->
-        <div id="homeScore"></div>
 
         <section class="now" id="nowCard" hidden>
           <div class="now-head">
@@ -162,11 +215,6 @@
           <ul class="now-feed" id="nowFeed"></ul>
         </section>
 
-        <!-- Buys waiting for a tap (semi-auto) or ideas it will not act on (manual). -->
-        <section class="proposals" id="proposalBox" hidden>
-          <div class="block-head"><h2 id="proposalTitle"></h2></div>
-          <div id="proposalList"></div>
-        </section>
 
         <!-- The one number people actually want: what has it made or lost me. -->
         <section class="perf" id="perfCard" hidden>
@@ -183,7 +231,6 @@
           <div id="positionList"></div>
         </section>
 
-        <div class="run" id="runBody"></div>
 
         <section class="block">
           <div class="block-head"><h2>Today</h2></div>
@@ -210,8 +257,6 @@
           <div class="actions">
             <button id="btnStart">Start</button>
             <button id="btnStop">Stop</button>
-            <button id="btnScan">Scan now</button>
-            <button id="btnArm" class="danger">Arm live</button>
           </div>
           <p class="note" id="armHint"></p>
         </section>
@@ -225,6 +270,28 @@
           <p class="note faint" data-i18n="port.subtitle"></p>
         </div>
         <div id="portReady"></div>
+        <!-- Whose money this is comes first, every time: real, practice or
+             simulated. Drawn by money.js; the number itself by chart.js. -->
+        <section class="hero moneycard" id="moneyCard">
+          <div class="mc-top">
+            <span class="mc-tag" id="mcTag"><i></i>…</span>
+            <span class="hero-state" id="heroMode"></span>
+          </div>
+          <div class="figure skeleton" id="heroEquity">$0.00</div>
+          <div class="mc-empty" id="mcEmpty" hidden>
+            <b data-i18n="mc.empty"></b>
+            <p data-i18n="mc.emptyBody"></p>
+          </div>
+          <div class="hero-change" id="heroChange"></div>
+          <p class="mc-sub" id="mcSub"></p>
+          <div class="mc-result" id="mcResult" hidden></div>
+          <div class="spark" id="equitySpark"></div>
+          <div class="mc-actions" id="mcActions"></div>
+        </section>
+
+        <!-- Did the bot beat simply holding SPY? (modes.js) -->
+        <div id="homeScore"></div>
+        <div class="run" id="runBody"></div>
         <div id="portBody"></div>
       </section>
 
@@ -611,61 +678,29 @@
 
     </main>
 
-    <nav class="tabbar" id="nav">
-      <button class="tab active" data-tab="home">
-        <svg viewBox="0 0 20 20"><path d="M3 9.5 10 4l7 5.5M5.5 8.5V16h9V8.5"/></svg>
-        <span data-i18n="nav.home">Home</span>
+    <nav class="mb mb-nav" id="nav" aria-label="Groups">
+      <button class="grp" data-group="bot">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 4.5h14v11H3zM6 8.5l2.5 2-2.5 2M10.5 12.5H14"/></svg>
+        <span data-i18n="bot.nav.bot">Bot</span>
       </button>
-      <button class="tab" data-tab="portfolio">
-        <svg viewBox="0 0 20 20"><path d="M10 3.2a6.8 6.8 0 1 0 6.8 6.8H10V3.2Z"/><path d="M12.6 2.9a6.9 6.9 0 0 1 4.5 4.5h-4.5V2.9Z"/></svg>
-        <span data-i18n="nav.portfolio">Portfolio</span>
-      </button>
-      <button class="tab" data-tab="live">
-        <svg viewBox="0 0 20 20"><path d="M2.5 10h3l2-5 3 10 2-6.5 1.5 1.5h3.5"/></svg>
-        <span data-i18n="nav.live">Live</span>
-        <i class="tab-dot live-dot" id="liveTabDot" hidden></i>
-      </button>
-      <button class="tab" data-tab="brain">
-        <svg viewBox="0 0 20 20"><path d="M10 3.2 12 7.6l4.8.5-3.6 3.2 1 4.7L10 13.6 5.8 16l1-4.7-3.6-3.2 4.8-.5L10 3.2Z"/></svg>
-        <span data-i18n="nav.brain">Brain</span>
-      </button>
-      <button class="tab" data-tab="lab">
-        <svg viewBox="0 0 20 20"><path d="M8 3.5h4M8.8 3.5v4.6L4.4 15a1.2 1.2 0 0 0 1 1.8h9.2a1.2 1.2 0 0 0 1-1.8l-4.4-6.9V3.5M6.4 12h7.2"/></svg>
-        <span data-i18n="nav.lab">Lab</span>
-      </button>
-      <button class="tab" data-tab="swarm">
-        <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="2.2"/><circle cx="4.5" cy="5" r="1.6"/><circle cx="15.5" cy="5" r="1.6"/><circle cx="4.5" cy="15" r="1.6"/><circle cx="15.5" cy="15" r="1.6"/><path d="M6 6.2 8.3 8.5M14 6.2l-2.3 2.3M6 13.8l2.3-2.3M14 13.8l-2.3-2.3"/></svg>
-        <span data-i18n="nav.swarm">Swarm</span>
-        <i class="tab-dot live-dot" id="swarmTabDot" hidden></i>
-      </button>
-      <button class="tab" data-tab="research">
-        <svg viewBox="0 0 20 20"><circle cx="9" cy="9" r="5.5"/><path d="m13.5 13.5 3 3"/></svg>
-        <span data-i18n="nav.research">Research</span>
-      </button>
-      <button class="tab" data-tab="chart">
-        <svg viewBox="0 0 20 20"><path d="M3 16V4M3 16h14M7 13V8.5M10.5 13V6M14 13v-3"/></svg>
-        <span data-i18n="nav.chart">Chart</span>
-      </button>
-      <button class="tab" data-tab="market">
-        <svg viewBox="0 0 20 20"><path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h8"/></svg>
+      <button class="grp" data-group="market">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 16V4M3 16h14M6.5 12l3-3.5 2.5 2 4-5"/></svg>
         <span data-i18n="nav.market">Market</span>
       </button>
-      <button class="tab" data-tab="news">
-        <svg viewBox="0 0 20 20"><path d="M3.5 4.5h10v11h-10v-11ZM13.5 8h3v6a1.5 1.5 0 0 1-3 0V8ZM5.5 7h6M5.5 10h6M5.5 13h4"/></svg>
-        <span data-i18n="section.news">News</span>
-        <i class="tab-dot" id="newsDot" hidden></i>
+      <button class="grp" data-group="portfolio">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3.2a6.8 6.8 0 1 0 6.8 6.8H10V3.2Z"/></svg>
+        <span data-i18n="nav.portfolio">Portfolio</span>
       </button>
-      <button class="tab" data-tab="catalysts">
-        <svg viewBox="0 0 20 20"><path d="M4 6.5h12v9H4v-9ZM4 9.5h12M7.5 4.5v3M12.5 4.5v3"/></svg>
-        <span data-i18n="nav.catalysts">Catalysts</span>
-        <i class="tab-dot" id="catalystDot" hidden></i>
+      <button class="grp" data-group="lab">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8 3.5h4M8.8 3.5v4.6L4.4 15a1.2 1.2 0 0 0 1 1.8h9.2a1.2 1.2 0 0 0 1-1.8l-4.4-6.9V3.5"/></svg>
+        <span data-i18n="nav.lab">Lab</span>
       </button>
-      <button class="tab" data-tab="activity">
-        <svg viewBox="0 0 20 20"><path d="M10 5.5V10l3 1.8M17 10a7 7 0 1 1-2.05-4.95"/></svg>
-        <span data-i18n="nav.activity">Activity</span>
+      <button class="grp" data-group="chat">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4.5h12v9H8.5L4 16.5v-12Z"/></svg>
+        <span data-i18n="bot.nav.chat">Chat</span>
       </button>
-      <button class="tab" data-tab="settings">
-        <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="2.6"/><path d="M10 3.2v2M10 15v1.8M16.8 10h-1.8M5 10H3.2M14.8 5.2l-1.3 1.3M6.5 13.5l-1.3 1.3M14.8 14.8l-1.3-1.3M6.5 6.5 5.2 5.2"/></svg>
+      <button class="grp" data-group="settings">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="2.6"/><path d="M10 3.2v2M10 15v1.8M16.8 10h-1.8M5 10H3.2M14.8 5.2l-1.3 1.3M6.5 13.5l-1.3 1.3M14.8 14.8l-1.3-1.3M6.5 6.5 5.2 5.2"/></svg>
         <span data-i18n="nav.settings">Settings</span>
       </button>
     </nav>
@@ -684,6 +719,8 @@
 <script type="module" src="/lab.js"></script>
 <script type="module" src="/shots.js"></script>
 <script type="module" src="/privacy.js"></script>
+<script type="module" src="/bot/shell.js"></script>
+<script type="module" src="/bot/bot.js"></script>
 <script src="/sw-register.js"></script>
 </body>
 </html>

@@ -16,7 +16,7 @@ let runConfig = null;
 let pickStake = null;
 let pickMult = null;
 let selected = null;
-let activeView = "home";
+let activeView = "bot";
 let lastQuote = null;
 let claudeReady = false;
 let aiMemory = [];
@@ -204,7 +204,10 @@ const sparkSeries = spark.addAreaSeries({
 function showView(name) {
   // Setup became part of Settings in 6.0.
   if (name === "setup") name = "settings";
-  if (!document.querySelector(`.view[data-view="${name}"]`)) name = "home";
+  // 12.0: Home, Live and Activity became the Bot console (agent.log, ledger).
+  if (name === "activity") window.dispatchEvent(new CustomEvent("mb:logtab", { detail: "ledger" }));
+  if (name === "home" || name === "live" || name === "activity") name = "bot";
+  if (!document.querySelector(`.view[data-view="${name}"]`)) name = "bot";
   activeView = name;
   try { localStorage.setItem("mt_view", name); } catch { /* storage off: the app opens on Home */ }
   document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
@@ -885,7 +888,12 @@ function connect() {
       alertCatalyst(msg.catalyst);
     }
   };
-  socket.onclose = () => setTimeout(connect, 3000);
+  // The console shows a thin strip while the socket is down and fills the gap on return.
+  socket.onopen = () => window.dispatchEvent(new CustomEvent("mt:ws-state", { detail: "open" }));
+  socket.onclose = () => {
+    window.dispatchEvent(new CustomEvent("mt:ws-state", { detail: "closed" }));
+    setTimeout(connect, 3000);
+  };
 }
 
 /* =================================================================== news */
