@@ -1,0 +1,146 @@
+/* Money Bot 12.0 shell: top bar, six groups, sub-tabs (B1.1, B1.2).
+   Left strip at >= 1100 px, bottom bar below. Loaded after theme.css. */
+
+/* ------------------------------------------------------------- top bar */
+
+.top.mb-top {
+  height: 48px; padding: 0 var(--s4); gap: var(--s2);
+  background: var(--bg); border-bottom: 1px solid var(--line); box-shadow: none;
+  font-family: var(--sans);
+}
+.top.mb-top::after { display: none; }
+
+.mb-brand {
+  display: inline-flex; align-items: center; gap: var(--s2); flex: none;
+  padding: 0 var(--s1); height: 32px; border: 0; background: none; cursor: pointer;
+  color: var(--text); font: 600 var(--f-body)/1 var(--mono); letter-spacing: 0;
+}
+.mb-brand:hover:not(:disabled) { background: none; color: var(--accent); }
+.mb-brand img { display: block; }
+
+.mb-chip {
+  display: inline-flex; align-items: center; gap: 6px; min-width: 0;
+  height: 24px; padding: 0 var(--s2); border-radius: var(--radius-sm);
+  border: 1px solid var(--line-2); background: var(--panel);
+  color: var(--text-2); font: 600 var(--f-time)/1 var(--mono); letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+.mb-account[data-kind="paper"] { color: var(--text); }
+.mb-account[data-kind="live"] { color: var(--bad); border-color: rgba(255, 107, 96, 0.45); }
+.mb-account[data-kind="armed"] { color: #000; background: var(--bad); border-color: var(--bad); }
+.mb-market { letter-spacing: 0; font-weight: 500; overflow: hidden; flex: 0 1 auto; }
+.mb-market #mbMarket { overflow: hidden; text-overflow: ellipsis; }
+.mb-market .top-clock { color: var(--text-3); font-size: var(--f-time); }
+.mb-market .dot.open::after { display: none; }     /* no self-pulsing ring */
+.mb-market .dot.open { box-shadow: none; }
+.mb-top-gap { flex: 1; }
+.mb-top .top-right { gap: var(--s2); }
+
+.mb-top .halt-btn,
+.mb-top .halt-btn[data-state="on"],
+.mb-top .halt-btn[data-state="off"] {
+  height: 32px; padding: 0 var(--s4) 0 var(--s3); border-radius: var(--radius-sm);
+  font: 700 var(--f-label)/1 var(--mono); letter-spacing: 0.12em;
+  background: transparent; box-shadow: none; transform: none;
+}
+.mb-top .halt-btn[data-state="on"] { color: var(--bad); border: 1px solid var(--bad); }
+.mb-top .halt-btn[data-state="on"]:hover { background: rgba(255, 107, 96, 0.12); }
+.mb-top .halt-btn[data-state="off"] { color: var(--accent); border: 1px solid var(--accent); }
+.mb-top .halt-btn[data-state="off"]:hover { background: rgba(255, 214, 10, 0.10); }
+.mb-top .halt-led { animation: none !important; }
+
+/* Arm only exists for a real account; on practice money chart.js disables it. */
+.mb-top .mb-arm { height: 32px; padding: 0 var(--s3); border-radius: var(--radius-sm); font: 600 var(--f-label)/1 var(--sans); }
+.mb-top .mb-arm:disabled, .mb-top .mb-arm.mb-nolive, .mb-top .mb-arm[hidden] { display: none; }
+
+.mb-wsbar {
+  position: sticky; top: 48px; z-index: 29;
+  padding: var(--s1) var(--s4); background: rgba(255, 159, 10, 0.12);
+  border-bottom: 1px solid rgba(255, 159, 10, 0.35);
+  color: var(--warn); font: 500 var(--f-label)/1.4 var(--sans);
+}
+
+/* -------------------------------------------------------------- groups */
+
+.mb-nav {
+  position: fixed; z-index: 40; display: flex;
+  background: var(--bg); font-family: var(--sans);
+}
+.mb-nav .grp {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  padding: 0 2px; border: 0; border-radius: var(--radius-sm); background: none; cursor: pointer;
+  color: var(--text-3); font: 500 10.5px/1.1 var(--sans);
+}
+.mb-nav .grp:hover:not(:disabled) { background: var(--panel-2); color: var(--text); }
+.mb-nav .grp[aria-current="page"] { color: var(--accent); background: rgba(255, 214, 10, 0.08); }
+.mb-nav .grp svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ----------------------------------------------------------- sub-tabs */
+
+.mb-sub { display: flex; gap: var(--s1); margin: 0 0 var(--s4); border-bottom: 1px solid var(--line); }
+.mb-sub:not(:has(.mb-subset:not([hidden]))) { display: none; }
+.mb-subset { display: flex; gap: var(--s1); overflow-x: auto; scrollbar-width: none; }
+.mb-subset::-webkit-scrollbar { display: none; }
+.mb-sub .sub {
+  position: relative; display: inline-flex; align-items: center; gap: 6px; flex: none;
+  height: 36px; padding: 0 var(--s3); border: 0; border-radius: 0; background: none; cursor: pointer;
+  color: var(--text-2); font: 500 var(--f-body)/1 var(--sans); text-decoration: none;
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.mb-sub .sub:hover:not(:disabled) { background: none; color: var(--text); }
+.mb-sub .sub[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+.mb-sub .tab-dot { position: static; }
+
+/* The Bot console is wide; the older views keep their reading column. */
+body[data-group="bot"] .page { max-width: none; padding: var(--s3) var(--s4) var(--s4); }
+body[data-group="bot"] .view.active > * { animation: none; }
+
+/* ------------------------------------------------------ desktop strip */
+
+@media (min-width: 1100px) {
+  .shell { padding-left: 72px; }
+  .mb-nav {
+    left: 0; top: 0; bottom: 0; width: 72px;
+    flex-direction: column; gap: var(--s1); padding: var(--s2);
+    border-right: 1px solid var(--line);
+  }
+  .mb-nav .grp { width: 56px; height: 56px; }
+  .main { padding-bottom: 0; }
+  /* The chat is a rail that opens beside the page, not a permanent column. */
+  .ai { display: none; }
+  body.mb-chat .ai { display: flex; }
+  .only-phone { display: none; }
+}
+
+/* --------------------------------------------------------- phone bar */
+
+@media (max-width: 1099px) {
+  .shell { display: block; }
+  .mb-nav {
+    left: 0; right: 0; bottom: 0; height: calc(56px + env(safe-area-inset-bottom));
+    padding: 0 var(--s1) env(safe-area-inset-bottom);
+    border-top: 1px solid var(--line);
+  }
+  .mb-nav .grp { flex: 1; min-width: 0; height: 56px; }
+  .mb-nav .grp span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .main { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  /* The chat slides up as a sheet (dashboard.css does this only up to 1000 px). */
+  .ai {
+    position: fixed; inset: 0; width: auto; height: 100dvh; z-index: 60;
+    border-right: none; transform: translateY(100%); transition: transform 0.42s var(--ease);
+  }
+  .ai.open { transform: none; }
+  #aiClose { display: grid; }
+  .only-phone { display: none; }           /* Chat is in the bottom bar now */
+  .top.mb-top { padding: 0 var(--s3); }
+  .mb-top .halt-btn { min-height: 44px; }
+}
+
+@media (max-width: 640px) {
+  .mb-brand span, .mb-market .top-clock, .mb-top .ready-pill { display: none; }
+  .mb-market { flex: 1 1 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mb *, .mb *::before, .mb *::after { transition: none !important; animation: none !important; }
+}

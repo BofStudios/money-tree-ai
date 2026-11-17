@@ -1,0 +1,53 @@
+/* Money Bot 12.0 design tokens.
+ *
+ * Scoped to .mb (the new shell and the Bot console) so the older views keep
+ * theme.css, whose --line is yellow-tinted. Not .bot: brain.css already owns
+ * that class for the Swarm cards.
+ *
+ * Contrast on --panel #0c0b09, measured: --text-3 .50 white = 5.40:1 (the
+ * plan's .38 was 3.53:1, too low for 11 px timestamps). Every agent tone and
+ * --good/--bad/--warn is >= 7:1.
+ */
+
+.mb {
+  --bg: #050403;
+  --panel: #0c0b09;
+  --panel-2: #131210;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-2: rgba(255, 255, 255, 0.14);
+  --text: #fffdf2;
+  --text-2: rgba(255, 255, 255, 0.72);
+  --text-3: rgba(255, 255, 255, 0.50);
+  --accent: #ffd60a;
+  --good: #32d583;
+  --bad: #ff6b60;
+  --warn: #ff9f0a;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --mono: ui-monospace, "Cascadia Mono", "Cascadia Code", Consolas, "SF Mono", Menlo, monospace;
+  --sans: -apple-system, "Segoe UI", system-ui, Roboto, sans-serif;
+
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px;
+  --f-time: 11px; --f-label: 12px; --f-body: 13px; --f-title: 15px; --f-num-m: 22px; --f-num: 34px;
+
+  /* one tone per agent */
+  --atlas: #7cc4ff;
+  --vega: #c9a3ff;
+  --orion: #ffd60a;
+  --titan: #5fe0a2;
+  --luna: #ff9db0;
+  --nova: #ff7a59;
+  --rigel: #9fb4c8;
+}
+
+.mb [data-agent="atlas"] { --tone: var(--atlas); }
+.mb [data-agent="vega"]  { --tone: var(--vega); }
+.mb [data-agent="orion"] { --tone: var(--orion); }
+.mb [data-agent="titan"] { --tone: var(--titan); }
+.mb [data-agent="luna"]  { --tone: var(--luna); }
+.mb [data-agent="nova"]  { --tone: var(--nova); }
+.mb [data-agent="rigel"] { --tone: var(--rigel); }
+
+.mb .num, .mb .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.mb :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
