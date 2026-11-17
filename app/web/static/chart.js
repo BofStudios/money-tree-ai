@@ -717,7 +717,7 @@ function renderControls(s) {
   if (s.mode === "paper") {
     arm.disabled = true;
     hint.className = "note";
-    hint.textContent = tr("hint.paper", null, "Practice money. The prices are real. The money is not real.");
+    hint.textContent = tr("hint.paper", null, "No real account is connected yet.");
     return;
   }
   arm.disabled = false;
