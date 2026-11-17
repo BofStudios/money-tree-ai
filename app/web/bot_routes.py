@@ -92,11 +92,13 @@ def build_bot_router(engine, repo, events, token) -> APIRouter:
         allowed = {"budget", "per_trade_pct", "daily_loss", "max_positions", "confirm"}
         if not body or set(body) - allowed:
             raise HTTPException(status_code=400, detail="Send budget, per_trade_pct, daily_loss or max_positions (null removes one).")
-        done = change(body)
+        return {**change(body), "risk": risk_now()}
+
+    def risk_now() -> dict:
         from app.engine import scalper
 
-        return {**done, "risk": risk_view(engine, scalper.SLOTS if getattr(engine, "ultra", False) else
-                                           int(engine.config.risk.max_open_positions), turkish(None))}
+        return risk_view(engine, scalper.SLOTS if getattr(engine, "ultra", False) else
+                         int(engine.config.risk.max_open_positions), turkish(None))
 
     @router.post("/pace", dependencies=owner)
     def set_pace(body: dict = Body(default={})) -> dict:
@@ -109,7 +111,7 @@ def build_bot_router(engine, repo, events, token) -> APIRouter:
     def set_planner(body: dict = Body(default={})) -> dict:
         if not isinstance(body.get("on"), bool):
             raise HTTPException(status_code=400, detail='Send {"on": true} or {"on": false}.')
-        return change({"planner": body["on"]})
+        return {**change({"planner": body["on"]}), "risk": risk_now()}
 
     @router.get("/paces", dependencies=guarded)
     def paces() -> dict:

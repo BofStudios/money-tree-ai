@@ -119,7 +119,7 @@ def risk_view(engine, engine_max: int, turkish: bool) -> dict:
         realized = float(getattr(engine.risk, "_daily_realized_pnl", 0.0) or 0.0)
     except Exception:
         realized = 0.0
-    used = round(max(-realized, 0.0), 2)
+    used = round(max(-realized, 0.0), 2) + 0.0          # never "-0.0"
     paused = None
     if v.get("daily_loss") is not None and used >= float(v["daily_loss"]):
         paused = "Daily loss limit reached: no new buys today" if not turkish else "Günlük zarar sınırı doldu: bugün yeni alım yok"
