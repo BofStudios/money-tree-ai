@@ -22,10 +22,11 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures"
 
 
-def build(static: Path) -> FastAPI:
+def build(static: Path, fixture: str = "open") -> FastAPI:
     app = FastAPI()
-    snap = json.loads((FIXTURES / "bot_snapshot.json").read_text(encoding="utf-8"))
-    lines = [json.loads(r) for r in (FIXTURES / "bot_log.jsonl").read_text(encoding="utf-8").splitlines() if r.strip()]
+    tail = "" if fixture == "open" else f"_{fixture}"
+    snap = json.loads((FIXTURES / f"bot_snapshot{tail}.json").read_text(encoding="utf-8"))
+    lines = [json.loads(r) for r in (FIXTURES / f"bot_log{tail}.jsonl").read_text(encoding="utf-8").splitlines() if r.strip()]
     start = max(0, len(lines) - 60)          # the first part is already "there", the rest is played
     played = {"n": start}
 
@@ -35,12 +36,15 @@ def build(static: Path) -> FastAPI:
         return {**snap, "log_head": shown[-1]["n"] if shown else 0}
 
     @app.get("/api/bot/log")
-    def log(after: int = 0, limit: int = 200, agent: str | None = None, tab: str | None = None) -> dict:
+    def log(after: int = 0, limit: int = 200, agent: str | None = None, tab: str | None = None,
+            before: int | None = None) -> dict:
         verbs = {"orders": ("order", "fill", "partial", "exit", "stop", "target"),
                  "risk": ("veto", "pause", "resume", "arm", "disarm")}.get(tab or "")
         rows = [l for l in lines[:played["n"]]
-                if l["n"] > after and (not agent or l["agent"] == agent) and (verbs is None or l["verb"] in verbs)]
-        return {"head": rows[-1]["n"] if rows else after, "lines": rows[:limit] if after else rows[-limit:]}
+                if l["n"] > after and (before is None or l["n"] < before)
+                and (not agent or l["agent"] == agent) and (verbs is None or l["verb"] in verbs)]
+        head = lines[played["n"] - 1]["n"] if played["n"] else 0
+        return {"head": head, "lines": rows[:limit] if after and before is None else rows[-limit:]}
 
     @app.get("/api/bot/ledger")
     def ledger(range: str = "today") -> dict:
@@ -73,5 +77,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--static", default=str(ROOT / "app" / "web" / "static"))
     parser.add_argument("--port", type=int, default=8820)
+    parser.add_argument("--fixture", choices=["open", "closed"], default="open",
+                        help="open: market open, no trades; closed: market closed, Ultra on, the Lab's proof says lost")
     args = parser.parse_args()
-    uvicorn.run(build(Path(args.static)), host="127.0.0.1", port=args.port, log_level="warning")
+    uvicorn.run(build(Path(args.static), args.fixture), host="127.0.0.1", port=args.port, log_level="warning")

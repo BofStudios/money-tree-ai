@@ -66,8 +66,9 @@ def build_bot_router(engine, repo, events, token) -> APIRouter:
 
     @router.get("/log", dependencies=guarded)
     def log_lines(after: int = Query(default=0, ge=0), limit: int = Query(default=200, ge=1, le=500),
-                  agent: str | None = Query(default=None), tab: str | None = Query(default=None)) -> dict:
-        return {"head": agent_log.head, "lines": agent_log.lines(after, limit, agent, tab)}
+                  agent: str | None = Query(default=None), tab: str | None = Query(default=None),
+                  before: int | None = Query(default=None, ge=1)) -> dict:
+        return {"head": agent_log.head, "lines": agent_log.lines(after, limit, agent, tab, before)}
 
     @router.get("/ledger", dependencies=guarded)
     def ledger(range: str = Query(default="today", pattern="^(today|week|all)$")) -> dict:

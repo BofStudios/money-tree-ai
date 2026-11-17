@@ -231,6 +231,36 @@ def report(engine, turkish: bool = False) -> dict:
                       f"Bugün {sum(v.get('count', 0) for v in blocked.values())} veto · {loss} · sektörler: {exposure}"),
             "items": nova_items or [t("No veto today.", "Bugün veto yok.")]}
 
-    return {"agents": [atlas, vega, orion, titan, luna, nova],
+    # Rigel: the research (12.0)
+    lab = getattr(engine, "lab", None)
+    rigel_items: list[str] = []
+    stat = t("No Lab replay yet", "Henüz Lab tekrarı yok")
+    try:
+        report = (lab.status() or {}).get("report") or {} if lab is not None else {}
+        m = (report.get("rules") or {}).get("9.0")
+        if m:
+            stat = t(f"Last replay: {m.get('trades', 0)} trades, {m.get('avg') or 0:+.3f}% a trade, PF {m.get('profit_factor') or 0:.2f}",
+                     f"Son tekrar: {m.get('trades', 0)} işlem, işlem başı %{m.get('avg') or 0:+.3f}, PF {m.get('profit_factor') or 0:.2f}")
+        blocked = list(report.get("blocked") or [])
+        if blocked and getattr(lab, "edge_on", False):
+            rigel_items.append(t(f"Skipped because the replay lost on them: {', '.join(blocked[:8])}",
+                                 f"Tekrarda kaybettikleri için atlanıyor: {', '.join(blocked[:8])}"))
+    except Exception:
+        pass
+    swarm = getattr(getattr(engine, "brain", None), "swarm", None)
+    try:
+        if swarm is not None and swarm.running:
+            rigel_items.append(t("The swarm is testing strategies on months of candles.",
+                                 "Sürü aylık mumlar üzerinde strateji deniyor."))
+    except Exception:
+        pass
+    rigel = {"id": "rigel", "name": "Rigel", "role": t("Researches", "Araştırır"),
+             "how": t("Replays Ultra's rules on the last week of real one-minute bars (the Lab), keeps the list of symbols "
+                      "the rule lost on, and watches what the swarm learns.",
+                      "Ultra'nın kurallarını son haftanın gerçek 1 dakikalık mumlarında yeniden oynatır (Lab), kuralın "
+                      "kaybettiği sembollerin listesini tutar ve sürünün öğrendiklerini izler."),
+             "stat": stat, "items": rigel_items or [t("Nothing to add right now.", "Şu an eklenecek bir şey yok.")]}
+
+    return {"agents": [atlas, vega, orion, titan, luna, nova, rigel],
             "note": t("Each agent is a part of the bot. Nova always has the last word. No agent can arm real money.",
                       "Her ajan botun bir parçasıdır. Son söz her zaman Nova'nındır. Hiçbir ajan gerçek parayı kuramaz.")}

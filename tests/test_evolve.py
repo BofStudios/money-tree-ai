@@ -392,5 +392,5 @@ def test_every_buy_gets_a_thesis_and_the_desk_shows_six_agents(tmp_path):
     again = build(tmp_path, state_path=state)
     assert again._thesis_log, "theses survive a restart"
     d = report(engine)
-    assert [a["id"] for a in d["agents"]] == ["atlas", "vega", "orion", "titan", "luna", "nova"]
+    assert [a["id"] for a in d["agents"]] == ["atlas", "vega", "orion", "titan", "luna", "nova", "rigel"]
     assert d["agents"][2]["theses"]
