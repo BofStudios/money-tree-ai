@@ -110,8 +110,7 @@ function renderCard() {
   $("mcActions").innerHTML = real
     ? `<button class="primary" data-money="add">${esc(t("mc.add"))}</button>
        <button class="ghost" data-money="out">${esc(t("mc.withdraw"))}</button>`
-    : `<button class="primary" data-go-real>${esc(t("mc.goReal"))}</button>
-       <button class="ghost" data-money="add">${esc(t("mc.add"))}</button>`;
+    : `<button class="ghost" data-money="add">${esc(t("mc.add"))}</button>`;
 }
 
 document.addEventListener("click", (e) => {
@@ -264,15 +263,8 @@ function renderSettings() {
   const inUse = (keys && keys.in_use) || s.broker;
 
   host.innerHTML = `
+    <!-- 12.0: real money is the only way; no practice switch, no paper keys. -->
     <div class="field-block">
-      <label>${esc(t("sm.mode"))}</label>
-      <div class="seg-row" id="modeRow">
-        ${["live", "paper"].map((m) => `
-          <button class="seg ${mode === m ? "active" : ""} ${m === "live" ? "seg-real" : ""}" data-set-mode="${m}">
-            ${esc(t({ paper: "sm.modePaper", live: "sm.modeLive" }[m]))}
-          </button>`).join("")}
-      </div>
-      <p class="note faint">${esc(t(`sm.modeHint.${mode}`))}</p>
       <p class="note">${esc(t("sm.inUse", { what: t(`sm.use.${inUse}`) }))}</p>
     </div>
     ${keys && keys.restart_needed ? `
@@ -280,7 +272,6 @@ function renderSettings() {
         <span>${esc(t("sm.restartNeeded"))}</span>
         <button class="primary sm" data-restart>${esc(t("sm.restart"))}</button>
       </div>` : ""}
-    ${keyForm("paper")}
     ${keyForm("live")}
     <p class="note faint">${esc(t("sm.where"))}</p>
     <p class="note faint">${esc(t("sm.encrypted"))}</p>`;

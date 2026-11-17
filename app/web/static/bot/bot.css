@@ -4,7 +4,7 @@
 .mb-console.view.active {
   display: grid; gap: var(--s3);
   grid-template-columns: repeat(12, minmax(0, 1fr));
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
   height: calc(100dvh - 48px - var(--s3) - var(--s4));
   color: var(--text); font: 400 var(--f-body)/1.45 var(--sans);
 }
@@ -16,13 +16,14 @@
 
 /* Tiles and crew share a row only on wide screens (>= 1600 px); below that the
    seven cards would be too narrow to read, so they take their own row. */
-.mb-tiles  { grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s3); }
-.mb-crew   { grid-column: 1 / -1; grid-row: 3; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--s2); position: relative; }
-.mb-logbox { grid-column: 1 / 8; grid-row: 4; }
-.mb-side   { grid-column: 8 / 13; grid-row: 4; }
-.mb-queue  { grid-column: 1 / 8; grid-row: 5; }
-.mb-funnel { grid-column: 8 / 13; grid-row: 5; }
-.mb-strips:not(:has(> :not([hidden]):not(:empty))) + .mb-tiles { margin-top: calc(-1 * var(--s3)); }
+.mb-amount { grid-column: 1 / -1; grid-row: 2; }
+.mb-tiles  { grid-column: 1 / -1; grid-row: 3; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s3); }
+.mb-crew   { grid-column: 1 / -1; grid-row: 4; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--s2); position: relative; }
+.mb-logbox { grid-column: 1 / 8; grid-row: 5; }
+.mb-side   { grid-column: 8 / 13; grid-row: 5; }
+.mb-queue  { grid-column: 1 / 8; grid-row: 6; }
+.mb-funnel { grid-column: 8 / 13; grid-row: 6; }
+.mb-strips:not(:has(> :not([hidden]):not(:empty))) ~ .mb-amount { margin-top: calc(-1 * var(--s3)); }
 
 .mb-tile, .mb-card, .mb-logbox, .mb-side, .mb-queue, .mb-funnel {
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
@@ -225,7 +226,7 @@ button.mb-tile:hover:not(:disabled) { border-color: var(--line-2); background: v
 
 @media (min-width: 1600px) {
   .mb-tiles { grid-column: 1 / 7; }
-  .mb-crew { grid-column: 7 / 13; grid-row: 2; }
+  .mb-crew { grid-column: 7 / 13; grid-row: 3; }
 }
 
 /* ------------------------------------------------- phone: one column */
@@ -319,3 +320,41 @@ button.mb-tile:hover:not(:disabled) { border-color: var(--line-2); background: v
 .mb-advice em { font-style: normal; font-family: var(--mono); color: var(--text); }
 .mb-advice li[data-act="shrink"] em, .mb-advice li[data-act="skip"] em { color: var(--warn); }
 .mb-advice small { grid-column: 2 / -1; }
+
+/* -------------------------------------- real money: setup + amount (12.0) */
+
+.mb-amount { display: flex; flex-direction: column; gap: var(--s3); }
+.mb-amount:empty { display: none; }
+.mb-setup {
+  display: flex; align-items: center; gap: var(--s4); flex-wrap: wrap;
+  padding: var(--s2) var(--s4); border: 1px solid var(--accent); border-radius: var(--radius); background: var(--panel);
+}
+.mb-setup ol { display: flex; gap: var(--s2); margin: 0; padding: 0; list-style: none; counter-reset: st; }
+.mb-setup li { counter-increment: st; display: inline-flex; align-items: center; gap: 6px; color: var(--text-3); font: 600 var(--f-label)/1 var(--sans); }
+.mb-setup li::before {
+  content: counter(st); display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%;
+  border: 1px solid var(--line-2); font: 600 var(--f-time)/1 var(--mono);
+}
+.mb-setup li + li::after { content: none; }
+.mb-setup li.is-now { color: var(--accent); }
+.mb-setup li.is-now::before { border-color: var(--accent); }
+.mb-setup li.is-done { color: var(--text-2); }
+.mb-setup li.is-done::before { content: "✓"; border-color: var(--good); color: var(--good); }
+.mb-setup p { flex: 1; min-width: 220px; margin: 0; color: var(--text); font-size: var(--f-body); }
+.mb-amount-form { display: flex; align-items: flex-end; gap: var(--s2) var(--s5); flex-wrap: wrap; padding: var(--s2) var(--s4); border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
+.mb-amount-form label { display: block; color: var(--text-3); font: 600 var(--f-time)/1 var(--sans); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: var(--s2); }
+.mb-amount-row { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.mb-amount-cur { color: var(--text-3); font-size: var(--f-num); font-weight: 600; line-height: 1; }
+.mb-amount-in {
+  width: min(320px, 60vw); padding: 0; border: 0; border-bottom: 1px solid var(--line-2); border-radius: 0; background: transparent;
+  color: var(--text); font-size: var(--f-num); font-weight: 600; line-height: 1.1; -moz-appearance: textfield;
+}
+.mb-amount-in::-webkit-outer-spin-button, .mb-amount-in::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.mb-amount-in:focus { outline: none; border-bottom-color: var(--accent); }
+.mb-amount-in:disabled { color: var(--text-3); }
+.mb-amount-form > label { flex-basis: 100%; margin-bottom: 0; }
+.mb-amount-form .mb-note { flex-basis: 100%; margin: 0; }
+.mb-amount-say { flex: 1; min-width: 220px; padding-bottom: 6px; margin: 0; color: var(--text-2); font-size: var(--f-label); }
+@media (max-width: 1099px) {
+  .mb-amount-cur, .mb-amount-in { font-size: var(--f-num-m); }
+}

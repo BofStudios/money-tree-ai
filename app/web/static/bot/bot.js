@@ -15,6 +15,7 @@ import "./side.js";
 import "./queue.js";
 import "./funnel.js";
 import "./risk.js";
+import "./amount.js";
 
 /* ------------------------------------------------------------- top bar */
 
@@ -22,7 +23,8 @@ function accountChip(a) {
   const el = $("mbAccount");
   if (!el) return;
   if (!a) { el.dataset.kind = "none"; el.textContent = "—"; return; }
-  const kind = a.mode !== "live" ? "paper" : a.armed ? "armed" : "live";
+  // Real money is the only way; an account that is not live is simply not connected yet.
+  const kind = a.mode !== "live" ? "none" : a.armed ? "armed" : "live";
   el.dataset.kind = kind;
   // Arm keeps its old behaviour (chart.js) but only exists on a real account.
   $("btnArm")?.classList.toggle("mb-nolive", a.mode !== "live");
