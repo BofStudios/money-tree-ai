@@ -1117,6 +1117,16 @@ const STRINGS = {
     "bot.m.chart": "Chart",
     "bot.m.queue": "Queue",
     "bot.m.why": "Why",
+    "bot.planner.title": "AI planner",
+    "bot.planner.on": "On",
+    "bot.planner.off": "Off",
+    "bot.planner.what": "Before a trade the AI may keep it, make it smaller or skip it. It can never start a trade or loosen a limit.",
+    "bot.planner.left": "{n} AI calls left today.",
+    "bot.planner.none": "No advice right now.",
+    "bot.planner.until": "until {t}",
+    "bot.planner.act.keep": "keep",
+    "bot.planner.act.shrink": "shrink",
+    "bot.planner.act.skip": "skip",
   },
 
   tr: {
@@ -2211,6 +2221,16 @@ const STRINGS = {
     "bot.m.chart": "Grafik",
     "bot.m.queue": "Kuyruk",
     "bot.m.why": "Neden",
+    "bot.planner.title": "Yapay zekâ planlayıcı",
+    "bot.planner.on": "Açık",
+    "bot.planner.off": "Kapalı",
+    "bot.planner.what": "İşlemden önce yapay zekâ onu olduğu gibi bırakabilir, küçültebilir ya da atlayabilir. Asla işlem başlatamaz, sınır gevşetemez.",
+    "bot.planner.left": "Bugün {n} yapay zekâ çağrısı kaldı.",
+    "bot.planner.none": "Şu an öneri yok.",
+    "bot.planner.until": "{t} saatine kadar",
+    "bot.planner.act.keep": "bırak",
+    "bot.planner.act.shrink": "küçült",
+    "bot.planner.act.skip": "atla",
   },
 };
 
