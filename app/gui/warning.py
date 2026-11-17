@@ -48,7 +48,7 @@ def power_warning(bots: int, turkish: bool) -> tuple[int, str, bool] | None:
     title.setObjectName("title")
     title.setWordWrap(True)
     body = QLabel(t(
-        f"Money Tree runs {bots} strategy bots as separate processes. Each bot tests thousands of strategies "
+        f"Money Bot runs {bots} strategy bots as separate processes. Each bot tests thousands of strategies "
         f"a second on real prices. The research desk also reads SEC reports and the news of the whole market.\n\n"
         f"This can use 1–2 GB of RAM and most of your {cores} CPU cores. Know these results:\n"
         f"  •  Other programs and games can become slow.\n"
@@ -56,7 +56,7 @@ def power_warning(bots: int, turkish: bool) -> tuple[int, str, bool] | None:
         f"  •  The PC uses more electricity.\n"
         f"  •  More computing does not give more profit. You can lose real money.\n\n"
         f"The bots run at low priority. You can change the number of bots or the power on the Swarm page.",
-        f"Money Tree {bots} strateji botunu ayrı işlemler olarak çalıştırır. Her bot gerçek fiyatlarla saniyede "
+        f"Money Bot {bots} strateji botunu ayrı işlemler olarak çalıştırır. Her bot gerçek fiyatlarla saniyede "
         f"binlerce strateji dener. Araştırma masası ayrıca SEC raporlarını ve tüm piyasanın haberlerini okur.\n\n"
         f"Bu, 1–2 GB RAM ve {cores} işlemci çekirdeğinin çoğunu kullanabilir. Sonuçları bil:\n"
         f"  •  Başka programlar ve oyunlar yavaşlayabilir.\n"

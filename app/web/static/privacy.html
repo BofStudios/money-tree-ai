@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Money Tree Privacy</title>
-<meta name="description" content="What Money Tree keeps on your PC, what leaves it, and who gets it.">
+<title>Money Bot Privacy</title>
+<meta name="description" content="What Money Bot keeps on your PC, what leaves it, and who gets it.">
 <style>
   :root {
     --bg: #050403; --surface: #110e07; --line: rgba(255, 214, 10, 0.18); --text: #fffdf2; --text-2: #c9c2a8;
@@ -74,15 +74,15 @@
 <body class="en">
 <header class="top">
   <img src="/logo.png" alt="">
-  <b>Money Tree</b>
+  <b>Money Bot</b>
   <span class="sp"></span>
   <div class="lang"><button data-set="en" class="on">English</button> <button data-set="tr">Türkçe</button></div>
 </header>
 <main>
 <!-- Made by scripts/gen_privacy.py from app/privacy/docs.py. Do not edit by hand. -->
 <div data-lang="en">
-  <h1>Money Tree <em>Privacy</em></h1>
-  <p class="lead">Money Tree is a program on your PC. There is no account and no server of ours. This page says what is kept, what leaves the PC and who gets it. It is written from the code, and a test fails when the two disagree.</p>
+  <h1>Money Bot <em>Privacy</em></h1>
+  <p class="lead">Money Bot is a program on your PC. There is no account and no server of ours. This page says what is kept, what leaves the PC and who gets it. It is written from the code, and a test fails when the two disagree.</p>
   <h2>The short version</h2>
   <ul>
     <li><strong>Nothing is sent to us.</strong> BofStudios has no server, no account system and no way to see your data.</li>
@@ -105,7 +105,7 @@
     <tr><td><code>data/mentor_feed.json</code></td><td>What the app said in the side chat.</td><td></td></tr>
     <tr><td><code>data/brain</code></td><td>What the bot learned: news memory, strategy progress, the swarm.</td><td></td></tr>
     <tr><td><code>data/lab.json</code></td><td>The last Lab replay and the edge switch.</td><td></td></tr>
-    <tr><td><code>data/bot</code></td><td>The console: the agent log, why trades did or did not happen, the day&#x27;s start value.</td><td></td></tr>
+    <tr><td><code>data/bot</code></td><td>The console: the agent log, why trades did or did not happen, the day&#x27;s start value, your limits and pace, the planner&#x27;s daily call count.</td><td></td></tr>
     <tr><td><code>data/privacy.json</code></td><td>These privacy choices.</td><td></td></tr>
     <tr><td><code>data/journal.json</code></td><td>Counters: how long the app has run.</td><td></td></tr>
     <tr><td><code>data/engine_state.json</code></td><td>Open positions and the stop flag, to survive a restart.</td><td></td></tr>
@@ -186,14 +186,14 @@
   <h2>Children</h2>
   <p>Trading real money needs a brokerage account in an adult's name; that is the broker's rule, not ours. The app asks for no age, name or identity.</p>
   <h2>Not financial advice</h2>
-  <p>Money Tree is software. Nothing in it is a recommendation to buy or sell. Read the terms in the guide and in TERMS.txt.</p>
+  <p>Money Bot is software. Nothing in it is a recommendation to buy or sell. Read the terms in the guide and in TERMS.txt.</p>
   <h2>Changes and questions</h2>
   <p>This page changes only with the code, so every change is in the public history on GitHub. Questions: open an issue there. A security problem: use the private report described in SECURITY.md.</p>
 </div>
 
 <div data-lang="tr">
-  <h1>Money Tree <em>Gizlilik</em></h1>
-  <p class="lead">Money Tree senin bilgisayarında çalışan bir programdır. Hesap yok, bizim sunucumuz yok. Bu sayfa neyin saklandığını, neyin PC'den çıktığını ve kime gittiğini söyler. Koddan üretilir; ikisi uyuşmazsa bir test kırılır.</p>
+  <h1>Money Bot <em>Gizlilik</em></h1>
+  <p class="lead">Money Bot senin bilgisayarında çalışan bir programdır. Hesap yok, bizim sunucumuz yok. Bu sayfa neyin saklandığını, neyin PC'den çıktığını ve kime gittiğini söyler. Koddan üretilir; ikisi uyuşmazsa bir test kırılır.</p>
   <h2>Kısaca</h2>
   <ul>
     <li><strong>Bize hiçbir şey gönderilmez.</strong> BofStudios'un sunucusu, hesap sistemi ve verini görme yolu yok.</li>
@@ -216,7 +216,7 @@
     <tr><td><code>data/mentor_feed.json</code></td><td>Uygulamanın yan sohbette söyledikleri.</td><td></td></tr>
     <tr><td><code>data/brain</code></td><td>Botun öğrendikleri: haber hafızası, strateji ilerlemesi, sürü.</td><td></td></tr>
     <tr><td><code>data/lab.json</code></td><td>Son Lab tekrarı ve avantaj filtresi anahtarı.</td><td></td></tr>
-    <tr><td><code>data/bot</code></td><td>Konsol: ajan günlüğü, işlemlerin neden olup olmadığı, günün başlangıç değeri.</td><td></td></tr>
+    <tr><td><code>data/bot</code></td><td>Konsol: ajan günlüğü, işlemlerin neden olup olmadığı, günün başlangıç değeri, sınırların ve tempon, planlayıcının günlük çağrı sayısı.</td><td></td></tr>
     <tr><td><code>data/privacy.json</code></td><td>Bu gizlilik seçimleri.</td><td></td></tr>
     <tr><td><code>data/journal.json</code></td><td>Sayaçlar: uygulamanın ne kadar çalıştığı.</td><td></td></tr>
     <tr><td><code>data/engine_state.json</code></td><td>Açık pozisyonlar ve durdurma bayrağı, yeniden başlatmaya dayanmak için.</td><td></td></tr>
@@ -297,7 +297,7 @@
   <h2>Çocuklar</h2>
   <p>Gerçek para ile işlem için yetişkin adına bir aracı kurum hesabı gerekir; bu bizim değil, aracı kurumun kuralı. Uygulama yaş, ad ya da kimlik sormaz.</p>
   <h2>Finansal tavsiye değildir</h2>
-  <p>Money Tree bir yazılımdır. İçindeki hiçbir şey al ya da sat önerisi değildir. Şartları kılavuzda ve TERMS.txt içinde oku.</p>
+  <p>Money Bot bir yazılımdır. İçindeki hiçbir şey al ya da sat önerisi değildir. Şartları kılavuzda ve TERMS.txt içinde oku.</p>
   <h2>Değişiklikler ve sorular</h2>
   <p>Bu sayfa sadece kodla birlikte değişir; yani her değişiklik GitHub'daki herkese açık geçmişte durur. Sorular için orada bir issue aç. Güvenlik sorunu için SECURITY.md'deki özel bildirimi kullan.</p>
 </div>

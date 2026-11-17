@@ -99,7 +99,7 @@ def migrate(home: Path | None = None, legacy: Path | None = None) -> list[str]:
     try:
         marker.parent.mkdir(parents=True, exist_ok=True)
         marker.write_text(
-            "Money Tree AI keeps its keys, settings and learning in this folder.\n"
+            "Money Bot keeps its keys, settings and learning in this folder.\n"
             f"Set up {time.strftime('%Y-%m-%d %H:%M')}."
             + (f" Copied from {legacy}.\n" if copied else "\n"),
             encoding="utf-8",

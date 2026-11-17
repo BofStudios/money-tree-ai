@@ -314,6 +314,12 @@ class Scalper:
                 if symbol in fresh:
                     funnel.block("owned" if symbol in owned else "paused", symbol)
                 continue
+            planner = getattr(eng, "planner", None)
+            advice = planner.advice_for(symbol) if planner is not None else None
+            if advice == "skip":                    # 12.0: the planner may hold a chart back, never push one
+                if symbol in fresh:
+                    funnel.block("ai", symbol)
+                continue
             stop = stop_for(c)
             tip = self.tips.get(symbol)
             reason = (f"{PREFIX}{setup} · {dip_of(c):.1f} ATR under VWAP · RSI {c['rsi']:.0f} · "
@@ -321,6 +327,8 @@ class Scalper:
                       + (f" · news: {tip[1]}" if symbol in tipped and tip else ""))
             vote = float((c.get("conf") or {}).get("score", 0.0))
             share = ALL_IN if (pace.all_in and vote >= ALL_IN_VOTE and not held) else ALLOC
+            if advice == "shrink":
+                share *= 0.5
             eng.last_block = None
             eng.funnel_quiet = True                # this look counts its own block, once a minute
             try:

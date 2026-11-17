@@ -46,8 +46,8 @@ ITEMS: tuple[Item, ...] = (
     Item("data/brain", "learned", "What the bot learned: news memory, strategy progress, the swarm.",
          "Botun öğrendikleri: haber hafızası, strateji ilerlemesi, sürü."),
     Item("data/lab.json", "lab", "The last Lab replay and the edge switch.", "Son Lab tekrarı ve avantaj filtresi anahtarı."),
-    Item("data/bot", "bot", "The console: the agent log, why trades did or did not happen, the day's start value.",
-         "Konsol: ajan günlüğü, işlemlerin neden olup olmadığı, günün başlangıç değeri."),
+    Item("data/bot", "bot", "The console: the agent log, why trades did or did not happen, the day's start value, your limits and pace, the planner's daily call count.",
+         "Konsol: ajan günlüğü, işlemlerin neden olup olmadığı, günün başlangıç değeri, sınırların ve tempon, planlayıcının günlük çağrı sayısı."),
     Item("data/privacy.json", "choices", "These privacy choices.", "Bu gizlilik seçimleri."),
     Item("data/journal.json", "state", "Counters: how long the app has run.", "Sayaçlar: uygulamanın ne kadar çalıştığı."),
     Item("data/engine_state.json", "state", "Open positions and the stop flag, to survive a restart.",
@@ -99,7 +99,7 @@ def export_zip(home: Path, trades: list[dict], dest_dir: Path | None = None) -> 
     out = dest_dir / f"money-tree-data-{time.strftime('%Y%m%d-%H%M%S')}.zip"
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("trades.csv", trades_csv(trades))
-        z.writestr("README.txt", "Your Money Tree data. No keys, no password. "
+        z.writestr("README.txt", "Your Money Bot data. No keys, no password. "
                                  "trades.csv is your trade history; the .json files are your choices, chat and what the bot learned.\n")
         for it in ITEMS:
             if it.secret or not it.export:

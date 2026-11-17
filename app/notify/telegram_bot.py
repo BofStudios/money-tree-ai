@@ -44,7 +44,7 @@ MENU_COMMANDS = [
     ("help", "All commands"),
 ]
 
-HELP = """*Money Tree AI commands*
+HELP = """*Money Bot commands*
 
 /status — equity, market state, open positions
 /run — the current run: stake, target, progress
@@ -157,6 +157,34 @@ class TelegramNotifier:
             if next_beat is not None and time.monotonic() >= next_beat:
                 await self._heartbeat(time.monotonic() - started)
                 next_beat = time.monotonic() + interval
+            await self._day_end()
+
+    async def _day_end(self) -> None:
+        """Once a trading day, after 16:05 New York, if the bot traded: the day's sums (12.0)."""
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        now = datetime.now(ZoneInfo("America/New_York"))
+        today = now.strftime("%Y-%m-%d")
+        if now.weekday() >= 5 or (now.hour, now.minute) < (16, 5) or getattr(self, "_day_end_sent", "") == today:
+            return
+        self._day_end_sent = today
+        try:
+            text = await asyncio.to_thread(self.day_end_text)
+            if text:
+                await self.broadcast(text)
+        except Exception:
+            log.exception("the end-of-day message failed")
+
+    def day_end_text(self, only_if_traded: bool = True) -> str | None:
+        from app.bot.ledger import ledger
+        from app.bot.snapshot import proof_of
+
+        book = ledger(self.engine.repo, self.engine.mode, "today")
+        if only_if_traded and not book["sum"]["count"]:
+            return None
+        funnel = self.engine.funnel.view() if getattr(self.engine, "funnel", None) else None
+        return fmt.day_end_message(book, funnel, proof_of(self.engine))
 
     async def _heartbeat(self, uptime_seconds: float) -> None:
         try:
@@ -528,7 +556,7 @@ class TelegramNotifier:
         elif kind == "not_armed":
             # A reminder only: arming still needs the owner's tap on "Yes, arm it".
             self.broadcast_sync(
-                "*Money Tree is only watching.*\n\nReal money is not armed, so the bot will not buy. Arm it?",
+                "*Money Bot is only watching.*\n\nReal money is not armed, so the bot will not buy. Arm it?",
                 InlineKeyboardMarkup([[
                     InlineKeyboardButton("Yes, arm it", callback_data="arm:yes"),
                     InlineKeyboardButton("Not now", callback_data="arm:no"),

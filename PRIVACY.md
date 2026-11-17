@@ -1,6 +1,6 @@
 # Privacy
 
-Money Tree is a program on your PC. There is no account and no server of ours. This page says what is kept, what leaves the PC and who gets it. It is written from the code, and a test fails when the two disagree.
+Money Bot is a program on your PC. There is no account and no server of ours. This page says what is kept, what leaves the PC and who gets it. It is written from the code, and a test fails when the two disagree.
 
 ## The short version
 
@@ -26,7 +26,7 @@ The folder is `%LOCALAPPDATA%\BofStudios\Money Tree AI`. Files marked secret are
 | `data/mentor_feed.json` | What the app said in the side chat. |  |
 | `data/brain` | What the bot learned: news memory, strategy progress, the swarm. |  |
 | `data/lab.json` | The last Lab replay and the edge switch. |  |
-| `data/bot` | The console: the agent log, why trades did or did not happen, the day's start value. |  |
+| `data/bot` | The console: the agent log, why trades did or did not happen, the day's start value, your limits and pace, the planner's daily call count. |  |
 | `data/privacy.json` | These privacy choices. |  |
 | `data/journal.json` | Counters: how long the app has run. |  |
 | `data/engine_state.json` | Open positions and the stop flag, to survive a restart. |  |
@@ -112,7 +112,7 @@ Trading real money needs a brokerage account in an adult's name; that is the bro
 
 ## Not financial advice
 
-Money Tree is software. Nothing in it is a recommendation to buy or sell. Read the terms in the guide and in TERMS.txt.
+Money Bot is software. Nothing in it is a recommendation to buy or sell. Read the terms in the guide and in TERMS.txt.
 
 ## Changes and questions
 

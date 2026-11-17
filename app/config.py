@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.common import home as _home
-APP_NAME = "Money Tree AI"
+APP_NAME = "Money Bot"     # 12.0; the data home keeps its old name (app/common/home.py)
 
 FROZEN = getattr(sys, "frozen", False)
 

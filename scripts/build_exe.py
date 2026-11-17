@@ -1,4 +1,4 @@
-"""Build "Money Tree AI.exe" with PyInstaller, then the Windows installer.
+"""Build "Money Bot.exe" with PyInstaller, then the Windows installer.
 
     python scripts/build_exe.py              # the app, in dist/
     python scripts/build_exe.py --installer  # and the Windows installer
@@ -29,7 +29,7 @@ sys.path.insert(0, str(ROOT))
 
 from app import __version__  # noqa: E402
 
-NAME = "Money Tree AI"
+NAME = "Money Bot"
 DIST = ROOT / "dist"
 BUILD = ROOT / "build"
 ISS = ROOT / "installer" / "money-tree-ai.iss"
@@ -97,7 +97,7 @@ def build_exe() -> None:
     shutil.copy2(ROOT / "README.md", target / "README.md")
     # The guide, readable without the app running (its logo sits beside it).
     guide = (ROOT / "app" / "web" / "static" / "guide.html").read_text(encoding="utf-8")
-    (target / "Money Tree AI Guide.html").write_text(guide.replace('src="/logo.png"', 'src="guide-logo.png"'),
+    (target / "Money Bot Guide.html").write_text(guide.replace('src="/logo.png"', 'src="guide-logo.png"'),
                                                     encoding="utf-8")
     shutil.copy2(ROOT / "app" / "web" / "static" / "logo.png", target / "guide-logo.png")
     subprocess.run([sys.executable, str(ROOT / "scripts" / "notices.py"), str(target / "THIRD-PARTY-NOTICES.txt")],

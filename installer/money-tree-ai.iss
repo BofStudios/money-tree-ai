@@ -7,7 +7,7 @@
   #define AppVersion "0.0.0"
 #endif
 #ifndef SourceDir
-  #define SourceDir "..\dist\Money Tree AI"
+  #define SourceDir "..\dist\Money Bot"
 #endif
 #ifndef LicensePage
   #define LicensePage "..\LICENSE"
@@ -15,19 +15,19 @@
 
 [Setup]
 AppId={{305D42B3-3C9B-4270-BE37-29D153D21509}
-AppName=Money Tree AI
+AppName=Money Bot
 AppVersion={#AppVersion}
-AppVerName=Money Tree AI {#AppVersion}
+AppVerName=Money Bot {#AppVersion}
 AppPublisher=BOF Studios
 AppPublisherURL=https://github.com/BofStudios/money-tree-ai
-DefaultDirName={autopf}\Money Tree AI
-DefaultGroupName=Money Tree AI
+DefaultDirName={autopf}\Money Bot
+DefaultGroupName=Money Bot
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=..\dist
-OutputBaseFilename=MoneyTreeAI-Setup-{#AppVersion}
+OutputBaseFilename=MoneyBot-Setup-{#AppVersion}
 SetupIconFile=..\assets\logo.ico
-UninstallDisplayIcon={app}\Money Tree AI.exe
+UninstallDisplayIcon={app}\Money Bot.exe
 LicenseFile={#LicensePage}
 InfoBeforeFile=before-install.txt
 Compression=lzma2/max
@@ -47,9 +47,9 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\Money Tree AI"; Filename: "{app}\Money Tree AI.exe"; IconFilename: "{app}\Money Tree AI.exe"
-Name: "{group}\{cm:UninstallProgram,Money Tree AI}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\Money Tree AI"; Filename: "{app}\Money Tree AI.exe"; Tasks: desktopicon
+Name: "{group}\Money Bot"; Filename: "{app}\Money Bot.exe"; IconFilename: "{app}\Money Bot.exe"
+Name: "{group}\{cm:UninstallProgram,Money Bot}"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\Money Bot"; Filename: "{app}\Money Bot.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\Money Tree AI.exe"; Description: "{cm:LaunchProgram,Money Tree AI}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\Money Bot.exe"; Description: "{cm:LaunchProgram,Money Bot}"; Flags: nowait postinstall skipifsilent

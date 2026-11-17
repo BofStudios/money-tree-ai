@@ -1,9 +1,9 @@
 MONEY TREE AI - TERMS OF USE
 ============================
 
-By installing or using Money Tree AI you agree to these terms.
+By installing or using Money Bot you agree to these terms.
 
-1. Not advice. Money Tree AI is software. BofStudios does not give
+1. Not advice. Money Bot is software. BofStudios does not give
    investment, financial, tax or legal advice. Nothing in the app, in the AI's
    answers, in the guide or on our pages is a recommendation to buy or sell
    anything.
@@ -24,10 +24,10 @@ By installing or using Money Tree AI you agree to these terms.
    damage from using or not being able to use the software.
 
 5. Third parties. Alpaca, AI providers and data sources are independent
-   companies with their own terms. Money Tree AI is not made, endorsed or
+   companies with their own terms. Money Bot is not made, endorsed or
    sponsored by them.
 
-6. Open source. Money Tree AI's own source code is published under the MIT
+6. Open source. Money Bot's own source code is published under the MIT
    licence below. The program also includes third-party open-source parts
    under their own licences; see THIRD-PARTY-NOTICES.txt in the program folder.
 
@@ -35,9 +35,9 @@ By installing or using Money Tree AI you agree to these terms.
 MONEY TREE AI - KULLANIM ŞARTLARI
 =================================
 
-Money Tree AI'ı kurarak ya da kullanarak bu şartları kabul edersin.
+Money Bot'u kurarak ya da kullanarak bu şartları kabul edersin.
 
-1. Tavsiye değildir. Money Tree AI bir yazılımdır. BofStudios yatırım, finans,
+1. Tavsiye değildir. Money Bot bir yazılımdır. BofStudios yatırım, finans,
    vergi ya da hukuk tavsiyesi vermez. Uygulamadaki, yapay zekânın
    cevaplarındaki, kılavuzdaki ya da sayfalarımızdaki hiçbir şey bir şeyi alma
    ya da satma önerisi değildir.
@@ -59,10 +59,10 @@ Money Tree AI'ı kurarak ya da kullanarak bu şartları kabul edersin.
    zararlardan sorumlu değildir.
 
 5. Üçüncü taraflar. Alpaca, yapay zekâ sağlayıcıları ve veri kaynakları kendi
-   şartları olan bağımsız şirketlerdir. Money Tree AI onlar tarafından
+   şartları olan bağımsız şirketlerdir. Money Bot onlar tarafından
    yapılmamış, onaylanmamış ya da desteklenmemiştir.
 
-6. Açık kaynak. Money Tree AI'ın kendi kaynak kodu aşağıdaki MIT lisansıyla
+6. Açık kaynak. Money Bot'un kendi kaynak kodu aşağıdaki MIT lisansıyla
    yayımlanır. Program ayrıca kendi lisansları olan üçüncü taraf açık kaynak
    parçalar içerir; program klasöründeki THIRD-PARTY-NOTICES.txt dosyasına bak.
 

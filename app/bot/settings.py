@@ -20,7 +20,8 @@ from app.bot import pace as P
 log = logging.getLogger(__name__)
 
 FIELDS = ("budget", "per_trade_pct", "daily_loss", "max_positions")
-DEFAULTS: dict = {"budget": None, "per_trade_pct": None, "daily_loss": None, "max_positions": None, "pace": "balanced"}
+DEFAULTS: dict = {"budget": None, "per_trade_pct": None, "daily_loss": None, "max_positions": None, "pace": "balanced",
+                  "planner": False}
 
 
 class NeedsConfirm(Exception):
@@ -91,6 +92,10 @@ class BotSettings:
                     clamped.append(field)
                 v = round(fixed, 2) if field != "max_positions" else int(fixed)
             new[field] = v
+        if "planner" in changes:
+            if not isinstance(changes["planner"], bool):
+                raise ValueError("planner must be true or false")
+            new["planner"] = changes["planner"]      # the AI can only shrink or skip: no confirm needed
         if "pace" in changes:
             if changes["pace"] not in P.IDS:
                 raise ValueError("pace must be calm, balanced or aggressive")

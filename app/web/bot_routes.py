@@ -16,7 +16,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from app.bot import log as botlog
 from app.bot.settings import NeedsConfirm
-from app.bot.snapshot import _closed_ms, _day_start_ms, _f, paces_view, proof_of, risk_view, snapshot
+from app.bot.snapshot import paces_view, proof_of, risk_view, snapshot
 from app.web.auth import Auth
 
 log = logging.getLogger(__name__)
@@ -105,6 +105,12 @@ def build_bot_router(engine, repo, events, token) -> APIRouter:
         done = change({"pace": body["pace"], "confirm": body.get("confirm")})
         return {**done, "proof": proof_of(engine)}
 
+    @router.post("/planner", dependencies=owner)
+    def set_planner(body: dict = Body(default={})) -> dict:
+        if not isinstance(body.get("on"), bool):
+            raise HTTPException(status_code=400, detail='Send {"on": true} or {"on": false}.')
+        return change({"planner": body["on"]})
+
     @router.get("/paces", dependencies=guarded)
     def paces() -> dict:
         return paces_view(engine)
@@ -117,21 +123,8 @@ def build_bot_router(engine, repo, events, token) -> APIRouter:
 
     @router.get("/ledger", dependencies=guarded)
     def ledger(range: str = Query(default="today", pattern="^(today|week|all)$")) -> dict:
-        trades = repo.recent_trades(engine.mode, limit=5000)
-        day = _day_start_ms()
-        floor = {"today": day, "week": day - 6 * 86_400_000, "all": 0}[range]
-        rows = [t for t in trades if _closed_ms(t) >= floor]
-        fills = [{"id": t.get("id"), "symbol": t.get("symbol"), "side": "long", "qty": t.get("quantity"),
-                  "entry": t.get("entry_price"), "exit": t.get("exit_price"),
-                  "opened_at": None, "closed_at": _closed_ms(t) or None, "minutes": None,
-                  "pnl": _f(t.get("pnl")), "pct": _f(t.get("pnl_pct")), "fees": 0.0,
-                  "reason": t.get("exit_reason"), "book": None} for t in rows]
-        pnls = [f["pnl"] for f in fills]
-        won, lost = sum(p for p in pnls if p > 0), -sum(p for p in pnls if p < 0)
-        return {"range": range, "fills": fills,
-                "sum": {"count": len(fills), "wins": sum(1 for p in pnls if p > 0), "pnl": round(sum(pnls), 2),
-                        "fees": 0.0, "best": max(pnls, default=0.0), "worst": min(pnls, default=0.0),
-                        "profit_factor": round(won / lost, 2) if lost else None, "avg_minutes": None},
-                "curve": []}
+        from app.bot.ledger import ledger as book
+
+        return book(repo, engine.mode, range)
 
     return router

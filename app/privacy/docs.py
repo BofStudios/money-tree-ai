@@ -30,7 +30,7 @@ WHEN = {
 TEXT = {
     "en": {
         "title": "Privacy",
-        "lead": "Money Tree is a program on your PC. There is no account and no server of ours. This page says what is kept, what leaves the PC and who gets it. It is written from the code, and a test fails when the two disagree.",
+        "lead": "Money Bot is a program on your PC. There is no account and no server of ours. This page says what is kept, what leaves the PC and who gets it. It is written from the code, and a test fails when the two disagree.",
         "short": "The short version",
         "short_items": [
             "**Nothing is sent to us.** BofStudios has no server, no account system and no way to see your data.",
@@ -78,13 +78,13 @@ TEXT = {
         "kids": "Children",
         "kids_text": "Trading real money needs a brokerage account in an adult's name; that is the broker's rule, not ours. The app asks for no age, name or identity.",
         "money": "Not financial advice",
-        "money_text": "Money Tree is software. Nothing in it is a recommendation to buy or sell. Read the terms in the guide and in TERMS.txt.",
+        "money_text": "Money Bot is software. Nothing in it is a recommendation to buy or sell. Read the terms in the guide and in TERMS.txt.",
         "changes": "Changes and questions",
         "changes_text": "This page changes only with the code, so every change is in the public history on GitHub. Questions: open an issue there. A security problem: use the private report described in SECURITY.md.",
     },
     "tr": {
         "title": "Gizlilik",
-        "lead": "Money Tree senin bilgisayarında çalışan bir programdır. Hesap yok, bizim sunucumuz yok. Bu sayfa neyin saklandığını, neyin PC'den çıktığını ve kime gittiğini söyler. Koddan üretilir; ikisi uyuşmazsa bir test kırılır.",
+        "lead": "Money Bot senin bilgisayarında çalışan bir programdır. Hesap yok, bizim sunucumuz yok. Bu sayfa neyin saklandığını, neyin PC'den çıktığını ve kime gittiğini söyler. Koddan üretilir; ikisi uyuşmazsa bir test kırılır.",
         "short": "Kısaca",
         "short_items": [
             "**Bize hiçbir şey gönderilmez.** BofStudios'un sunucusu, hesap sistemi ve verini görme yolu yok.",
@@ -132,7 +132,7 @@ TEXT = {
         "kids": "Çocuklar",
         "kids_text": "Gerçek para ile işlem için yetişkin adına bir aracı kurum hesabı gerekir; bu bizim değil, aracı kurumun kuralı. Uygulama yaş, ad ya da kimlik sormaz.",
         "money": "Finansal tavsiye değildir",
-        "money_text": "Money Tree bir yazılımdır. İçindeki hiçbir şey al ya da sat önerisi değildir. Şartları kılavuzda ve TERMS.txt içinde oku.",
+        "money_text": "Money Bot bir yazılımdır. İçindeki hiçbir şey al ya da sat önerisi değildir. Şartları kılavuzda ve TERMS.txt içinde oku.",
         "changes": "Değişiklikler ve sorular",
         "changes_text": "Bu sayfa sadece kodla birlikte değişir; yani her değişiklik GitHub'daki herkese açık geçmişte durur. Sorular için orada bir issue aç. Güvenlik sorunu için SECURITY.md'deki özel bildirimi kullan.",
     },
@@ -171,7 +171,7 @@ def _inline(text: str) -> str:
 
 def _section(lang: str) -> str:
     x = TEXT[lang]
-    h = ['<div data-lang="%s">' % lang, f"  <h1>Money Tree <em>{_html.escape(x['title'])}</em></h1>", f'  <p class="lead">{_inline(x["lead"])}</p>']
+    h = ['<div data-lang="%s">' % lang, f"  <h1>Money Bot <em>{_html.escape(x['title'])}</em></h1>", f'  <p class="lead">{_inline(x["lead"])}</p>']
     h += [f"  <h2>{x['short']}</h2>", "  <ul>"] + [f"    <li>{_inline(i)}</li>" for i in x["short_items"]] + ["  </ul>"]
     h += [f"  <h2>{x['stored']}</h2>", f"  <p>{_inline(x['stored_note'])}</p>", "  <table>",
           "    <tr>" + "".join(f"<th>{c}</th>" for c in x["stored_cols"]) + "</tr>"]
@@ -202,14 +202,14 @@ def page() -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Money Tree Privacy</title>
-<meta name="description" content="What Money Tree keeps on your PC, what leaves it, and who gets it.">
+<title>Money Bot Privacy</title>
+<meta name="description" content="What Money Bot keeps on your PC, what leaves it, and who gets it.">
 {style}
 </head>
 <body class="en">
 <header class="top">
   <img src="/logo.png" alt="">
-  <b>Money Tree</b>
+  <b>Money Bot</b>
   <span class="sp"></span>
   <div class="lang"><button data-set="en" class="on">English</button> <button data-set="tr">Türkçe</button></div>
 </header>

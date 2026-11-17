@@ -47,7 +47,7 @@ def create_app(
     config_path=None,
     key_problems=None,
 ) -> FastAPI:
-    api = FastAPI(title="Money Tree AI", docs_url=None, redoc_url=None)
+    api = FastAPI(title="Money Bot", docs_url=None, redoc_url=None)
     hub = WebSocketHub(events)
     auth = Auth(token)          # one lockout counter for every router
 

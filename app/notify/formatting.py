@@ -144,7 +144,7 @@ def status_message(status: dict) -> str:
     state = "OPEN" if market["is_open"] else "CLOSED"
 
     lines = [
-        f"*Money Tree AI* — {status['mode']} mode",
+        f"*Money Bot* — {status['mode']} mode",
         "",
         f"Market: *{state}* ({market['countdown']})",
         f"Equity: *${money(status['equity'])}*",
@@ -205,7 +205,7 @@ def heartbeat_message(status: dict, uptime_seconds: float) -> str:
     market = "open" if status["market"]["is_open"] else "closed"
 
     lines = [
-        f"*Money Tree is still up* — {uptime}",
+        f"*Money Bot is still up* — {uptime}",
         f"{status['mode']} mode · equity *${money(status['equity'])}* · "
         f"{len(status['positions'])} open · market {market}",
     ]
@@ -242,6 +242,27 @@ def trade_closed_message(trade: dict) -> str:
         f"P&L *{signed(trade['pnl'])}* ({signed(trade['pnl_pct'])}%)\n"
         f"_Reason:_ {trade['exit_reason']}"
     )
+
+
+def day_end_message(book: dict, funnel: dict | None = None, proof: dict | None = None) -> str:
+    """Money Bot's day (12.0): the same sums as the console's ledger tab."""
+    s = book["sum"]
+    lines = ["*Money Bot — today*", ""]
+    if s["count"]:
+        lines.append(f"Trades: {s['count']} ({s['wins']} won) · P&L *{signed(s['pnl'])}*")
+        if s.get("profit_factor") is not None:
+            lines.append(f"Profit factor: {s['profit_factor']}")
+        lines.append(f"Best: {signed(s['best'])}   Worst: {signed(s['worst'])}")
+    else:
+        lines.append("No trades today.")
+    blocked = (funnel or {}).get("blocked") or []
+    if blocked:
+        top = blocked[0]
+        lines.append(f"Most often in the way: {top['label']} ({top['n']}×)")
+    if proof and proof.get("state") in ("lost", "passed") and proof.get("per_trade_pct") is not None:
+        word = "lost" if proof["state"] == "lost" else "passed"
+        lines.append(f"The Lab's last replay of this pace: {word}, {proof['per_trade_pct']:+.3f}% a trade.")
+    return "\n".join(lines)
 
 
 def stats_message(stats: dict) -> str:

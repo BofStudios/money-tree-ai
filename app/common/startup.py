@@ -14,6 +14,8 @@ Only the standard library and PySide6 are imported here.
 """
 from __future__ import annotations
 
+from app.config import APP_NAME
+
 import os
 import sys
 import time
@@ -122,7 +124,7 @@ def _show_splash() -> None:
     font = QFont("Segoe UI", 17)
     font.setBold(True)
     painter.setFont(font)
-    painter.drawText(canvas.rect().adjusted(0, 180, 0, 0), Qt.AlignmentFlag.AlignHCenter, "Money Tree AI")
+    painter.drawText(canvas.rect().adjusted(0, 180, 0, 0), Qt.AlignmentFlag.AlignHCenter, APP_NAME)
     painter.setPen(QColor("#ffd60a"))
     painter.drawRect(0, 0, 459, 299)
     painter.end()

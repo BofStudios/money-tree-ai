@@ -310,7 +310,7 @@ class Words:
     # ------------------------------------------------ desktop notifications
 
     def notice_not_armed(self) -> tuple[str, str]:
-        return (self._("Money Tree is only watching", "Money Tree sadece izliyor"),
+        return (self._("Money Bot is only watching", "Money Bot sadece izliyor"),
                 self._("Real money is not armed, so the bot does not buy. Open the app and press Arm real money.",
                        "Gerçek para kurulu değil, bot almaz. Uygulamayı aç ve Gerçek parayı kur'a bas."))
 

@@ -14,7 +14,7 @@ AUTH = {"Authorization": f"Bearer {TOKEN}"}
 
 def test_limits_are_checked_clamped_and_kept(tmp_path):
     s = BotSettings(tmp_path / "s.json")
-    assert s.all() == {"budget": None, "per_trade_pct": None, "daily_loss": None, "max_positions": None, "pace": "balanced"}
+    assert s.all() == {"budget": None, "per_trade_pct": None, "daily_loss": None, "max_positions": None, "pace": "balanced", "planner": False}
     values, clamped = s.update({"budget": 50_000, "per_trade_pct": 9, "daily_loss": 900, "max_positions": 7},
                                equity=2_000, live=False)
     assert values["budget"] == 2_000 and values["per_trade_pct"] == 5 and values["max_positions"] == 5
@@ -110,3 +110,16 @@ def test_the_console_api_for_limits_and_paces(client):
     assert client.get("/api/bot", headers=AUTH).json()["risk"]["pace"] == "calm"
     bad = client.post("/api/bot/pace", json={"pace": "calm"}, headers={**AUTH, "Origin": "https://evil.example"})
     assert bad.status_code in (400, 403)
+
+
+def test_the_name_changed_and_the_data_home_did_not(monkeypatch):
+    from app.common import home
+    from app.config import APP_NAME
+
+    assert APP_NAME == "Money Bot"
+    monkeypatch.delenv("MONEYTREE_HOME", raising=False)
+    monkeypatch.setenv("LOCALAPPDATA", "C:/X")
+    path = home.exe_home() if hasattr(home, "exe_home") else None
+    src = (home.__file__ and open(home.__file__, encoding="utf-8").read())
+    assert '"BofStudios" / "Money Tree AI"' in src            # the keys, trades and password stay where they are
+    assert path is None or str(path).endswith("Money Tree AI")

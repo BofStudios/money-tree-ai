@@ -14,10 +14,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-HEADER = """Money Tree AI - third-party notices
+HEADER = """Money Bot - third-party notices
 ====================================
 
-Money Tree AI includes open-source software. Each part keeps its own licence;
+Money Bot includes open-source software. Each part keeps its own licence;
 the copyright stays with its authors. The full licence texts ship inside the
 program folder (_internal\\...\\*.dist-info\\LICENSE* and similar), or can be
 read at each project's home page below.

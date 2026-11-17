@@ -72,6 +72,9 @@ def from_event(event: dict) -> dict | None:
                 "level": "good" if (pnl or 0) > 0 else "bad" if (pnl or 0) < 0 else "info",
                 "text": f"{symbol} closed ({event.get('exit_reason') or 'exit'})",
                 "ref": {"trade": event.get("id")}, "money": {"pnl": pnl, "pct": pct}}
+    if kind == "bot_plan":
+        return {"agent": "orion", "verb": "plan", "symbol": None, "level": "info",
+                "text": str(event.get("text") or "")[:300], "ref": {}, "money": None}
     if kind == "not_armed":
         return {"agent": "nova", "verb": "veto", "symbol": event.get("symbol"), "level": "warn",
                 "text": "Real money is not armed: no order was sent", "ref": {"gate": "not_armed"}, "money": None}

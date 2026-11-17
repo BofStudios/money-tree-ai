@@ -172,7 +172,10 @@
   "max_positions": 2,
   "daily_loss_used": 0.0,
   "paused": null,
-  "pace": "balanced"
+  "pace": "balanced",
+  "planner": false,
+  "planner_calls_left": 60,
+  "advice": []
  },
  "proof": {
   "rule": "ultra-9.0",

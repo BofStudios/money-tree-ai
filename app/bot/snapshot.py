@@ -32,12 +32,9 @@ def _f(v, default: float = 0.0) -> float:
 
 
 def _iso_ms(raw) -> int | None:
-    if not raw:
-        return None
-    try:
-        return int(datetime.fromisoformat(str(raw).replace("Z", "+00:00")).timestamp() * 1000)
-    except ValueError:
-        return None
+    from app.bot.ledger import to_ms
+
+    return to_ms(raw)
 
 
 def _cash(balance) -> float:
@@ -55,11 +52,9 @@ def _day_start_ms() -> int:
 
 
 def _closed_ms(trade: dict) -> int:
-    raw = trade.get("exit_time") or trade.get("closed_at") or ""
-    try:
-        return int(datetime.fromisoformat(str(raw).replace("Z", "+00:00")).timestamp() * 1000)
-    except ValueError:
-        return 0
+    from app.bot.ledger import to_ms
+
+    return to_ms(trade.get("exit_time") or trade.get("closed_at")) or 0
 
 
 WORK_S, VETO_S = 8, 30
@@ -131,7 +126,10 @@ def risk_view(engine, engine_max: int, turkish: bool) -> dict:
     most = v.get("max_positions")
     return {"budget": v.get("budget"), "per_trade_pct": v.get("per_trade_pct"), "daily_loss": v.get("daily_loss"),
             "max_positions": min(engine_max, int(most)) if most and engine_max else (most or engine_max),
-            "daily_loss_used": used, "paused": paused, "pace": v.get("pace") or "balanced"}
+            "daily_loss_used": used, "paused": paused, "pace": v.get("pace") or "balanced",
+            "planner": bool(v.get("planner")),
+            "planner_calls_left": engine.planner.calls_left() if getattr(engine, "planner", None) else None,
+            "advice": engine.planner.advice() if getattr(engine, "planner", None) else []}
 
 
 def paces_view(engine) -> dict:

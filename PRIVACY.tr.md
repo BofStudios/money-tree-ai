@@ -1,6 +1,6 @@
 # Gizlilik
 
-Money Tree senin bilgisayarında çalışan bir programdır. Hesap yok, bizim sunucumuz yok. Bu sayfa neyin saklandığını, neyin PC'den çıktığını ve kime gittiğini söyler. Koddan üretilir; ikisi uyuşmazsa bir test kırılır.
+Money Bot senin bilgisayarında çalışan bir programdır. Hesap yok, bizim sunucumuz yok. Bu sayfa neyin saklandığını, neyin PC'den çıktığını ve kime gittiğini söyler. Koddan üretilir; ikisi uyuşmazsa bir test kırılır.
 
 ## Kısaca
 
@@ -26,7 +26,7 @@ Klasör `%LOCALAPPDATA%\BofStudios\Money Tree AI`. Gizli işaretli dosyalar dı�
 | `data/mentor_feed.json` | Uygulamanın yan sohbette söyledikleri. |  |
 | `data/brain` | Botun öğrendikleri: haber hafızası, strateji ilerlemesi, sürü. |  |
 | `data/lab.json` | Son Lab tekrarı ve avantaj filtresi anahtarı. |  |
-| `data/bot` | Konsol: ajan günlüğü, işlemlerin neden olup olmadığı, günün başlangıç değeri. |  |
+| `data/bot` | Konsol: ajan günlüğü, işlemlerin neden olup olmadığı, günün başlangıç değeri, sınırların ve tempon, planlayıcının günlük çağrı sayısı. |  |
 | `data/privacy.json` | Bu gizlilik seçimleri. |  |
 | `data/journal.json` | Sayaçlar: uygulamanın ne kadar çalıştığı. |  |
 | `data/engine_state.json` | Açık pozisyonlar ve durdurma bayrağı, yeniden başlatmaya dayanmak için. |  |
@@ -112,7 +112,7 @@ Gerçek para ile işlem için yetişkin adına bir aracı kurum hesabı gerekir;
 
 ## Finansal tavsiye değildir
 
-Money Tree bir yazılımdır. İçindeki hiçbir şey al ya da sat önerisi değildir. Şartları kılavuzda ve TERMS.txt içinde oku.
+Money Bot bir yazılımdır. İçindeki hiçbir şey al ya da sat önerisi değildir. Şartları kılavuzda ve TERMS.txt içinde oku.
 
 ## Değişiklikler ve sorular
 
