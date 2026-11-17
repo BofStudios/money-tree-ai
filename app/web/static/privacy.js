@@ -84,7 +84,7 @@ function filesHtml() {
 }
 
 function clearButtons() {
-  return ["chat", "learned", "lab", "logs"].map((g) => `
+  return ["chat", "learned", "lab", "logs", "bot"].map((g) => `
     <button class="ghost sm ${pendingClear === g ? "danger" : ""}" data-clear="${g}">
       ${esc(pendingClear === g ? T("sure") : `${T("clear")}: ${T(`group.${g}`)}`)}</button>`).join("");
 }

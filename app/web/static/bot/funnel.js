@@ -14,7 +14,8 @@ function draw() {
   const blocked = [...(f.blocked || [])].sort((a, b) => b.n - a.n);
   const fills = (steps.find((s) => s.id === "fills") || {}).n;
   const signals = (steps.find((s) => s.id === "signals") || {}).n;
-  const quiet = steps.length && !fills;
+  // Highlighted only when signals came and none filled (a closed market is not "quiet").
+  const quiet = steps.length && signals > 0 && !fills;
   host.classList.toggle("mb-quiet", !!quiet);
 
   if (!steps.length) {
