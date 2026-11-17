@@ -1,0 +1,188 @@
+{
+ "name": "Money Bot",
+ "version": "10.1.0",
+ "account": {
+  "mode": "paper",
+  "armed": false,
+  "halted": false,
+  "engine": "running",
+  "book": "ultra"
+ },
+ "market": {
+  "open": false,
+  "label": "The market is closed. It opens at Tue 09:30 NY.",
+  "next_change_at": 1794925800000
+ },
+ "tiles": {
+  "fills": {
+   "closed": 0,
+   "max": 30,
+   "opened": 0
+  },
+  "positions": {
+   "open": 0,
+   "max": 2
+  },
+  "net": {
+   "today": 0,
+   "today_pct": 0.0,
+   "unrealized": 0,
+   "week": 0,
+   "all": 0,
+   "fees_today": 0.0,
+   "since": null
+  },
+  "capital": {
+   "start_today": 10000.0,
+   "equity": 10000.0,
+   "cash": 10000.0,
+   "budget": null
+  }
+ },
+ "crew": [
+  {
+   "id": "orion",
+   "name": "Orion",
+   "role": "planner",
+   "role_label": "Plans",
+   "state": "idle",
+   "last": "The bot examines 24 stocks: Done. There are no trade signals. The market is closed. The bot does not trade.",
+   "last_at": 1794903935753,
+   "today": {
+    "lines": 4,
+    "acted": 2
+   }
+  },
+  {
+   "id": "atlas",
+   "name": "Atlas",
+   "role": "scout",
+   "role_label": "Scans",
+   "state": "idle",
+   "last": "The bot gets 2000 1m candles for each of 22 stocks. The swarm trains on them: Done. Stocks: 22. Candles: 44,000.",
+   "last_at": 1794903979205,
+   "today": {
+    "lines": 4,
+    "acted": 0
+   }
+  },
+  {
+   "id": "vega",
+   "name": "Vega",
+   "role": "news",
+   "role_label": "Reads the news",
+   "state": "idle",
+   "last": null,
+   "last_at": null,
+   "today": {
+    "lines": 0,
+    "acted": 0
+   }
+  },
+  {
+   "id": "titan",
+   "name": "Titan",
+   "role": "trader",
+   "role_label": "Trades",
+   "state": "idle",
+   "last": "Done. The bot waits for the market to open. Next open: Tue 09:30 NY.",
+   "last_at": 1794903929738,
+   "today": {
+    "lines": 1,
+    "acted": 0
+   }
+  },
+  {
+   "id": "luna",
+   "name": "Luna",
+   "role": "exits",
+   "role_label": "Exits",
+   "state": "idle",
+   "last": "The bot examines the positions and the open orders: Positions: 0.",
+   "last_at": 1794903928392,
+   "today": {
+    "lines": 1,
+    "acted": 0
+   }
+  },
+  {
+   "id": "nova",
+   "name": "Nova",
+   "role": "risk",
+   "role_label": "Guards",
+   "state": "idle",
+   "last": "The bot reads your account: Equity: $10,000.00. Cash: $10,000.00.",
+   "last_at": 1794903928387,
+   "today": {
+    "lines": 2,
+    "acted": 0
+   }
+  },
+  {
+   "id": "rigel",
+   "name": "Rigel",
+   "role": "research",
+   "role_label": "Researches",
+   "state": "idle",
+   "last": "The bot measures the public attention on 22 companies (Wikipedia): 14/22",
+   "last_at": 1794903978399,
+   "today": {
+    "lines": 3,
+    "acted": 3
+   }
+  }
+ ],
+ "queue": [],
+ "funnel": {
+  "day": "2026-11-17",
+  "steps": [
+   {
+    "id": "scanned",
+    "label": "Charts read",
+    "n": 0
+   },
+   {
+    "id": "signals",
+    "label": "Entry signals",
+    "n": 0
+   },
+   {
+    "id": "passed",
+    "label": "Passed every check",
+    "n": 0
+   },
+   {
+    "id": "orders",
+    "label": "Orders sent",
+    "n": 0
+   },
+   {
+    "id": "fills",
+    "label": "Filled",
+    "n": 0
+   }
+  ],
+  "blocked": []
+ },
+ "focus": null,
+ "risk": {
+  "budget": null,
+  "per_trade_pct": null,
+  "daily_loss": null,
+  "max_positions": 2,
+  "daily_loss_used": 0.0,
+  "paused": null,
+  "pace": "balanced"
+ },
+ "proof": {
+  "rule": "ultra-9.0",
+  "state": "lost",
+  "per_trade_pct": -0.0121,
+  "profit_factor": 0.93,
+  "trades": 250,
+  "days": 7,
+  "ran_at": 1794903972000
+ },
+ "log_head": 15,
+ "at": 1794904034034
+}

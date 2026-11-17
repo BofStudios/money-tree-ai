@@ -106,7 +106,7 @@ def build_privacy_router(engine, repo, claude, restarter, token) -> APIRouter:
     def clear(body: dict = Body(...)) -> dict:
         group = str(body.get("group", ""))
         if group not in (*mydata.CLEARABLE, "all"):
-            raise HTTPException(status_code=400, detail="Choose chat, learned, lab, logs or all.")
+            raise HTTPException(status_code=400, detail="Choose chat, learned, lab, bot, logs or all.")
         if group == "all" and str(body.get("confirm", "")).strip().lower() not in CLEAR_WORDS:
             raise HTTPException(status_code=400, detail="Type the word to confirm.")
         done = []
@@ -119,6 +119,11 @@ def build_privacy_router(engine, repo, claude, restarter, token) -> APIRouter:
                 done.append(g)
             elif g == "lab" and getattr(engine, "lab", None) is not None:
                 engine.lab.clear()
+                done.append(g)
+            elif g == "bot" and getattr(engine, "agent_log", None) is not None:
+                engine.agent_log.clear()
+                if getattr(engine, "funnel", None) is not None:
+                    engine.funnel.clear()
                 done.append(g)
             elif g == "logs":
                 mydata.prune_logs(LOG_DIR, 0)

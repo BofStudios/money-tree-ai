@@ -7,6 +7,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from app.bot import log as botlog
 from app.bot.crew import CREW, IDS, LEVELS, VERBS
 from app.common.events import EventBus
@@ -39,17 +41,23 @@ def same(a, b) -> bool:
     return a == b
 
 
-def test_the_fixture_has_the_contract_keys():
-    snap = json.loads((FIXTURES / "bot_snapshot.json").read_text(encoding="utf-8"))
+SNAPS = ("bot_snapshot.json", "bot_snapshot_closed.json")
+LOGS = ("bot_log.jsonl", "bot_log_closed.jsonl")
+
+
+@pytest.mark.parametrize("name", SNAPS)
+def test_the_fixture_has_the_contract_keys(name):
+    snap = json.loads((FIXTURES / name).read_text(encoding="utf-8"))
     assert set(snap) >= {"name", "version", "account", "market", "tiles", "crew", "queue", "funnel",
                          "focus", "risk", "proof", "log_head"}
     assert [c["id"] for c in snap["crew"]] == list(IDS)
     assert set(snap["tiles"]) == {"fills", "positions", "net", "capital"}
 
 
-def test_every_fixture_line_is_a_real_kind_of_line():
-    rows = [json.loads(r) for r in (FIXTURES / "bot_log.jsonl").read_text(encoding="utf-8").splitlines() if r.strip()]
-    assert len(rows) >= 20
+@pytest.mark.parametrize("name", LOGS)
+def test_every_fixture_line_is_a_real_kind_of_line(name):
+    rows = [json.loads(r) for r in (FIXTURES / name).read_text(encoding="utf-8").splitlines() if r.strip()]
+    assert len(rows) >= 10
     numbers = [r["n"] for r in rows]
     assert numbers == sorted(numbers) and len(set(numbers)) == len(numbers)
     for r in rows:
@@ -59,8 +67,9 @@ def test_every_fixture_line_is_a_real_kind_of_line():
 
 def test_the_snapshot_answers_in_the_fixture_shape(client):
     got = client.get("/api/bot", headers=AUTH).json()
-    want = json.loads((FIXTURES / "bot_snapshot.json").read_text(encoding="utf-8"))
-    assert same(shape(got), shape(want))
+    for name in SNAPS:
+        want = json.loads((FIXTURES / name).read_text(encoding="utf-8"))
+        assert same(shape(got), shape(want)), name
     assert len(got["crew"]) == len(CREW)
     log = client.get("/api/bot/log", headers=AUTH).json()
     assert set(log) == {"head", "lines"}

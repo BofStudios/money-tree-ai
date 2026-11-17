@@ -146,21 +146,36 @@ def read_chart(frame, now: datetime | None = None) -> dict | None:
     }
 
 
-def score(c: dict, tipped: bool) -> tuple[float, str] | None:
-    """(score, setup) for a long scalp, or None when the chart says no."""
+NO_SIGNAL = "no_signal"
+
+
+def chart_gate(c: dict) -> str | None:
+    """None when the chart passes Ultra's entry rule; NO_SIGNAL when there is no
+    dip at all; otherwise the gate (app/bot/funnel.py) that stopped a dip."""
     rsi = c["rsi"]
     if rsi is None or rsi > RSI_MAX:
-        return None
+        return NO_SIGNAL
     if not 0.04 <= c["atr_pct"] <= 1.5 or c["age"] > FRESH_SECONDS:
-        return None
-    if dip_of(c) < DIP_ATR or c["price"] <= c["prev"]:
-        return None
+        return "quiet"
+    if dip_of(c) < DIP_ATR:
+        return NO_SIGNAL
+    if c["price"] <= c["prev"]:
+        return "turn"
     conf = c.get("conf") or {}
-    if conf.get("veto") or dip_of(c) > DIP_MAX:
+    if conf.get("veto"):
+        return "knife"
+    if dip_of(c) > DIP_MAX:
+        return "too_deep"
+    if float(conf.get("score", 0.0)) < CONF_MIN:
+        return "confluence"
+    return None
+
+
+def score(c: dict, tipped: bool) -> tuple[float, str] | None:
+    """(score, setup) for a long scalp, or None when the chart says no."""
+    if chart_gate(c) is not None:
         return None
-    vote = float(conf.get("score", 0.0))
-    if vote < CONF_MIN:
-        return None
+    vote = float((c.get("conf") or {}).get("score", 0.0))
     return min(dip_of(c), 5.0) + 4.0 * vote + (1.5 if tipped else 0.0), "dip"
 
 
@@ -186,6 +201,7 @@ class Scalper:
         self.radar: list[dict] = []
         self.log: list[dict] = []
         self.state = ""                                  # why it is not buying right now, if it is not
+        self.gate = ""                                   # the same, as a funnel gate id (12.0)
         self.day = ""
         self.entries = 0
         self.pdt_day = ""
@@ -242,10 +258,25 @@ class Scalper:
 
         tipped = {s for s, (until, _) in self.tips.items() if until > time.time()}
         lab = getattr(eng, "lab", None)
+        funnel = getattr(eng, "funnel", None)      # 12.0: counts only; never changes a decision
+        if funnel is not None:
+            funnel.scanned(len(charts))
+        fresh: set[str] = set()                    # dips counted for the first time this minute
         ranked = []
         for symbol, c in charts.items():
-            if lab is not None and lab.edge_blocked(symbol):
-                continue     # 10.0: the Lab's replay lost on this symbol; skipped until the next run
+            gate = chart_gate(c)
+            if gate == NO_SIGNAL:
+                continue
+            if funnel is not None and funnel.signal(symbol):
+                fresh.add(symbol)
+            if gate is None and lab is not None and lab.edge_blocked(symbol):
+                gate = "edge"    # 10.0: the Lab's replay lost on this symbol; skipped until the next run
+            if gate is not None:
+                if symbol in fresh:
+                    funnel.block(gate, symbol)
+                continue
+            if symbol in fresh:
+                funnel.passed()
             got = score(c, symbol in tipped)
             if got is not None:
                 ranked.append((got[0], symbol, got[1], c))
@@ -258,6 +289,9 @@ class Scalper:
 
         self.state = self._why_not_now(now, len(held))
         if self.state:
+            for _, symbol, _, _ in ranked:
+                if symbol in fresh:
+                    funnel.block(self.gate, symbol)
             return done
         with eng._lock:
             owned = set(eng._positions)
@@ -266,9 +300,14 @@ class Scalper:
         if cash is not None and cash < MIN_CASH:
             self.state = self._t("all the money is in trades: waiting for one to finish",
                                  "tüm para işlemde: biri bitince yenisi")
+            for _, symbol, _, _ in ranked:
+                if symbol in fresh:
+                    funnel.block("cash", symbol)
             return done
         for sc, symbol, setup, c in ranked:
             if symbol in owned or eng.protections.blocked(symbol):
+                if symbol in fresh:
+                    funnel.block("owned" if symbol in owned else "paused", symbol)
                 continue
             stop = stop_for(c)
             tip = self.tips.get(symbol)
@@ -277,7 +316,14 @@ class Scalper:
                       + (f" · news: {tip[1]}" if symbol in tipped and tip else ""))
             vote = float((c.get("conf") or {}).get("score", 0.0))
             share = ALL_IN if (vote >= ALL_IN_VOTE and not held) else ALLOC
-            result = eng.book_buy(symbol, BOOK, reason, equity * share, stop, RR, price=c["price"])
+            eng.last_block = None
+            eng.funnel_quiet = True                # this look counts its own block, once a minute
+            try:
+                result = eng.book_buy(symbol, BOOK, reason, equity * share, stop, RR, price=c["price"])
+            finally:
+                eng.funnel_quiet = False
+            if symbol in fresh and result != "bought":
+                funnel.block("approval" if result == "waiting" else (getattr(eng, "last_block", None) or "rules"), symbol)
             if result == "bought":
                 self.entries += 1
                 done.append(self._note(symbol, "buy", reason[len(PREFIX):]))
@@ -335,32 +381,42 @@ class Scalper:
             return tr_ if tr else en
 
         if eng.halted:
+            self.gate = "halted"
             return t("stopped: no new trades", "durduruldu: yeni işlem yok")
         pace = eng.buy_wait() if hasattr(eng, "buy_wait") else None
         if pace and eng.clock.state().is_open:
+            self.gate = "pace"
             return pace
         if not eng.clock.state().is_open:
+            self.gate = "closed"
             local = datetime.combine(now.date(), START, tzinfo=NY).astimezone(ZoneInfo("Europe/Istanbul"))
             return t(f"the market is closed: Ultra starts at 9:45 New York ({local:%H:%M} Türkiye)",
                      f"piyasa kapalı: işlemler New York 9:45'te (Türkiye {local:%H:%M}) başlar")
         if self.pdt_day == self._today(now):
+            self.gate = "pdt"
             return t("the broker refused a day trade today (day-trade rule): no new trades until tomorrow",
                      "aracı kurum bugün gün içi işlemi reddetti (day-trade kuralı): yarına kadar yeni işlem yok")
         if now.time() < START:
+            self.gate = "hours"
             return t("waiting for 9:45 New York: the first minutes are too wild",
                      "New York 9:45 bekleniyor (9:45): ilk dakikalar çok sert")
         if now.time() >= LAST_ENTRY:
+            self.gate = "hours"
             return t("no new trades after 15:40 New York", "New York 15:40'tan sonra yeni işlem yok")
         if self._bad_day(now):
+            self.gate = "bad_day"
             return t(f"today's trades lost {-GUARD_AVG:.2f}% or more on average: no new trades today",
                      f"bugünkü işlemler ortalama %{-GUARD_AVG:.2f} ya da daha fazla kaybetti: bugün yeni işlem yok")
         if self.entries >= MAX_ENTRIES:
+            self.gate = "entries"
             return t(f"{MAX_ENTRIES} trades today: that is the day's limit",
                      f"bugün {MAX_ENTRIES} işlem: günlük sınır bu")
         if open_scalps >= SLOTS:
+            self.gate = "slots"
             return t(f"{SLOTS} trades open: waiting for one to finish",
                      f"{SLOTS} işlem açık (open): biri bitince yenisi")
         if not self.radar:
+            self.gate = "quiet"
             return t("no chart passes right now: watching", "şu an kurallardan geçen grafik yok: izliyor")
         return ""
 

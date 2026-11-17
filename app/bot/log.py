@@ -19,6 +19,9 @@ log = logging.getLogger(__name__)
 
 KEEP = 2000
 MAX_BYTES = 5 * 1024 * 1024
+QUIET_VERBS = ("scan", "note", "wait", "signal", "veto")
+QUIET_S = 60
+ACTED = ("signal", "order", "fill", "partial", "exit", "stop", "target", "veto", "pause", "lab", "learn", "thesis", "plan")
 TABS = {"orders": ORDER_VERBS, "risk": RISK_VERBS}
 
 
@@ -46,7 +49,7 @@ def from_event(event: dict) -> dict | None:
         agent, verb = STEP_OWNER.get(step.get("kind") or "", ("orion", "note"))
         text = step.get("title") or ""
         if step.get("detail"):
-            text = f"{text}: {step['detail']}" if text else step["detail"]
+            text = f"{text.rstrip('.:')}: {step['detail']}" if text else step["detail"]
         if not text:
             return None
         failed = state == "failed"
@@ -85,6 +88,7 @@ class AgentLog:
         self._now = now
         self._lock = threading.Lock()
         self._lines: deque[dict] = deque(maxlen=KEEP)
+        self._quiet: dict[tuple, list] = {}
         self.head = 0
         self._load()
         if events is not None:
@@ -115,9 +119,21 @@ class AgentLog:
             return
         if line is None:
             return
+        now = self._now()
         with self._lock:
+            # The noise rule: the same agent saying the same kind of thing about the
+            # same symbol within a minute is one line; the next one says how many.
+            if line["verb"] in QUIET_VERBS:
+                key = (line["agent"], line["verb"], line["symbol"], line["text"][:24])
+                seen = self._quiet.get(key)
+                if seen and now - seen[0] < QUIET_S:
+                    seen[1] += 1
+                    return
+                if seen and seen[1]:
+                    line["text"] = f"{line['text']} (×{seen[1] + 1})"
+                self._quiet[key] = [now, 0]
             self.head += 1
-            line = {"n": self.head, "at": int(self._now() * 1000), **line}
+            line = {"n": self.head, "at": int(now * 1000), **line}
             self._lines.append(line)
             self._append(line)
         if self.events is not None:
@@ -151,9 +167,10 @@ class AgentLog:
                     return line
         return None
 
-    def count_today(self, agent: str, since_ms: int) -> int:
+    def count_today(self, agent: str, since_ms: int, acted: bool = False) -> int:
         with self._lock:
-            return sum(1 for l in self._lines if l["agent"] == agent and l["at"] >= since_ms)
+            return sum(1 for l in self._lines if l["agent"] == agent and l["at"] >= since_ms
+                       and (not acted or l["verb"] in ACTED))
 
     def clear(self) -> None:
         with self._lock:

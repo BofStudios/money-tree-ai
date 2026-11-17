@@ -8,11 +8,18 @@ Read-only. Nothing here trades, arms or changes a limit.
 """
 from __future__ import annotations
 
+import logging
+import threading
+import time
+
 from fastapi import APIRouter, Depends, Query
 
 from app.bot import log as botlog
 from app.bot.snapshot import _closed_ms, _day_start_ms, _f, snapshot
 from app.web.auth import Auth
+
+log = logging.getLogger(__name__)
+BOT_TRIGGERS = {"bot_log", "status", "trade_opened", "trade_closed", "intent", "proposal_resolved", "approval_needed"}
 
 
 def build_bot_router(engine, repo, events, token) -> APIRouter:
@@ -27,6 +34,31 @@ def build_bot_router(engine, repo, events, token) -> APIRouter:
 
     def turkish(lang: str | None) -> bool:
         return (lang or getattr(engine, "language", "en")) == "tr"
+
+    # The live "bot" event: something happened -> at most one fresh console a second.
+    # The snapshot can ask the broker, so it is made on its own thread, never on the
+    # thread that published the event.
+    if events is not None and not getattr(engine, "_bot_publisher", None):
+        wake = threading.Event()
+
+        def on_event(event: dict) -> None:
+            if event.get("type") in BOT_TRIGGERS:
+                wake.set()
+
+        def publisher() -> None:
+            while True:
+                wake.wait()
+                wake.clear()
+                try:
+                    snap = snapshot(engine, agent_log, turkish(None))
+                    events.publish("bot", {k: snap[k] for k in ("account", "tiles", "crew", "queue", "focus", "risk", "funnel")})
+                except Exception:
+                    log.debug("could not make the bot event", exc_info=True)
+                time.sleep(1.0)
+
+        events.subscribe(on_event)
+        engine._bot_publisher = threading.Thread(target=publisher, name="bot-event", daemon=True)
+        engine._bot_publisher.start()
 
     @router.get("", dependencies=guarded)
     def bot(lang: str | None = Query(default=None)) -> dict:

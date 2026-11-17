@@ -162,7 +162,10 @@ class GeminiProvider(Benched):
                 timeout=TIMEOUT,
             )
             if r.status_code == 429:
-                self.bench(120, "free-tier rate limit")
+                from app.bot.protocol import wait_from
+
+                wait, daily = wait_from(r.headers, r.text, default=120)
+                self.bench(wait, "free-tier daily quota" if daily else "free-tier rate limit")
                 return None
             if r.status_code in (400, 401, 403) and "key" in r.text.lower():
                 self.bench(3600, "the API key was refused")
@@ -209,7 +212,10 @@ class GroqProvider(Benched):
                 timeout=TIMEOUT,
             )
             if r.status_code == 429:
-                self.bench(90, "free-tier rate limit")
+                from app.bot.protocol import wait_from
+
+                wait, daily = wait_from(r.headers, r.text, default=90)
+                self.bench(wait, "free-tier daily quota" if daily else "free-tier rate limit")
                 return None
             if r.status_code in (401, 403):
                 self.bench(3600, "the API key was refused")
