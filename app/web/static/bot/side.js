@@ -12,8 +12,7 @@ let armClose = null, armTimer = 0, closeNote = "";
 function css(name) { return getComputedStyle(host).getPropertyValue(name).trim(); }
 
 function head(f, sym) {
-  // An open position is the one focus with a quantity and an open time (why is translated text).
-  if (f && f.symbol === sym && f.qty != null && f.opened_at) {
+  if (f && f.symbol === sym && f.kind === "position") {
     const open = f.opened_at ? minutes(Math.max(0, Math.round((Date.now() - f.opened_at) / 60000))) : "";
     return `<div class="mb-side-head"><b class="mono">${esc(sym)}</b>
       <span class="num t-${tone(f.pnl)}">${esc(money(f.pnl, { sign: true }))} (${esc(pct(f.pnl_pct))})</span>

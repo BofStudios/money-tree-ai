@@ -23,7 +23,7 @@ function draw() {
     return;
   }
   const max = Math.max(...steps.map((s) => s.n), 1);
-  const w = (n) => (n > 0 ? 18 + 82 * (Math.log10(n + 1) / Math.log10(max + 1)) : 18);
+  const w = (n) => (n > 0 ? 18 + 82 * (Math.log10(n + 1) / Math.log10(max + 1)) : 0);   // zero draws no bar; the number is still written
   let sentence = "";
   if (quiet && signals) {
     const top = blocked[0];

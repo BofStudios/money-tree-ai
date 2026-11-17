@@ -9,6 +9,8 @@
 import { api, lang } from "./util.js";
 
 const MAX_LINES = 200;                     // DOM ceiling for the log (B2.10)
+const MAX_PAGED = 600;                     // ceiling while the owner reads older pages
+const PAGE = 100;
 const TAB_VERBS = {
   orders: new Set(["order", "fill", "partial", "exit", "stop", "target"]),
   risk: new Set(["veto", "pause", "resume", "arm", "disarm"]),
@@ -19,6 +21,8 @@ export const store = {
   lines: [],              // log lines for the current tab + agent filter, oldest first
   head: 0,                // highest n seen
   more: true,             // older lines may exist
+  paged: false,           // older pages were loaded above the live tail
+  loadingOlder: false,
   ledger: null,           // /api/bot/ledger for store.range (ledger tab)
   today: null,            // /api/bot/ledger?range=today (side panel: closed today)
   range: "today",
@@ -33,16 +37,25 @@ export const store = {
 };
 
 let frame = 0;
+let backup = 0;
 export function emit(...what) {
   what.forEach((w) => store.changed.add(w));
-  if (frame) return;
-  if (document.hidden) { frame = -1; return; }   // catch up once, on return
-  frame = requestAnimationFrame(() => {
+  if (frame > 0) return;                         // a draw is already scheduled
+  // Hidden: wait. -1 is not a lock; the next emit while visible (or the
+  // visibilitychange below) schedules the catch-up draw.
+  if (document.hidden) { frame = -1; return; }
+  // One draw per frame. A timer backs the frame up: a covered or occluded
+  // window can stop animation frames while still reporting "visible".
+  const flush = () => {
+    if (frame <= 0) return;
+    cancelAnimationFrame(frame); clearTimeout(backup);
     frame = 0;
     const changed = new Set(store.changed);
     store.changed.clear();
     window.dispatchEvent(new CustomEvent("bot:update", { detail: { store, changed } }));
-  });
+  };
+  frame = requestAnimationFrame(flush);
+  backup = setTimeout(flush, 120);
 }
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden && frame === -1) { frame = 0; emit("all"); }
@@ -79,7 +92,8 @@ export async function loadLog() {
     const res = await api("GET", logQuery());
     store.lines = res.lines || [];
     store.head = Math.max(store.head, res.head || 0, ...store.lines.map((l) => l.n));
-    store.more = store.lines.length >= MAX_LINES;
+    store.more = store.lines.length >= MAX_LINES || (store.lines[0] && store.lines[0].n > 1);
+    store.paged = false;
   } catch (err) {
     store.error = err.message || "error";
   }
@@ -109,8 +123,25 @@ export function addLine(line) {
     store.lines.push(line);
   }
   if (["exit", "stop", "target"].includes(line.verb)) { loadToday(); if (store.tab === "ledger") loadLedger(); }
-  if (store.lines.length > MAX_LINES) { store.lines.splice(0, store.lines.length - MAX_LINES); store.more = true; }
+  const cap = store.paged ? MAX_PAGED : MAX_LINES;
+  if (store.lines.length > cap) { store.lines.splice(0, store.lines.length - cap); store.more = true; }
   emit("line");
+}
+
+/** Scrolled to the top: the page just before the oldest loaded line. */
+export async function loadOlder() {
+  const first = store.lines[0];
+  if (!first || !store.more || store.loadingOlder || store.lines.length >= MAX_PAGED) return;
+  store.loadingOlder = true;
+  try {
+    const res = await api("GET", logQuery(`&before=${first.n}`).replace(`limit=${MAX_LINES}`, `limit=${PAGE}`));
+    const older = (res.lines || []).filter((l) => l.n < first.n);
+    store.lines = older.concat(store.lines);
+    store.more = older.length >= PAGE && older[0].n > 1;
+    store.paged = true;
+  } catch { /* scrolling up again retries */ }
+  store.loadingOlder = false;
+  emit("older");
 }
 
 export async function loadLedger(range = store.range) {

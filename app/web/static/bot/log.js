@@ -7,7 +7,7 @@
  */
 
 import { $, T, esc, hms, nyTime, money, tone } from "./util.js";
-import { store, setTab, setAgent, setQuery, setFocus } from "./store.js";
+import { store, setTab, setAgent, setQuery, setFocus, loadOlder } from "./store.js";
 
 const LEVELS = new Set(["info", "good", "bad", "warn", "error"]);
 const box = $("mbLines");
@@ -101,13 +101,14 @@ window.addEventListener("bot:update", ({ detail: { changed } }) => {
   if (changed.has("tab") || changed.has("agent") || changed.has("all") || drawnTab !== store.tab) { tabs(); filterChip(); drawnTab = store.tab; }
   if (store.tab === "ledger") return;
   if (changed.has("log")) { atBottom = true; }
-  if (changed.has("log") || changed.has("line") || changed.has("query") || changed.has("all")) draw(changed.has("log"));
+  if (changed.has("log") || changed.has("line") || changed.has("older") || changed.has("query") || changed.has("all")) draw(changed.has("log"));
   else if (changed.has("snap") && !store.lines.length) draw(true);   // empty-state words follow the engine
 });
 
 box?.addEventListener("scroll", () => {
   atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 24;
   if (atBottom) { seenN = store.head; newButton(); }
+  if (box.scrollTop < 40 && !store.query && store.more) loadOlder();
 }, { passive: true });
 
 $("mbNewLines")?.addEventListener("click", () => {
