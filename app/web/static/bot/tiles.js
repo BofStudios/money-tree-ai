@@ -30,6 +30,12 @@ function draw() {
     return;
   }
   host.removeAttribute("aria-busy");
+  // Real money is the only way: before the real account is connected the numbers
+  // would be the background practice engine's, so they are not shown.
+  if (!(s.account && s.account.mode === "live")) {
+    host.innerHTML = ["fills", "positions", "net.today", "equity"].map((k) => tile(k, T(`tiles.${k}`), "—", T("tiles.notConnected"))).join("");
+    return;
+  }
   const { fills = {}, positions = {}, net = {}, capital = {} } = s.tiles || {};
 
   const fillBig = fills.max ? `${int(fills.closed)} / ${int(fills.max)}` : int(fills.closed);

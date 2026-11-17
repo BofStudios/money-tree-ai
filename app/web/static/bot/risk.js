@@ -8,8 +8,8 @@
 import { $, T, esc, money, pct, api, lang } from "./util.js";
 import { store, loadSnap } from "./store.js";
 
+// The budget is the big amount field at the top of the console (amount.js).
 const FIELDS = [
-  { id: "budget", min: 1, step: 1, unit: "$" },
   { id: "per_trade_pct", min: 0.25, max: 5, step: 0.25, unit: "%" },
   { id: "daily_loss", min: 1, step: 1, unit: "$" },
   { id: "max_positions", min: 1, max: 5, step: 1, unit: "" },
@@ -28,12 +28,11 @@ const num = (v) => (v === "" || v === null || v === undefined || Number.isNaN(Nu
 
 function current() {
   const r = (store.snap && store.snap.risk) || {};
-  return Object.fromEntries(FIELDS.map((f) => [f.id, r[f.id] ?? null]));
+  return { budget: r.budget ?? null, ...Object.fromEntries(FIELDS.map((f) => [f.id, r[f.id] ?? null])) };
 }
 
 function say(id, v, vals) {
   const base = vals.budget ?? equity();
-  if (id === "budget") return v == null ? T("risk.say.budgetNone") : T("risk.say.budget", { v: money(v), e: money(equity()) });
   if (id === "per_trade_pct") return v == null ? T("risk.say.perNone") : T("risk.say.per", { v: money((base * v) / 100) });
   if (id === "daily_loss") return v == null ? T("risk.say.lossNone") : T("risk.say.loss", { v: money(v) });
   return v == null ? T("risk.say.posNone") : T("risk.say.pos", { n: v });

@@ -326,7 +326,7 @@ function drawOnboarding() {
     market ? t("ob.sumMarket", { market: t(`market.${market}`) }) : null,
     t("ob.sumHorizon", { tf: t(`tf.${tf}`).toLowerCase() }),
     t({ full: "ob.sumFull", semi: "ob.sumSemi", manual: "ob.sumManual" }[autonomy]),
-    t(mode === "live" ? "ob.sumReal" : "ob.sumPractice"),
+    t(mode === "live" ? "ob.sumReal" : "bot.setup.keys"),
   ];
   body.innerHTML = `
     <h2>${esc(t("ob.doneTitle"))}</h2>

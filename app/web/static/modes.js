@@ -321,7 +321,7 @@ function portfolioHtml(p) {
   return `
     <section class="port-head">
       <div class="port-money">
-        <span class="${live ? (armed ? "armed" : "warn") : ""}">${esc(t(live ? (armed ? "modes.money.armed" : "modes.money.notArmed") : "modes.money.practiceBody"))}</span>
+        <span class="${live ? (armed ? "armed" : "warn") : ""}">${esc(t(live ? (armed ? "modes.money.armed" : "modes.money.notArmed") : "bot.setup.keys"))}</span>
         ${live ? `<button class="${armed ? "ghost sm" : "arm-big"}" data-arm="${armed ? "off" : "on"}">${esc(t(armed ? "modes.money.disarm" : "modes.money.arm"))}</button>` : ""}
       </div>
       <div class="port-regime ${p.regime_up === false ? "down" : "up"}">${esc(regime)}</div>
@@ -368,7 +368,7 @@ function scalpHtml(p) {
   return `
     <section class="port-head">
       <div class="port-money">
-        <span class="${live ? (armed ? "armed" : "warn") : ""}">${esc(t(live ? (armed ? "modes.money.armed" : "modes.money.notArmed") : "modes.money.practiceBody"))}</span>
+        <span class="${live ? (armed ? "armed" : "warn") : ""}">${esc(t(live ? (armed ? "modes.money.armed" : "modes.money.notArmed") : "bot.setup.keys"))}</span>
         ${live ? `<button class="${armed ? "ghost sm" : "arm-big"}" data-arm="${armed ? "off" : "on"}">${esc(t(armed ? "modes.money.disarm" : "modes.money.arm"))}</button>` : ""}
       </div>
       <div class="port-regime up">${esc(t("scalp.pace", { s: rules.seconds || 10, n: p.universe }))}</div>
