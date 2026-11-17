@@ -17,10 +17,10 @@
 
   /* Brand: the yellow of fear-light. Used for identity and live state —
      never for profit, where yellow would read as a warning. */
-  --accent: #ffd60a;
-  --accent-deep: #c9a200;
-  --accent-soft: rgba(255, 214, 10, 0.12);
-  --accent-glow: 0 0 18px rgba(255, 214, 10, 0.45);
+  --accent: #d0d0d0;
+  --accent-deep: #9f9f9f;
+  --accent-soft: rgba(255, 255, 255, 0.12);
+  --accent-glow: 0 0 18px rgba(255, 255, 255, 0.45);
 
   --r: 16px;
   --r-sm: 10px;

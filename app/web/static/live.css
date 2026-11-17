@@ -17,8 +17,8 @@
 .lv-head {
   display: flex; align-items: center; gap: 12px;
   padding: 14px 16px; border-radius: var(--r);
-  background: linear-gradient(180deg, rgba(255, 214, 10, 0.06), rgba(255, 214, 10, 0) 70%), var(--surface);
-  border: 1px solid rgba(255, 214, 10, 0.22);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 70%), var(--surface);
+  border: 1px solid rgba(255, 255, 255, 0.22);
 }
 .lv-status { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -77,7 +77,7 @@
 .lv-more:hover:not(:disabled) { background: none; text-decoration: underline; }
 
 /* Colour by what the step is. */
-.lv-step.k-order .lv-dot, .lv-step.k-sell .lv-dot { background: var(--accent); box-shadow: 0 0 10px rgba(255, 214, 10, 0.55); }
+.lv-step.k-order .lv-dot, .lv-step.k-sell .lv-dot { background: var(--accent); box-shadow: none; }
 .lv-step.k-trail .lv-dot { background: var(--accent-deep); }
 .lv-step.k-ai .lv-dot { background: #b79cff; }
 .lv-step.k-approval .lv-dot { background: var(--accent); }
@@ -91,7 +91,7 @@
 
 /* Running: a spinner in place of the dot, for exactly as long as the call. */
 .lv-step.s-running .lv-dot {
-  background: none; border: 2px solid rgba(255, 214, 10, 0.25); border-top-color: var(--accent);
+  background: none; border: 2px solid rgba(255, 255, 255, 0.25); border-top-color: var(--accent);
   box-shadow: none; animation: spin 0.8s linear infinite;
 }
 .lv-step.s-running .lv-detail span { color: var(--accent); }
@@ -115,14 +115,14 @@
 }
 .moneycard::before {
   content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: radial-gradient(120% 90% at 100% 0%, rgba(255, 214, 10, 0.10), transparent 55%);
+  background: radial-gradient(120% 90% at 100% 0%, rgba(255, 255, 255, 0.10), transparent 55%);
 }
 .moneycard[data-kind="real"] {
-  border-color: rgba(255, 214, 10, 0.5);
-  box-shadow: 0 0 0 1px rgba(255, 214, 10, 0.08), 0 24px 60px -30px rgba(255, 214, 10, 0.55);
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow: none;
 }
 .moneycard[data-kind="real"]::before {
-  background: radial-gradient(120% 100% at 100% 0%, rgba(255, 214, 10, 0.18), transparent 60%);
+  background: radial-gradient(120% 100% at 100% 0%, rgba(255, 255, 255, 0.18), transparent 60%);
 }
 .mc-top { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
 .mc-tag {
@@ -161,10 +161,10 @@ a.link-accent { display: inline-block; margin-top: 6px; }
   background: var(--surface); border: 1px solid var(--line);
 }
 .mv-card.glow {
-  border-color: rgba(255, 214, 10, 0.45);
-  box-shadow: 0 24px 60px -34px rgba(255, 214, 10, 0.6);
+  border-color: rgba(255, 255, 255, 0.45);
+  box-shadow: none;
 }
-.mv-card.soft { border-color: rgba(255, 214, 10, 0.28); }
+.mv-card.soft { border-color: rgba(255, 255, 255, 0.28); }
 .mv-card.soft b, .mv-card.warn-card b { font-size: 15px; font-weight: 650; }
 .mv-card.soft p, .mv-card.warn-card p { margin: 6px 0 0; font-size: 13.5px; line-height: 1.6; color: var(--text-2); }
 .mv-card.warn-card { border-color: rgba(255, 107, 96, 0.4); }
@@ -197,7 +197,7 @@ a.primary.wide:active { transform: scale(0.98); }
 
 /* ===================================================== money & keys */
 
-.money-block { border-color: rgba(255, 214, 10, 0.22); }
+.money-block { border-color: rgba(255, 255, 255, 0.22); }
 .seg-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .seg-row .seg { padding: 9px 14px; font-size: 13px; }
 .seg-row .seg.seg-real.active { background: rgba(255, 107, 96, 0.12); border-color: var(--down); color: var(--down); }
@@ -205,7 +205,7 @@ a.primary.wide:active { transform: scale(0.98); }
 .restart-banner {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
   margin: 14px 0; padding: 12px 14px; border-radius: 12px;
-  background: var(--accent-soft); border: 1px solid rgba(255, 214, 10, 0.4);
+  background: var(--accent-soft); border: 1px solid rgba(255, 255, 255, 0.4);
   font-size: 13.5px; color: var(--text);
 }
 .restart-banner .primary.sm { padding: 8px 14px; font-size: 13px; border-radius: 10px; }
@@ -254,7 +254,7 @@ button.danger-text { color: var(--down); }
 .restart-overlay { z-index: 99; }
 .restart-spin {
   width: 42px; height: 42px; border-radius: 50%;
-  border: 3px solid rgba(255, 214, 10, 0.2); border-top-color: var(--accent);
+  border: 3px solid rgba(255, 255, 255, 0.2); border-top-color: var(--accent);
   animation: spin 0.9s linear infinite;
 }
 

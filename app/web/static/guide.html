@@ -7,8 +7,8 @@
 <meta name="description" content="How to install, set up and use Money Bot, the desktop stock-trading bot for Alpaca.">
 <style>
   :root {
-    --bg: #050403; --surface: #110e07; --line: rgba(255, 214, 10, 0.18); --text: #fffdf2; --text-2: #c9c2a8;
-    --text-3: #8a8268; --accent: #ffd60a; --good: #32d583; --bad: #ff5a4e;
+    --bg: #040404; --surface: #0e0e0e; --line: rgba(255, 255, 255, 0.18); --text: #ffffff; --text-2: #ffffff;
+    --text-3: #828282; --accent: #d0d0d0; --good: #32d583; --bad: #ff5a4e;
     --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
     --mono: "Cascadia Mono", Consolas, "SF Mono", monospace;
   }
@@ -16,11 +16,11 @@
   html, body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.65 var(--sans); }
   body::before {
     content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-    background: radial-gradient(900px 500px at 85% -10%, rgba(255, 214, 10, 0.12), transparent 60%);
+    background: radial-gradient(900px 500px at 85% -10%, rgba(255, 255, 255, 0.12), transparent 60%);
   }
   header.top {
     position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 14px; padding: 12px 16px;
-    background: rgba(5, 4, 3, 0.94); border-bottom: 1px solid var(--line);
+    background: rgba(4, 4, 4, 0.94); border-bottom: 1px solid var(--line);
   }
   header.top img { width: 30px; height: 30px; }
   header.top b { color: var(--accent); font-size: 16px; }
@@ -29,7 +29,7 @@
     font: 600 13px/1 var(--sans); padding: 8px 12px; border-radius: 999px; cursor: pointer;
     background: transparent; color: var(--text-2); border: 1px solid var(--line);
   }
-  .lang button.on { background: var(--accent); color: #120d00; border-color: var(--accent); }
+  .lang button.on { background: var(--accent); color: #0d0d0d; border-color: var(--accent); }
   main { max-width: 860px; margin: 0 auto; padding: 28px 16px 80px; }
   h1 { font-size: clamp(30px, 6vw, 44px); line-height: 1.1; margin: 10px 0 8px; letter-spacing: -0.02em; }
   h1 em { color: var(--accent); font-style: normal; }
@@ -43,7 +43,7 @@
   p, li { color: var(--text-2); }
   strong { color: var(--text); }
   a { color: var(--accent); }
-  code, .path { font-family: var(--mono); font-size: 14px; background: rgba(255, 214, 10, 0.08); padding: 1px 6px; border-radius: 6px; color: var(--text); word-break: break-all; }
+  code, .path { font-family: var(--mono); font-size: 14px; background: rgba(255, 255, 255, 0.08); padding: 1px 6px; border-radius: 6px; color: var(--text); word-break: break-all; }
   ol, ul { padding-left: 22px; }
   li { margin: 6px 0; }
   .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; margin: 14px 0; }
@@ -66,7 +66,7 @@
   @media (max-width: 600px) { nav.toc { columns: 1; } }
   @media print {
     header.top { display: none; } body::before { display: none; }
-    html, body { background: #fff; color: #111; } p, li, td { color: #222; } h2, a, .grid .card b { color: #7a5a00; }
+    html, body { background: #fff; color: #111; } p, li, td { color: #222; } h2, a, .grid .card b { color: #5a5a5a; }
     .card { background: #fff; }
   }
 </style>

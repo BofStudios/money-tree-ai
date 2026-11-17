@@ -46,7 +46,7 @@
 .mb-top .halt-btn[data-state="on"] { color: var(--bad); border: 1px solid var(--bad); }
 .mb-top .halt-btn[data-state="on"]:hover { background: rgba(255, 107, 96, 0.12); }
 .mb-top .halt-btn[data-state="off"] { color: var(--accent); border: 1px solid var(--accent); }
-.mb-top .halt-btn[data-state="off"]:hover { background: rgba(255, 214, 10, 0.10); }
+.mb-top .halt-btn[data-state="off"]:hover { background: rgba(255, 255, 255, 0.10); }
 .mb-top .halt-led { animation: none !important; }
 
 /* Arm only exists for a real account; on practice money chart.js disables it. */
@@ -72,7 +72,7 @@
   color: var(--text-3); font: 500 10.5px/1.1 var(--sans);
 }
 .mb-nav .grp:hover:not(:disabled) { background: var(--panel-2); color: var(--text); }
-.mb-nav .grp[aria-current="page"] { color: var(--accent); background: rgba(255, 214, 10, 0.08); }
+.mb-nav .grp[aria-current="page"] { color: var(--accent); background: rgba(255, 255, 255, 0.08); }
 .mb-nav .grp svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 
 /* ----------------------------------------------------------- sub-tabs */

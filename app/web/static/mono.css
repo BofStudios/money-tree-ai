@@ -1,0 +1,84 @@
+/* Money Bot 12.0: one plain look on every screen. Loaded last.
+ *
+ * Pure black, white text, grey lines, white as the only accent. Colour means
+ * something or is not there: green a gain, red a loss, orange a warning.
+ * No glow, no gradient, no ring. The older sheets keep their layout; this file
+ * only takes their decoration away.
+ */
+
+:root, .mb {
+  --bg: #000;
+  --rail: #000;
+  --surface: #0a0a0a;
+  --surface-2: #121212;
+  --panel: #0a0a0a;
+  --panel-2: #121212;
+  --line: rgba(255, 255, 255, 0.12);
+  --line-2: rgba(255, 255, 255, 0.2);
+  --line-soft: rgba(255, 255, 255, 0.07);
+  --text: #fff;
+  --text-2: #a3a3a3;
+  --text-3: #8a8a8a;
+  --accent: #fff;
+  --accent-hot: #fff;
+  --accent-deep: #d4d4d4;
+  --accent-soft: rgba(255, 255, 255, 0.08);
+  --accent-glow: none;
+  --gold-line: rgba(255, 255, 255, 0.12);
+  --card: #0a0a0a;
+  --card-edge: rgba(255, 255, 255, 0.12);
+  --edge: rgba(255, 255, 255, 0.12);
+  --lift: none;
+  --up: #32d583;
+  --good: #32d583;
+  --down: #ff6b60;
+  --bad: #ff6b60;
+  --warn: #ff9f0a;
+}
+
+html, body { background: #000; color: var(--text); }
+body::before, body::after { display: none !important; }
+::selection { background: #fff; color: #000; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.35); }
+
+/* Surfaces: flat. */
+.top, .ai, .tabbar, .nav, .rail, .moneycard, .card, .block, .panel, .onboard-card, .sheet, .modal, .lab-card, .bot, .now {
+  background-image: none !important;
+  box-shadow: none !important;
+}
+.top { background: #000; border-bottom: 1px solid var(--line); }
+.top::after, .moneycard::before, .moneycard::after, .card::before, .card::after { display: none !important; }
+.ai { background: #000; border-color: var(--line); }
+.logo, .boot-mark, .figure, .mv-figure, h1, h2 { filter: none !important; text-shadow: none !important; }
+h2 { color: var(--text-2); }
+.figure, .mv-figure, .moneycard .figure, .mem-ring b, .sc-vs b:not(.up):not(.down) {
+  background: none !important; -webkit-text-fill-color: currentColor !important;
+}
+
+/* Controls: white is the one accent; selected = white on black inverted. */
+button, .chip, .seg { box-shadow: none !important; background-image: none !important; }
+button { border-color: var(--line); }
+button:hover:not(:disabled) { background: #161616; border-color: var(--line-2); }
+.tab.active, .chip.on, .seg.active, button.solid, button.primary, a.primary.wide {
+  background: #fff !important; color: #000 !important; border-color: #fff !important;
+}
+button.solid:hover:not(:disabled), button.primary:hover:not(:disabled) { background: #e5e5e5 !important; }
+.tab { color: var(--text-3); }
+.tab:hover { color: var(--text); }
+input:focus, textarea:focus, select:focus { border-color: #fff !important; box-shadow: none !important; }
+:focus-visible { outline: 1px solid #fff; outline-offset: 2px; }
+
+/* The boot: black, the mark, a thin white name. Nothing moves but the step text. */
+.boot { background: #000 !important; gap: 0; }
+.boot-mark { width: 96px; height: 96px; filter: none !important; }
+.boot-mark img { animation: none !important; filter: none !important; }
+.boot-name {
+  margin-top: 20px; color: #fff; font: 300 15px/1 var(--mono); letter-spacing: 0.12em;
+  text-transform: lowercase; animation: none;
+}
+.boot-step { margin-top: 10px; color: var(--text-3); animation: none; }
+.restart-spin { border-color: rgba(255, 255, 255, 0.15); border-top-color: #fff; box-shadow: none; }
+
+/* 12.0: always full power; no Ultra badge. */
+#ultraBadge { display: none !important; }

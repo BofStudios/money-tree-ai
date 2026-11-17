@@ -148,18 +148,7 @@ function renderModes() {
     <label class="gate"><input type="checkbox" data-switch="${esc(k)}" ${on ? "checked" : ""}>
       <span class="switch"></span><span><b>${esc(t(`modes.sw.${k}`))}</b><small>${esc(t(`modes.sw.${k}Hint`))}</small></span></label>`).join("");
   body.innerHTML = `
-    <section class="mode-block">
-      <h2>${esc(t("modes.money"))}</h2>
-      ${cardRow("money", ["practice", "real"], moneyActive, moneyExtra)}
-      <div class="mode-actions">
-        ${live ? `<button class="${armed ? "ghost" : "arm-big"}" data-arm="${armed ? "off" : "on"}">${esc(t(armed ? "modes.money.disarm" : "modes.money.arm"))}</button>` : ""}
-      </div>
-    </section>
-    <section class="mode-block mode-main">
-      <h2>${esc(t("modes.mode"))}</h2>
-      ${cardRow("mode", ["balanced", "ultra"], modes.mode || "balanced")}
-      <p class="note faint">${esc(t("modes.mode.note"))}</p>
-    </section>
+    <!-- 12.0: real money only and always full power: no money or speed cards. Arm is in the top bar. -->
     <section class="mode-block">
       <h2>${esc(t("modes.who"))}</h2>
       ${cardRow("who", ["full", "semi", "manual"], modes.autonomy)}
@@ -234,7 +223,7 @@ function when(epoch) {
 function memoryHtml(m) {
   if (!m) return `<div class="fl-card"><p class="note">…</p></div>`;
   const pct = Math.round((m.progress || 0) * 100);
-  const ring = `conic-gradient(var(--accent) ${pct * 3.6}deg, rgba(255,214,10,0.12) 0)`;
+  const ring = `conic-gradient(var(--accent) ${pct * 3.6}deg, rgba(255, 255, 255,0.12) 0)`;
   const facts = m.facts.map((f) => `
       <div class="mem-fact"><b>${esc(fmt(f.value))}</b><span>${esc(f.label)}</span></div>`).join("");
   const growth = m.growth.length ? m.growth.map((e) => `

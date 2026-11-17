@@ -397,13 +397,9 @@ function renderSwarm() {
         <p class="small faint">${esc(t("swarm.data", { n: s.symbols, bars: num(s.bars) }))}</p>
       </div>
       <div class="hero-right">
+        <!-- 12.0: always every bot at full power; no count or power picker. -->
         <span class="label">${esc(t("swarm.bots"))}</span>
-        <div class="bot-count">${[0, 1, 2, 4, 6, 8, 10].filter((n) => n <= (set.max_bots ?? 10)).map((n) => `<button class="seg ${set.bots === n ? "active" : ""}" data-swarm-bots="${n}">${n}</button>`).join("")}</div>
-        <span class="label">${esc(t("swarm.power"))}</span>
-        <div class="seg-row">
-          <button class="seg ${set.power === "full" ? "active" : ""}" data-swarm-power="full">${esc(t("swarm.full"))}</button>
-          <button class="seg ${set.power === "light" ? "active" : ""}" data-swarm-power="light">${esc(t("swarm.light"))}</button>
-        </div>
+        <b class="num">${set.bots ?? "—"}</b>
         <p class="small warn">${esc(t("swarm.ramWarning"))}</p>
       </div>
     </section>
