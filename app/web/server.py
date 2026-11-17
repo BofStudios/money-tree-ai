@@ -67,7 +67,7 @@ def create_app(
     api.include_router(build_brain_router(engine, auth))
     api.include_router(build_mode_router(engine, auth))
     api.include_router(build_lab_router(engine, repo, auth))
-    api.include_router(build_bot_router(engine, repo, events, auth))
+    api.include_router(build_bot_router(engine, repo, events, auth, settings))
     api.include_router(build_privacy_router(engine, repo, claude, restarter, auth))
 
     @api.middleware("http")

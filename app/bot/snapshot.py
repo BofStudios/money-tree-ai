@@ -215,7 +215,18 @@ def day_start_equity(engine, equity: float) -> float | None:
     return seen["equity"]
 
 
-def snapshot(engine, agent_log, turkish: bool = False) -> dict:
+def setup_of(engine, status: dict, live_keys: bool | None = None) -> dict:
+    """Real money is the one road (12.0): live keys, then the owner's amount, then Arm."""
+    live = str(status.get("mode")) == "live"
+    risk = status.get("risk") if isinstance(status.get("risk"), dict) else {}
+    keys = live or bool(live_keys)
+    amount = _owner(engine).get("budget") is not None
+    armed = bool(risk.get("armed", False))
+    nxt = ("keys" if not keys else "live" if not live else "amount" if not amount else None if armed else "arm")
+    return {"keys": keys, "live": live, "amount": amount, "armed": armed, "next": nxt}
+
+
+def snapshot(engine, agent_log, turkish: bool = False, live_keys: bool | None = None) -> dict:
     status = engine.status()
     ultra = bool(status.get("ultra"))
     risk = status.get("risk") if isinstance(status.get("risk"), dict) else {}
@@ -302,6 +313,7 @@ def snapshot(engine, agent_log, turkish: bool = False) -> dict:
         {"day": datetime.now(NY).strftime("%Y-%m-%d"), "steps": [], "blocked": []},
         "focus": focus,
         "risk": risk_view(engine, max_pos, turkish),
+        "setup": setup_of(engine, status, live_keys),
         "proof": proof_of(engine),
         "log_head": agent_log.head if agent_log else 0,
         "at": int(time.time() * 1000),

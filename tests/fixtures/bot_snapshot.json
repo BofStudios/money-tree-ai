@@ -151,6 +151,13 @@
   "planner_calls_left": 60,
   "advice": []
  },
+ "setup": {
+  "keys": false,
+  "live": false,
+  "amount": false,
+  "armed": false,
+  "next": "keys"
+ },
  "proof": {
   "rule": "ultra-9.0",
   "state": "untested",

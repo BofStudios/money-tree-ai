@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
 BOT_TRIGGERS = {"bot_log", "status", "trade_opened", "trade_closed", "intent", "proposal_resolved", "approval_needed"}
 
 
-def build_bot_router(engine, repo, events, token) -> APIRouter:
+def build_bot_router(engine, repo, events, token, settings_obj=None) -> APIRouter:
     router = APIRouter(prefix="/api/bot")
     auth = token if isinstance(token, Auth) else Auth(token)
     guarded = [Depends(auth.guard())]
@@ -33,6 +33,13 @@ def build_bot_router(engine, repo, events, token) -> APIRouter:
     if agent_log is None:
         agent_log = botlog.AgentLog(botlog.default_path(), events)
         engine.agent_log = agent_log
+
+    def live_keys() -> bool:
+        try:
+            key, secret = settings_obj.secrets.alpaca_keys(True)
+            return bool(key and secret)
+        except Exception:
+            return False
 
     def turkish(lang: str | None) -> bool:
         return (lang or getattr(engine, "language", "en")) == "tr"
@@ -52,8 +59,8 @@ def build_bot_router(engine, repo, events, token) -> APIRouter:
                 wake.wait()
                 wake.clear()
                 try:
-                    snap = snapshot(engine, agent_log, turkish(None))
-                    events.publish("bot", {k: snap[k] for k in ("account", "tiles", "crew", "queue", "focus", "risk", "funnel")})
+                    snap = snapshot(engine, agent_log, turkish(None), live_keys())
+                    events.publish("bot", {k: snap[k] for k in ("account", "tiles", "crew", "queue", "focus", "risk", "setup", "funnel")})
                 except Exception:
                     log.debug("could not make the bot event", exc_info=True)
                 time.sleep(1.0)
@@ -64,7 +71,7 @@ def build_bot_router(engine, repo, events, token) -> APIRouter:
 
     @router.get("", dependencies=guarded)
     def bot(lang: str | None = Query(default=None)) -> dict:
-        return snapshot(engine, agent_log, turkish(lang))
+        return snapshot(engine, agent_log, turkish(lang), live_keys())
 
     def settings():
         s = getattr(engine, "bot_settings", None)

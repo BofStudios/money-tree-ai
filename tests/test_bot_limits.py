@@ -123,3 +123,30 @@ def test_the_name_changed_and_the_data_home_did_not(monkeypatch):
     src = (home.__file__ and open(home.__file__, encoding="utf-8").read())
     assert '"BofStudios" / "Money Tree AI"' in src            # the keys, trades and password stay where they are
     assert path is None or str(path).endswith("Money Tree AI")
+
+
+def test_real_money_needs_the_owners_amount_before_arm(client):
+    engine = client.engine
+    assert client.get("/api/bot", headers=AUTH).json()["setup"]["next"] in ("keys", "live")
+    engine.risk.mode = "live"
+    try:
+        r = client.post("/api/arm", json={"confirm": True}, headers=AUTH)
+        assert r.status_code == 400 and r.json()["detail"].startswith("budget_needed")
+        engine.bot_settings.update({"budget": 500}, equity=10_000, live=True)
+        assert client.post("/api/arm", json={"confirm": True}, headers=AUTH).status_code == 200
+    finally:
+        engine.disarm("test")
+        engine.risk.mode = "paper"
+
+
+def test_setup_walks_keys_then_live_then_amount_then_arm():
+    from app.bot.settings import BotSettings
+    from app.bot.snapshot import setup_of
+
+    e = type("E", (), {"bot_settings": BotSettings(None)})()
+    assert setup_of(e, {"mode": "paper"})["next"] == "keys"
+    assert setup_of(e, {"mode": "paper"}, live_keys=True)["next"] == "live"
+    assert setup_of(e, {"mode": "live"})["next"] == "amount"
+    e.bot_settings.update({"budget": 300}, equity=1_000, live=True)
+    assert setup_of(e, {"mode": "live"})["next"] == "arm"
+    assert setup_of(e, {"mode": "live", "risk": {"armed": True}})["next"] is None
