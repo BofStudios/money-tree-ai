@@ -306,3 +306,16 @@ button.mb-tile:hover:not(:disabled) { border-color: var(--line-2); background: v
   .mb-drawer { top: 48px; bottom: calc(56px + env(safe-area-inset-bottom)); width: 100vw; border-left: 0; }
 }
 .mb-rf-range[data-off] { opacity: 0.35; }   /* no limit set: the slider is only a starting point */
+
+/* AI planner switch and advice (M3) */
+.mb-switch { display: inline-flex; align-items: center; gap: var(--s2); padding: 0; border: 0; background: none; color: var(--text); font: 500 var(--f-body)/1 var(--sans); cursor: pointer; }
+.mb-switch:hover:not(:disabled) { background: none; }
+.mb-switch i { position: relative; width: 32px; height: 18px; border-radius: 9px; border: 1px solid var(--line-2); background: var(--panel-2); }
+.mb-switch i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--text-3); transition: transform 150ms; }
+.mb-switch[aria-checked="true"] i { border-color: var(--accent); }
+.mb-switch[aria-checked="true"] i::after { transform: translateX(14px); background: var(--accent); }
+.mb-advice { list-style: none; margin: var(--s2) 0 0; padding: 0; font-size: var(--f-label); }
+.mb-advice li { display: grid; grid-template-columns: 6ch auto minmax(0, 1fr); gap: 2px var(--s2); padding: var(--s1) 0; border-bottom: 1px solid var(--line); color: var(--text-2); }
+.mb-advice em { font-style: normal; font-family: var(--mono); color: var(--text); }
+.mb-advice li[data-act="shrink"] em, .mb-advice li[data-act="skip"] em { color: var(--warn); }
+.mb-advice small { grid-column: 2 / -1; }

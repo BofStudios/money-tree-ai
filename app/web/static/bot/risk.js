@@ -75,6 +75,24 @@ function paceRow(p, on) {
   </button>`;
 }
 
+/* The AI planner (M3): it may only keep, shrink or skip a planned trade, never
+   start one or loosen a limit. Off by default; its advice comes from the server. */
+function planner() {
+  const r = (store.snap && store.snap.risk) || {};
+  if (r.planner === undefined) return "";
+  const on = !!r.planner;
+  const advice = Array.isArray(r.advice) ? r.advice : [];
+  const until = (ms) => (ms ? new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "");
+  return `<h3>${esc(T("planner.title"))}</h3>
+    <button class="mb-switch" type="button" role="switch" aria-checked="${on}" data-planner="${on ? "off" : "on"}" ${busy ? "disabled" : ""}>
+      <i aria-hidden="true"></i><span>${esc(T(on ? "planner.on" : "planner.off"))}</span></button>
+    <p class="mb-rf-say">${esc(T("planner.what"))}${on && r.planner_calls_left != null ? " " + esc(T("planner.left", { n: r.planner_calls_left })) : ""}</p>
+    ${on ? (advice.length ? `<ul class="mb-advice">${advice.map((a) => `<li data-act="${esc(a.action)}"><b class="mono">${esc(a.symbol)}</b>
+      <em>${esc(T(`planner.act.${["keep", "shrink", "skip"].includes(a.action) ? a.action : "keep"}`))}</em>
+      <span>${esc(a.why || "")}</span>${a.until ? `<small class="mb-dim">${esc(T("planner.until", { t: until(a.until) }))}</small>` : ""}</li>`).join("")}</ul>`
+      : `<p class="mb-dim">${esc(T("planner.none"))}</p>`) : ""}`;
+}
+
 function html(h) {
   if (!store.snap) return `<p class="mb-dim">${esc(T("err.load"))}</p>`;
   const vals = { ...current(), ...(draft || {}) };
@@ -93,6 +111,7 @@ function html(h) {
     ${usage()}
     <h3>${esc(T("risk.pace.title"))}</h3>
     <div class="mb-paces" role="radiogroup" aria-label="${esc(T("risk.pace.title"))}">${list.map((p) => paceRow(p, p.id === active)).join("")}</div>
+    ${planner()}
   </div>`;
 }
 
@@ -126,7 +145,7 @@ async function send(path, body) {
     const res = await api("POST", path, body);
     pending = null;
     const clamped = Array.isArray(res.clamped) ? res.clamped : [];
-    msg = clamped.length ? { tone: "warn", text: clamped.map(describeClamp).join(" ") } : { tone: "ok", text: T("risk.saved") };
+    msg = clamped.length ? { tone: "warn", text: clamped.map(describeClamp).join(" ") } : { tone: "ok", text: T("risk.saved") };   // clamped = field names
     draft = null;
     if (res.proof && paces) loadPaces();
   } catch (err) {
@@ -155,6 +174,8 @@ function onInput(e) {
 function onClick(e) {
   if (e.target.closest("[data-risk-undo]")) { draft = null; msg = null; pending = null; hosts().forEach((h) => { h.innerHTML = ""; }); draw(); return; }
   if (e.target.closest("[data-risk-confirm]") && pending) { send(pending.path, pending.body); return; }
+  const pl = e.target.closest("[data-planner]");
+  if (pl && !busy) { msg = null; send("/api/bot/planner", { on: pl.dataset.planner === "on" }); return; }
   const p = e.target.closest("[data-pace]");
   if (p && !busy) { msg = null; send("/api/bot/pace", { pace: p.dataset.pace }); }
 }
