@@ -46,6 +46,8 @@ ITEMS: tuple[Item, ...] = (
     Item("data/brain", "learned", "What the bot learned: news memory, strategy progress, the swarm.",
          "Botun öğrendikleri: haber hafızası, strateji ilerlemesi, sürü."),
     Item("data/lab.json", "lab", "The last Lab replay and the edge switch.", "Son Lab tekrarı ve avantaj filtresi anahtarı."),
+    Item("data/bot", "bot", "The console: the agent log, why trades did or did not happen, the day's start value.",
+         "Konsol: ajan günlüğü, işlemlerin neden olup olmadığı, günün başlangıç değeri."),
     Item("data/privacy.json", "choices", "These privacy choices.", "Bu gizlilik seçimleri."),
     Item("data/journal.json", "state", "Counters: how long the app has run.", "Sayaçlar: uygulamanın ne kadar çalıştığı."),
     Item("data/engine_state.json", "state", "Open positions and the stop flag, to survive a restart.",
@@ -55,7 +57,7 @@ ITEMS: tuple[Item, ...] = (
     Item("logs", "logs", "Log files, with keys removed.", "Kayıt dosyaları, anahtarlar temizlenmiş."),
 )
 
-CLEARABLE = ("chat", "learned", "lab", "logs")
+CLEARABLE = ("chat", "learned", "lab", "bot", "logs")
 
 
 def _size(p: Path) -> int:

@@ -31,6 +31,15 @@ def _f(v, default: float = 0.0) -> float:
         return default
 
 
+def _cash(balance) -> float:
+    if isinstance(balance, dict):
+        for key in ("cash", "free", "available"):
+            if balance.get(key) is not None:
+                return _f(balance[key])
+        return 0.0
+    return _f(balance)
+
+
 def _day_start_ms() -> int:
     now = datetime.now(NY)
     return int(now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000)
@@ -42,6 +51,111 @@ def _closed_ms(trade: dict) -> int:
         return int(datetime.fromisoformat(str(raw).replace("Z", "+00:00")).timestamp() * 1000)
     except ValueError:
         return 0
+
+
+WORK_S, VETO_S = 8, 30
+
+
+def crew_state(engine, agent_log, cid: str, queue: list[dict], now_ms: int) -> str:
+    """off | error | veto | work | wait | idle, from what really happened (docs: A1.2)."""
+    if not engine.status_running():
+        return "off"
+    last = agent_log.last_of(cid) if agent_log else None
+    if last and last["verb"] == "error" and now_ms - last["at"] < 5 * 60_000:
+        return "error"
+    if last and last["verb"] == "veto" and now_ms - last["at"] < VETO_S * 1000:
+        return "veto"
+    if last and now_ms - last["at"] < WORK_S * 1000:
+        return "work"
+    if any(q.get("by") == cid for q in queue):
+        return "wait"
+    return "idle"
+
+
+def queue_of(engine, turkish: bool) -> list[dict]:
+    """What is waiting: approvals, news ideas waiting for the price, and Ultra's best charts."""
+    out: list[dict] = []
+    try:
+        for p in engine.proposals.pending("approval"):
+            out.append({"id": f"p_{p.id}", "symbol": p.intent.symbol, "kind": "approval", "score": None, "votes": None,
+                        "state": "approval", "why": p.intent.reason[:140], "by": "titan",
+                        "since": _ms(p.created_at), "expires_at": _ms(p.expires_at)})
+    except Exception:
+        pass
+    reflex = getattr(engine, "reflex", None)
+    for w in list(getattr(reflex, "pending", []) or [])[:5]:
+        try:
+            out.append({"id": f"n_{w.idea.symbol}_{int(w.published)}", "symbol": w.idea.symbol, "kind": "news",
+                        "score": round(float(w.idea.confidence), 2), "votes": None, "state": "waiting",
+                        "why": (w.decision.title or w.idea.why)[:140], "by": "titan",
+                        "since": int(w.published * 1000), "expires_at": int(w.until * 1000)})
+        except Exception:
+            continue
+    sc = getattr(engine, "scalper", None)
+    if sc is not None and getattr(engine, "ultra", False):
+        blocked = bool(getattr(sc, "state", ""))
+        for r in list(getattr(sc, "radar", []) or [])[:5]:
+            out.append({"id": f"u_{r['symbol']}", "symbol": r["symbol"], "kind": r.get("setup") or "dip",
+                        "score": r.get("score"), "votes": f"{r.get('vote', 0)}/8",
+                        "state": "blocked" if blocked else "waiting",
+                        "why": sc.state if blocked else ("Best chart now" if not turkish else "Şu anki en iyi grafik"),
+                        "by": "nova" if blocked else "orion", "since": None, "expires_at": None})
+    return out
+
+
+def proof_of(engine) -> dict:
+    """The Lab's last replay of the rule that runs now (9.0)."""
+    out = {"rule": "ultra-9.0", "state": "untested", "per_trade_pct": None, "profit_factor": None,
+           "trades": 0, "days": 0, "ran_at": None}
+    lab = getattr(engine, "lab", None)
+    try:
+        report = (lab.status() or {}).get("report") or {} if lab is not None else {}
+    except Exception:
+        report = {}
+    m = (report.get("rules") or {}).get("9.0")
+    if not m:
+        return out
+    try:
+        ran = datetime.fromisoformat(report["ran_at"])
+        ran_ms = int(ran.timestamp() * 1000)
+    except (KeyError, TypeError, ValueError):
+        ran_ms = None
+    trades, avg, pf = int(m.get("trades") or 0), m.get("avg"), m.get("profit_factor")
+    if trades < 60:
+        state = "untested"
+    elif (pf or 0) >= 1.2 and (avg or 0) >= 0.05:
+        state = "passed"
+    else:
+        state = "lost"
+    if ran_ms and time.time() * 1000 - ran_ms > 48 * 3_600_000:
+        state = "stale"
+    return {**out, "state": state, "per_trade_pct": avg, "profit_factor": pf, "trades": trades,
+            "days": len(report.get("days") or []), "ran_at": ran_ms}
+
+
+def day_start_equity(engine, equity: float) -> float | None:
+    if not equity:
+        return None
+    today = datetime.now(NY).strftime("%Y-%m-%d")
+    seen = getattr(engine, "_bot_day", None)
+    if not seen or seen.get("day") != today:
+        seen = {"day": today, "equity": round(equity, 2)}
+        engine._bot_day = seen
+        path = getattr(getattr(engine, "agent_log", None), "path", None)
+        if path is not None:
+            try:
+                import json
+
+                day_file = path.parent / "day.json"
+                old = json.loads(day_file.read_text(encoding="utf-8")) if day_file.exists() else {}
+                if old.get("day") == today and old.get("equity"):
+                    seen = engine._bot_day = {"day": today, "equity": float(old["equity"])}
+                else:
+                    day_file.parent.mkdir(parents=True, exist_ok=True)
+                    day_file.write_text(json.dumps(seen), encoding="utf-8")
+            except (OSError, ValueError):
+                pass
+    return seen["equity"]
 
 
 def snapshot(engine, agent_log, turkish: bool = False) -> dict:
@@ -74,13 +188,16 @@ def snapshot(engine, agent_log, turkish: bool = False) -> dict:
     max_pos = scalper.SLOTS if ultra else int(getattr(engine.config.risk, "max_open_positions", 0) or 0)
     equity = _f(status.get("equity"))
 
+    queue = queue_of(engine, turkish)
+    now_ms = int(time.time() * 1000)
     crew = []
     for cid, name, role, labels in CREW:
         last = agent_log.last_of(cid) if agent_log else None
         crew.append({"id": cid, "name": name, "role": role, "role_label": labels[1 if turkish else 0],
-                     "state": "idle" if status.get("running") else "off",
+                     "state": crew_state(engine, agent_log, cid, queue, now_ms),
                      "last": last["text"] if last else None, "last_at": last["at"] if last else None,
-                     "today": {"lines": agent_log.count_today(cid, day) if agent_log else 0, "acted": 0}})
+                     "today": {"lines": agent_log.count_today(cid, day) if agent_log else 0,
+                               "acted": agent_log.count_today(cid, day, acted=True) if agent_log else 0}})
 
     focus = None
     if positions:
@@ -93,9 +210,8 @@ def snapshot(engine, agent_log, turkish: bool = False) -> dict:
         focus = {"symbol": today[0].get("symbol"), "why": "last trade", "entry": None, "stop": None, "target": None,
                  "qty": None, "pnl": _f(today[0].get("pnl")), "pnl_pct": _f(today[0].get("pnl_pct")), "opened_at": None}
 
-    lab = getattr(engine, "lab", None)
-    proof = {"rule": "ultra-9.0", "state": "untested", "per_trade_pct": None, "profit_factor": None,
-             "trades": 0, "days": 0, "ran_at": None}
+    start_today = day_start_equity(engine, equity)
+    funnel = getattr(engine, "funnel", None)
 
     return {
         "name": NAME,
@@ -108,19 +224,21 @@ def snapshot(engine, agent_log, turkish: bool = False) -> dict:
         "tiles": {
             "fills": {"closed": len(today), "max": max_fills, "opened": len(today) + len(positions)},
             "positions": {"open": len(positions), "max": max_pos},
-            "net": {"today": round(sum(_f(t.get("pnl")) for t in today), 2), "today_pct": 0.0,
+            "net": {"today": round(sum(_f(t.get("pnl")) for t in today), 2),
+                    "today_pct": round(sum(_f(t.get("pnl")) for t in today) / start_today * 100, 2) if start_today else 0.0,
                     "unrealized": round(unrealized, 2),
                     "week": round(sum(_f(t.get("pnl")) for t in week), 2),
                     "all": round(sum(_f(t.get("pnl")) for t in trades), 2), "fees_today": 0.0, "since": None},
-            "capital": {"start_today": None, "equity": equity, "cash": _f(status.get("balance")), "budget": None},
+            "capital": {"start_today": start_today, "equity": equity, "cash": _cash(status.get("balance")), "budget": None},
         },
         "crew": crew,
-        "queue": [],
-        "funnel": {"day": datetime.now(NY).strftime("%Y-%m-%d"), "steps": [], "blocked": []},
+        "queue": queue,
+        "funnel": funnel.view(turkish) if funnel is not None else
+        {"day": datetime.now(NY).strftime("%Y-%m-%d"), "steps": [], "blocked": []},
         "focus": focus,
         "risk": {"budget": None, "per_trade_pct": None, "daily_loss": None, "max_positions": max_pos,
                  "daily_loss_used": 0.0, "paused": None, "pace": "balanced"},
-        "proof": proof if lab is None else {**proof, "ran_at": None},
+        "proof": proof_of(engine),
         "log_head": agent_log.head if agent_log else 0,
         "at": int(time.time() * 1000),
     }

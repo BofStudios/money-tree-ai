@@ -26,6 +26,7 @@ Klasör `%LOCALAPPDATA%\BofStudios\Money Tree AI`. Gizli işaretli dosyalar dı�
 | `data/mentor_feed.json` | Uygulamanın yan sohbette söyledikleri. |  |
 | `data/brain` | Botun öğrendikleri: haber hafızası, strateji ilerlemesi, sürü. |  |
 | `data/lab.json` | Son Lab tekrarı ve avantaj filtresi anahtarı. |  |
+| `data/bot` | Konsol: ajan günlüğü, işlemlerin neden olup olmadığı, günün başlangıç değeri. |  |
 | `data/privacy.json` | Bu gizlilik seçimleri. |  |
 | `data/journal.json` | Sayaçlar: uygulamanın ne kadar çalıştığı. |  |
 | `data/engine_state.json` | Açık pozisyonlar ve durdurma bayrağı, yeniden başlatmaya dayanmak için. |  |

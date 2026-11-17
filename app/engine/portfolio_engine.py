@@ -190,6 +190,15 @@ class PortfolioEngine:
         from app.engine.lab import Lab
 
         self.lab = Lab(self)            # 10.0: the replay of Ultra's rules, and the edge filter
+        # 12.0: the console's agent log and "why no trade" funnel. Both only count.
+        from app.bot.funnel import Funnel
+        from app.bot.log import AgentLog
+
+        bot_dir = state_path.parent / "bot" if state_path else None
+        self.agent_log = AgentLog(bot_dir / "log.jsonl" if bot_dir else None, events)
+        self.funnel = Funnel(bot_dir / "funnel.json" if bot_dir else None, events)
+        self.last_block: str | None = None
+        self.funnel_quiet = False
         self.privacy = None             # 10.1: app.privacy.prefs.Prefs, set by main (None = the defaults)
         self.history_bars = SCALP_BARS if STYLE == "scalp" else HISTORY_BARS
         self._live: dict[str, float] = {}             # symbol -> latest trade price, scalp style
@@ -373,6 +382,10 @@ class PortfolioEngine:
     def note_block(self, why: str, symbol: str = "", detail: str = "") -> None:
         """Count a buy that did not happen, by reason, for today's readiness card."""
         day = _ny_day()
+        self.last_block = why
+        funnel = getattr(self, "funnel", None)
+        if funnel is not None and not getattr(self, "funnel_quiet", False):
+            funnel.block(why, symbol)
         with self._lock:
             if self._blocked_day != day:
                 self._blocked_day, self._blocked = day, {}
@@ -737,6 +750,10 @@ class PortfolioEngine:
         self.language = "tr" if language == "tr" else "en"
 
     # ------------------------------------------------------------------- status
+
+    def status_running(self) -> bool:
+        """Is the engine loop running (12.0 console)."""
+        return bool(self.running)
 
     def status(self) -> dict:
         market = self.clock.state()

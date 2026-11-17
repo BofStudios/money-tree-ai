@@ -26,6 +26,7 @@ The folder is `%LOCALAPPDATA%\BofStudios\Money Tree AI`. Files marked secret are
 | `data/mentor_feed.json` | What the app said in the side chat. |  |
 | `data/brain` | What the bot learned: news memory, strategy progress, the swarm. |  |
 | `data/lab.json` | The last Lab replay and the edge switch. |  |
+| `data/bot` | The console: the agent log, why trades did or did not happen, the day's start value. |  |
 | `data/privacy.json` | These privacy choices. |  |
 | `data/journal.json` | Counters: how long the app has run. |  |
 | `data/engine_state.json` | Open positions and the stop flag, to survive a restart. |  |
