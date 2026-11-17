@@ -358,3 +358,7 @@ button.mb-tile:hover:not(:disabled) { border-color: var(--line-2); background: v
 @media (max-width: 1099px) {
   .mb-amount-cur, .mb-amount-in { font-size: var(--f-num-m); }
 }
+
+/* Not connected yet: only the setup strip and the amount (amount.js). */
+.mb-console.mb-unready.view.active { height: auto; grid-template-rows: auto auto; align-content: start; }
+.mb-console.mb-unready :is(#proposalBox, .mb-tiles, .mb-crew, .mb-mtabs, .mb-logbox, .mb-side, .mb-queue, .mb-funnel) { display: none !important; }

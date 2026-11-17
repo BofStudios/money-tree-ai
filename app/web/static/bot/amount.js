@@ -47,6 +47,9 @@ function draw() {
   const s = store.snap;
   if (!s) { host.innerHTML = ""; return; }
   const st = setup(s);
+  // Before the real account is connected the log, crew and panels would show the
+  // background practice engine; only the setup strip and the amount are shown.
+  host.closest(".mb-console")?.classList.toggle("mb-unready", !st.live);
   const budget = s.risk ? s.risk.budget : null;
   const equity = s.tiles && s.tiles.capital ? s.tiles.capital.equity : null;
   const value = typed !== null ? typed : budget != null ? String(budget) : "";
