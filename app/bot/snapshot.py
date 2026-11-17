@@ -31,6 +31,15 @@ def _f(v, default: float = 0.0) -> float:
         return default
 
 
+def _iso_ms(raw) -> int | None:
+    if not raw:
+        return None
+    try:
+        return int(datetime.fromisoformat(str(raw).replace("Z", "+00:00")).timestamp() * 1000)
+    except ValueError:
+        return None
+
+
 def _cash(balance) -> float:
     if isinstance(balance, dict):
         for key in ("cash", "free", "available"):
@@ -199,16 +208,23 @@ def snapshot(engine, agent_log, turkish: bool = False) -> dict:
                      "today": {"lines": agent_log.count_today(cid, day) if agent_log else 0,
                                "acted": agent_log.count_today(cid, day, acted=True) if agent_log else 0}})
 
+    # The right panel's symbol: an open position, else the head of the queue, else the last trade.
+    t = (lambda en, tr: tr if turkish else en)
     focus = None
     if positions:
         p = positions[-1]
-        focus = {"symbol": p.get("symbol"), "why": "open position", "entry": _f(p.get("entry_price")),
-                 "stop": p.get("stop_loss"), "target": p.get("take_profit"),
+        focus = {"kind": "position", "symbol": p.get("symbol"), "why": t("open position", "açık pozisyon"),
+                 "entry": _f(p.get("entry_price")), "stop": p.get("stop_loss"), "target": p.get("take_profit"),
                  "qty": p.get("quantity", p.get("qty")), "pnl": _f(p.get("unrealized_pnl")),
-                 "pnl_pct": _f(p.get("unrealized_pnl_pct")), "opened_at": None}
+                 "pnl_pct": _f(p.get("unrealized_pnl_pct")), "opened_at": _iso_ms(p.get("entry_time") or p.get("opened_at"))}
+    elif queue:
+        q = queue[0]
+        focus = {"kind": "queue", "symbol": q["symbol"], "why": t("next in the queue", "sırada"), "entry": None,
+                 "stop": None, "target": None, "qty": None, "pnl": None, "pnl_pct": None, "opened_at": None}
     elif today:
-        focus = {"symbol": today[0].get("symbol"), "why": "last trade", "entry": None, "stop": None, "target": None,
-                 "qty": None, "pnl": _f(today[0].get("pnl")), "pnl_pct": _f(today[0].get("pnl_pct")), "opened_at": None}
+        focus = {"kind": "last", "symbol": today[0].get("symbol"), "why": t("last trade", "son işlem"), "entry": None,
+                 "stop": None, "target": None, "qty": None, "pnl": _f(today[0].get("pnl")),
+                 "pnl_pct": _f(today[0].get("pnl_pct")), "opened_at": None}
 
     start_today = day_start_equity(engine, equity)
     funnel = getattr(engine, "funnel", None)

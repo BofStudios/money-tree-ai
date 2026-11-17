@@ -152,13 +152,17 @@ class AgentLog:
         except OSError:
             log.debug("could not write the agent log", exc_info=True)
 
-    def lines(self, after: int = 0, limit: int = 200, agent: str | None = None, tab: str | None = None) -> list[dict]:
+    def lines(self, after: int = 0, limit: int = 200, agent: str | None = None, tab: str | None = None,
+              before: int | None = None) -> list[dict]:
+        """after=n: the lines after n, oldest first (catching up). before=n: the
+        `limit` lines just before n (scrolling back). Neither: the newest `limit`."""
         verbs = TABS.get(tab or "")
         with self._lock:
             rows = [l for l in self._lines
-                    if l["n"] > after and (not agent or l["agent"] == agent) and (verbs is None or l["verb"] in verbs)]
+                    if l["n"] > after and (before is None or l["n"] < before)
+                    and (not agent or l["agent"] == agent) and (verbs is None or l["verb"] in verbs)]
         limit = max(1, min(int(limit), 500))
-        return rows[:limit] if after else rows[-limit:]
+        return rows[:limit] if after and before is None else rows[-limit:]
 
     def last_of(self, agent: str) -> dict | None:
         with self._lock:

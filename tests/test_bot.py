@@ -219,3 +219,14 @@ def test_how_long_a_provider_wants_us_to_wait():
     assert wait_from({}, "", default=90) == (90, False)
     wait, daily = wait_from({"retry-after": "5"}, "Rate limit reached: tokens per day (TPD)", now=1_794_855_000.0)
     assert daily and 3600 < wait <= 12 * 3600
+
+
+def test_scrolling_back_with_before(tmp_path):
+    events = EventBus()
+    log = botlog.AgentLog(None, events)
+    for i in range(10):
+        events.publish("trade_closed", {"symbol": f"S{i}", "exit_reason": "target", "pnl": 1, "pnl_pct": 0.1})
+    assert [l["n"] for l in log.lines(limit=3)] == [8, 9, 10]
+    assert [l["n"] for l in log.lines(before=8, limit=3)] == [5, 6, 7]
+    assert [l["n"] for l in log.lines(after=2, limit=3)] == [3, 4, 5]
+    assert [l["n"] for l in log.lines(after=2, before=5, limit=10)] == [3, 4]
