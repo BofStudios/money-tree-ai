@@ -60,7 +60,21 @@ def entry_90(ch: dict) -> bool:
     return S.score(ch, False) is not None
 
 
-RULES = {"8.0": entry_80, "9.0": entry_90}
+def entry_calm(ch: dict) -> bool:
+    from app.bot import pace as P
+
+    return S.score(ch, False, P.CALM) is not None
+
+
+def entry_aggressive(ch: dict) -> bool:
+    from app.bot import pace as P
+
+    return S.score(ch, False, P.AGGRESSIVE) is not None
+
+
+# 9.0 is the balanced pace; calm and aggressive are 12.0's other two paces.
+RULES = {"8.0": entry_80, "9.0": entry_90, "calm": entry_calm, "aggressive": entry_aggressive}
+PACE_RULE = {"calm": "calm", "balanced": "9.0", "aggressive": "aggressive"}
 
 
 # ----------------------------------------------------------------- replay
@@ -89,10 +103,13 @@ def entries(df: pd.DataFrame, entry) -> list[tuple[int, dict]]:
     idx = df.index.tz_convert(S.NY)
     c = df["close"].to_numpy(float)
     r7 = rsi_series(c, 7)
+    from app.bot.pace import widest_rsi
+
+    rsi_cap = widest_rsi()        # every pace reads the same charts: keep what the loosest one needs
     out = []
     for i in range(WINDOW, len(df) - 1):
         t = idx[i]
-        if not (S.START <= t.time() < S.LAST_ENTRY) or np.isnan(r7[i]) or r7[i] > S.RSI_MAX:
+        if not (S.START <= t.time() < S.LAST_ENTRY) or np.isnan(r7[i]) or r7[i] > rsi_cap:
             continue
         ch = S.read_chart(df.iloc[i - WINDOW + 1: i + 1], (t + pd.Timedelta(seconds=65)).to_pydatetime())
         if ch is not None and entry(ch):
@@ -425,6 +442,11 @@ class Lab:
         """True when the last replay says Ultra loses on this symbol."""
         self._load()
         return self.edge_on and symbol in self._blocked
+
+    def lost_on(self, symbol: str) -> bool:
+        """The same list whatever the switch says (the calm pace always uses it)."""
+        self._load()
+        return symbol in self._blocked
 
     # ----------------------------------------------------------------- run
     def due(self, now: float | None = None) -> bool:

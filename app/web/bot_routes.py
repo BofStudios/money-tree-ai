@@ -12,10 +12,11 @@ import logging
 import threading
 import time
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from app.bot import log as botlog
-from app.bot.snapshot import _closed_ms, _day_start_ms, _f, snapshot
+from app.bot.settings import NeedsConfirm
+from app.bot.snapshot import _closed_ms, _day_start_ms, _f, paces_view, proof_of, risk_view, snapshot
 from app.web.auth import Auth
 
 log = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ def build_bot_router(engine, repo, events, token) -> APIRouter:
     router = APIRouter(prefix="/api/bot")
     auth = token if isinstance(token, Auth) else Auth(token)
     guarded = [Depends(auth.guard())]
+    owner = [Depends(auth.owner("The bot's limits can only be changed on the PC running the bot."))]
 
     agent_log = getattr(engine, "agent_log", None)
     if agent_log is None:
@@ -63,6 +65,49 @@ def build_bot_router(engine, repo, events, token) -> APIRouter:
     @router.get("", dependencies=guarded)
     def bot(lang: str | None = Query(default=None)) -> dict:
         return snapshot(engine, agent_log, turkish(lang))
+
+    def settings():
+        s = getattr(engine, "bot_settings", None)
+        if s is None:
+            raise HTTPException(status_code=503, detail="The bot's settings are not ready.")
+        return s
+
+    def change(body: dict) -> dict:
+        try:
+            equity = float(engine.executor.get_balance().total)
+        except Exception:
+            equity = 0.0
+        live = bool(getattr(engine.risk, "is_live", False))
+        try:
+            values, clamped = settings().update(body, equity, live, confirm=bool(body.get("confirm")))
+        except NeedsConfirm as exc:
+            raise HTTPException(status_code=409, detail=f"On real money, loosening needs confirm=true: {exc}") from None
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from None
+        events.publish("status", engine.status()) if events is not None else None
+        return {"ok": True, "values": values, "clamped": clamped}
+
+    @router.post("/risk", dependencies=owner)
+    def set_risk(body: dict = Body(default={})) -> dict:
+        allowed = {"budget", "per_trade_pct", "daily_loss", "max_positions", "confirm"}
+        if not body or set(body) - allowed:
+            raise HTTPException(status_code=400, detail="Send budget, per_trade_pct, daily_loss or max_positions (null removes one).")
+        done = change(body)
+        from app.engine import scalper
+
+        return {**done, "risk": risk_view(engine, scalper.SLOTS if getattr(engine, "ultra", False) else
+                                           int(engine.config.risk.max_open_positions), turkish(None))}
+
+    @router.post("/pace", dependencies=owner)
+    def set_pace(body: dict = Body(default={})) -> dict:
+        if body.get("pace") not in ("calm", "balanced", "aggressive"):
+            raise HTTPException(status_code=400, detail="pace must be calm, balanced or aggressive")
+        done = change({"pace": body["pace"], "confirm": body.get("confirm")})
+        return {**done, "proof": proof_of(engine)}
+
+    @router.get("/paces", dependencies=guarded)
+    def paces() -> dict:
+        return paces_view(engine)
 
     @router.get("/log", dependencies=guarded)
     def log_lines(after: int = Query(default=0, ge=0), limit: int = Query(default=200, ge=1, le=500),

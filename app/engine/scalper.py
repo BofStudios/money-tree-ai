@@ -149,15 +149,19 @@ def read_chart(frame, now: datetime | None = None) -> dict | None:
 NO_SIGNAL = "no_signal"
 
 
-def chart_gate(c: dict) -> str | None:
+def chart_gate(c: dict, pace=None) -> str | None:
     """None when the chart passes Ultra's entry rule; NO_SIGNAL when there is no
-    dip at all; otherwise the gate (app/bot/funnel.py) that stopped a dip."""
+    dip at all; otherwise the gate (app/bot/funnel.py) that stopped a dip.
+    pace (app/bot/pace.py) changes the thresholds; None is 9.0's own rule."""
+    rsi_max = RSI_MAX if pace is None else pace.rsi_max
+    dip_atr = DIP_ATR if pace is None else pace.dip_atr
+    conf_min = CONF_MIN if pace is None else pace.conf_min
     rsi = c["rsi"]
-    if rsi is None or rsi > RSI_MAX:
+    if rsi is None or rsi > rsi_max:
         return NO_SIGNAL
     if not 0.04 <= c["atr_pct"] <= 1.5 or c["age"] > FRESH_SECONDS:
         return "quiet"
-    if dip_of(c) < DIP_ATR:
+    if dip_of(c) < dip_atr:
         return NO_SIGNAL
     if c["price"] <= c["prev"]:
         return "turn"
@@ -166,14 +170,14 @@ def chart_gate(c: dict) -> str | None:
         return "knife"
     if dip_of(c) > DIP_MAX:
         return "too_deep"
-    if float(conf.get("score", 0.0)) < CONF_MIN:
+    if float(conf.get("score", 0.0)) < conf_min:
         return "confluence"
     return None
 
 
-def score(c: dict, tipped: bool) -> tuple[float, str] | None:
+def score(c: dict, tipped: bool, pace=None) -> tuple[float, str] | None:
     """(score, setup) for a long scalp, or None when the chart says no."""
-    if chart_gate(c) is not None:
+    if chart_gate(c, pace) is not None:
         return None
     vote = float((c.get("conf") or {}).get("score", 0.0))
     return min(dip_of(c), 5.0) + 4.0 * vote + (1.5 if tipped else 0.0), "dip"
@@ -262,14 +266,15 @@ class Scalper:
         if funnel is not None:
             funnel.scanned(len(charts))
         fresh: set[str] = set()                    # dips counted for the first time this minute
+        pace = self.pace()
         ranked = []
         for symbol, c in charts.items():
-            gate = chart_gate(c)
+            gate = chart_gate(c, pace)
             if gate == NO_SIGNAL:
                 continue
             if funnel is not None and funnel.signal(symbol):
                 fresh.add(symbol)
-            if gate is None and lab is not None and lab.edge_blocked(symbol):
+            if gate is None and lab is not None and (lab.lost_on(symbol) if pace.edge_forced else lab.edge_blocked(symbol)):
                 gate = "edge"    # 10.0: the Lab's replay lost on this symbol; skipped until the next run
             if gate is not None:
                 if symbol in fresh:
@@ -277,7 +282,7 @@ class Scalper:
                 continue
             if symbol in fresh:
                 funnel.passed()
-            got = score(c, symbol in tipped)
+            got = score(c, symbol in tipped, pace)
             if got is not None:
                 ranked.append((got[0], symbol, got[1], c))
         ranked.sort(key=lambda r: -r[0])
@@ -315,7 +320,7 @@ class Scalper:
                       f"volume {c['relvol']:.1f}x · {votes_text(c)}"
                       + (f" · news: {tip[1]}" if symbol in tipped and tip else ""))
             vote = float((c.get("conf") or {}).get("score", 0.0))
-            share = ALL_IN if (vote >= ALL_IN_VOTE and not held) else ALLOC
+            share = ALL_IN if (pace.all_in and vote >= ALL_IN_VOTE and not held) else ALLOC
             eng.last_block = None
             eng.funnel_quiet = True                # this look counts its own block, once a minute
             try:
@@ -373,6 +378,19 @@ class Scalper:
         except Exception:
             return None
 
+    def pace(self):
+        """The owner's pace (12.0); balanced is 9.0's rule."""
+        from app.bot import pace as P
+
+        settings = getattr(self.engine, "bot_settings", None)
+        return settings.pace() if settings is not None else P.balanced()
+
+    def slots(self) -> int:
+        """Trades open at once: Ultra's own number, or fewer if the owner set fewer."""
+        settings = getattr(self.engine, "bot_settings", None)
+        most = settings.get("max_positions") if settings is not None else None
+        return min(SLOTS, int(most)) if most else SLOTS
+
     def _why_not_now(self, now: datetime, open_scalps: int) -> str:
         eng = self.engine
         tr = getattr(eng, "language", "en") == "tr"
@@ -407,14 +425,16 @@ class Scalper:
             self.gate = "bad_day"
             return t(f"today's trades lost {-GUARD_AVG:.2f}% or more on average: no new trades today",
                      f"bugünkü işlemler ortalama %{-GUARD_AVG:.2f} ya da daha fazla kaybetti: bugün yeni işlem yok")
-        if self.entries >= MAX_ENTRIES:
+        most = self.pace().max_entries
+        if self.entries >= most:
             self.gate = "entries"
-            return t(f"{MAX_ENTRIES} trades today: that is the day's limit",
-                     f"bugün {MAX_ENTRIES} işlem: günlük sınır bu")
-        if open_scalps >= SLOTS:
+            return t(f"{most} trades today: that is the day's limit",
+                     f"bugün {most} işlem: günlük sınır bu")
+        slots = self.slots()
+        if open_scalps >= slots:
             self.gate = "slots"
-            return t(f"{SLOTS} trades open: waiting for one to finish",
-                     f"{SLOTS} işlem açık (open): biri bitince yenisi")
+            return t(f"{slots} trades open: waiting for one to finish",
+                     f"{slots} işlem açık (open): biri bitince yenisi")
         if not self.radar:
             self.gate = "quiet"
             return t("no chart passes right now: watching", "şu an kurallardan geçen grafik yok: izliyor")

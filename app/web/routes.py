@@ -421,7 +421,19 @@ def build_router(
         if engine.risk.is_live and not confirm:
             raise HTTPException(status_code=400, detail="live arming requires confirm=true")
         engine.arm()
-        return engine.status()
+        out = engine.status()
+        if engine.risk.is_live:
+            try:
+                from app.bot.snapshot import proof_of
+
+                proof = proof_of(engine)
+                if proof["state"] == "lost":
+                    out["warning"] = (f"The Lab replayed this pace on the last {proof['days']} days: "
+                                      f"{proof['trades']} trades, {proof['per_trade_pct']:+.3f}% a trade after costs. "
+                                      "It lost. Real money is armed because you chose it.")
+            except Exception:
+                pass
+        return out
 
     @router.post("/disarm", dependencies=guarded)
     def disarm() -> dict:

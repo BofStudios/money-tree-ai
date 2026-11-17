@@ -112,21 +112,54 @@ def queue_of(engine, turkish: bool) -> list[dict]:
     return out
 
 
-def proof_of(engine) -> dict:
-    """The Lab's last replay of the rule that runs now (9.0)."""
-    out = {"rule": "ultra-9.0", "state": "untested", "per_trade_pct": None, "profit_factor": None,
-           "trades": 0, "days": 0, "ran_at": None}
+def _owner(engine) -> dict:
+    s = getattr(engine, "bot_settings", None)
+    return s.all() if s is not None else {"pace": "balanced"}
+
+
+def risk_view(engine, engine_max: int, turkish: bool) -> dict:
+    """The owner's limits as they are, and how much of the day's loss limit is used."""
+    v = _owner(engine)
+    try:
+        realized = float(getattr(engine.risk, "_daily_realized_pnl", 0.0) or 0.0)
+    except Exception:
+        realized = 0.0
+    used = round(max(-realized, 0.0), 2)
+    paused = None
+    if v.get("daily_loss") is not None and used >= float(v["daily_loss"]):
+        paused = "Daily loss limit reached: no new buys today" if not turkish else "Günlük zarar sınırı doldu: bugün yeni alım yok"
+    most = v.get("max_positions")
+    return {"budget": v.get("budget"), "per_trade_pct": v.get("per_trade_pct"), "daily_loss": v.get("daily_loss"),
+            "max_positions": min(engine_max, int(most)) if most and engine_max else (most or engine_max),
+            "daily_loss_used": used, "paused": paused, "pace": v.get("pace") or "balanced"}
+
+
+def paces_view(engine) -> dict:
+    """Each pace's thresholds and its own Lab replay (GET /api/bot/paces)."""
+    from app.bot import pace as P
+    from app.engine.lab import PACE_RULE
+
     lab = getattr(engine, "lab", None)
     try:
         report = (lab.status() or {}).get("report") or {} if lab is not None else {}
     except Exception:
         report = {}
-    m = (report.get("rules") or {}).get("9.0")
+    out = []
+    for pid in P.IDS:
+        m = (report.get("rules") or {}).get(PACE_RULE[pid]) or {}
+        pf = (m.get("portfolio") or {})
+        out.append({**P.get(pid).to_dict(), "proof": _verdict(m, report),
+                    "max_drawdown_pct": pf.get("max_drawdown")})
+    return {"pace": _owner(engine).get("pace") or "balanced", "paces": out}
+
+
+def _verdict(m: dict, report: dict) -> dict:
+    out = {"state": "untested", "per_trade_pct": None, "profit_factor": None, "trades": 0,
+           "days": len(report.get("days") or []), "ran_at": None}
     if not m:
         return out
     try:
-        ran = datetime.fromisoformat(report["ran_at"])
-        ran_ms = int(ran.timestamp() * 1000)
+        ran_ms = int(datetime.fromisoformat(report["ran_at"]).timestamp() * 1000)
     except (KeyError, TypeError, ValueError):
         ran_ms = None
     trades, avg, pf = int(m.get("trades") or 0), m.get("avg"), m.get("profit_factor")
@@ -138,8 +171,25 @@ def proof_of(engine) -> dict:
         state = "lost"
     if ran_ms and time.time() * 1000 - ran_ms > 48 * 3_600_000:
         state = "stale"
-    return {**out, "state": state, "per_trade_pct": avg, "profit_factor": pf, "trades": trades,
-            "days": len(report.get("days") or []), "ran_at": ran_ms}
+    return {**out, "state": state, "per_trade_pct": avg, "profit_factor": pf, "trades": trades, "ran_at": ran_ms}
+
+
+def proof_of(engine) -> dict:
+    """The Lab's last replay of the pace that runs now (balanced is the 9.0 rule)."""
+    from app.engine.lab import PACE_RULE
+
+    pace = _owner(engine).get("pace") or "balanced"
+    out = {"rule": "ultra-9.0" if pace == "balanced" else f"ultra-{pace}", "state": "untested", "per_trade_pct": None,
+           "profit_factor": None, "trades": 0, "days": 0, "ran_at": None}
+    lab = getattr(engine, "lab", None)
+    try:
+        report = (lab.status() or {}).get("report") or {} if lab is not None else {}
+    except Exception:
+        report = {}
+    m = (report.get("rules") or {}).get(PACE_RULE.get(pace, "9.0"))
+    v = _verdict(m or {}, report)
+    return {**out, **{k: v[k] for k in ("state", "per_trade_pct", "profit_factor", "trades", "ran_at")},
+            "days": v["days"] if m else 0}
 
 
 def day_start_equity(engine, equity: float) -> float | None:
@@ -245,15 +295,15 @@ def snapshot(engine, agent_log, turkish: bool = False) -> dict:
                     "unrealized": round(unrealized, 2),
                     "week": round(sum(_f(t.get("pnl")) for t in week), 2),
                     "all": round(sum(_f(t.get("pnl")) for t in trades), 2), "fees_today": 0.0, "since": None},
-            "capital": {"start_today": start_today, "equity": equity, "cash": _cash(status.get("balance")), "budget": None},
+            "capital": {"start_today": start_today, "equity": equity, "cash": _cash(status.get("balance")),
+                        "budget": _owner(engine).get("budget")},
         },
         "crew": crew,
         "queue": queue,
         "funnel": funnel.view(turkish) if funnel is not None else
         {"day": datetime.now(NY).strftime("%Y-%m-%d"), "steps": [], "blocked": []},
         "focus": focus,
-        "risk": {"budget": None, "per_trade_pct": None, "daily_loss": None, "max_positions": max_pos,
-                 "daily_loss_used": 0.0, "paused": None, "pace": "balanced"},
+        "risk": risk_view(engine, max_pos, turkish),
         "proof": proof_of(engine),
         "log_head": agent_log.head if agent_log else 0,
         "at": int(time.time() * 1000),

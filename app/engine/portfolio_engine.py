@@ -199,6 +199,9 @@ class PortfolioEngine:
         self.funnel = Funnel(bot_dir / "funnel.json" if bot_dir else None, events)
         self.last_block: str | None = None
         self.funnel_quiet = False
+        from app.bot.settings import BotSettings
+
+        self.bot_settings = BotSettings(bot_dir / "settings.json" if bot_dir else None)
         self.privacy = None             # 10.1: app.privacy.prefs.Prefs, set by main (None = the defaults)
         self.history_bars = SCALP_BARS if STYLE == "scalp" else HISTORY_BARS
         self._live: dict[str, float] = {}             # symbol -> latest trade price, scalp style
@@ -750,6 +753,19 @@ class PortfolioEngine:
         self.language = "tr" if language == "tr" else "en"
 
     # ------------------------------------------------------------------- status
+
+    def _owner_limits(self, signal, balance) -> tuple[str | None, float | None]:
+        from app.bot.settings import limit_buy
+
+        with self._lock:
+            invested = sum(p.market_value for p in self._positions.values())
+            open_count = len(self._positions)
+        return limit_buy(
+            getattr(self, "bot_settings", None), equity=float(getattr(balance, "total", 0) or 0),
+            invested=invested, open_count=open_count + self._pending_entry_count(),
+            realized_today=float(getattr(self.risk, "_daily_realized_pnl", 0.0) or 0.0),
+            stop_pct=signal.detail.get("stop_pct"), fallback_stop_pct=float(self.config.risk.max_stop_pct),
+        )
 
     def status_running(self) -> bool:
         """Is the engine loop running (12.0 console)."""
@@ -1403,6 +1419,21 @@ class PortfolioEngine:
                 self.monitor.info(activity.INFO, w.not_placed(symbol, "the short book's budget is used"))
                 self.note_block("budget", symbol)
                 return False
+        if position is None and signal.action is Action.BUY:
+            # 12.0: the owner's limits (budget, risk a trade, daily loss, positions).
+            # They can only refuse a buy or make it smaller.
+            refused, most = self._owner_limits(signal, balance)
+            if refused:
+                self.monitor.info(activity.INFO, w.not_placed(symbol, refused.replace("_", " ")))
+                self.note_block(refused, symbol)
+                return False
+            if most is not None:
+                if most < self.config.risk.min_order_value:
+                    self.monitor.info(activity.INFO, w.not_placed(symbol, "the bot's budget is used"))
+                    self.note_block("budget", symbol)
+                    return False
+                current = sizing.get("max_value")
+                sizing["max_value"] = most if current is None else min(current, most)
         order, rejection = self.risk.validate(
             signal, balance, position, price, symbol,
             position_pct=position_pct, atr=snapshot.get("atr"), **sizing,

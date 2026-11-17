@@ -124,7 +124,7 @@ def test_a_lab_run_is_saved_and_the_edge_switch_is_kept(tmp_path, monkeypatch):
     assert lab.run()["ok"]
     saved = json.loads(path.read_text(encoding="utf-8"))
     rep = saved["report"]
-    assert set(rep["rules"]) == {"8.0", "9.0"} and rep["symbols_n"] == 2 and not lab.due()
+    assert set(rep["rules"]) == {"8.0", "9.0", "calm", "aggressive"} and rep["symbols_n"] == 2 and not lab.due()
     assert rep["rules"]["9.0"]["portfolio"]["start"] == LAB.START_CASH
 
     lab._blocked = {"AAA"}
