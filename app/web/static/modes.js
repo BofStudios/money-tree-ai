@@ -93,6 +93,15 @@ async function loadReady() {
   try { ready = await api("GET", "/api/readiness"); renderReady(); } catch { /* the next poll tries again */ }
 }
 
+/* 12.0: the "only watching" card follows Arm, Stop and Start at once, not on the next poll. */
+let readyKey = null;
+window.addEventListener("mt:status", (e) => {
+  const s = e.detail || {};
+  const key = `${!!(s.risk && s.risk.armed)}|${!!s.halted}|${!!s.running}|${s.mode}`;
+  if (readyKey !== null && key !== readyKey) loadReady();
+  readyKey = key;
+});
+
 /* -------------------------------------------------------------- scorecard */
 
 let score = null;
