@@ -230,6 +230,16 @@ class Scalper:
         return False
 
     # ----------------------------------------------------------------- tick
+    def _odds_note(self, symbol: str, odds: dict) -> None:
+        monitor = getattr(self.engine, "monitor", None)
+        if monitor is None:
+            return
+        monitor.info("lab", self._t(
+            f"Time Machine · {symbol}: target first {odds['target']:.0%}, stop first {odds['stop']:.0%} "
+            f"(needs {odds['breakeven']:.0%} of the decided), avg {odds['avg_r']:+.2f}R: skipped",
+            f"Zaman Makinesi · {symbol}: önce hedef %{odds['target'] * 100:.0f}, önce stop %{odds['stop'] * 100:.0f} "
+            f"(gereken %{odds['breakeven'] * 100:.0f}), ortalama {odds['avg_r']:+.2f}R: atlandı"))
+
     def tick(self, frames: dict, live: dict | None = None, now: datetime | None = None) -> list[dict]:
         """One look: manage the open scalps, then maybe open one. Returns what it did."""
         eng = self.engine
@@ -321,6 +331,13 @@ class Scalper:
                     funnel.block("ai", symbol)
                 continue
             stop = stop_for(c)
+            tm = getattr(eng, "timemachine", None)
+            odds = tm.check(symbol, float(c["price"]), stop, RR, now) if tm is not None else None
+            if odds and odds["hold"]:              # 12.0: the replays lean toward the stop; it can only hold back
+                if symbol in fresh:
+                    funnel.block("odds", symbol)
+                    self._odds_note(symbol, odds)
+                continue
             tip = self.tips.get(symbol)
             reason = (f"{PREFIX}{setup} · {dip_of(c):.1f} ATR under VWAP · RSI {c['rsi']:.0f} · "
                       f"volume {c['relvol']:.1f}x · {votes_text(c)}"

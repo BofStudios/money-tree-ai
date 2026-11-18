@@ -65,6 +65,7 @@ GATES: dict[str, tuple[str, str, str]] = {
     "research": ("vega", "Research held it back", "Araştırma geri tuttu"),
     "too_small": ("titan", "Order too small", "Emir çok küçük"),
     "ai": ("orion", "The AI vetoed it", "Yapay zekâ veto etti"),
+    "odds": ("sirius", "Time Machine: the replays lean toward the stop", "Zaman Makinesi: tekrarlar stoptan yana"),
     "daytrade": ("nova", "Broker refused a day trade", "Aracı kurum gün içi işlemi reddetti"),
     "approval": ("titan", "Waiting for your OK", "Onayını bekliyor"),
 }

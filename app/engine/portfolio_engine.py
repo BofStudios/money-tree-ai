@@ -205,6 +205,9 @@ class PortfolioEngine:
         from app.bot.planner import Planner
 
         self.planner = Planner(self, bot_dir / "quota.json" if bot_dir else None)
+        from app.engine.timemachine import TimeMachine
+
+        self.timemachine = TimeMachine(self)   # 12.0: the odds of each Ultra buy, from 60 days of 5-minute bars
         self.privacy = None             # 10.1: app.privacy.prefs.Prefs, set by main (None = the defaults)
         self.history_bars = SCALP_BARS if STYLE == "scalp" else HISTORY_BARS
         self._live: dict[str, float] = {}             # symbol -> latest trade price, scalp style
@@ -985,6 +988,9 @@ class PortfolioEngine:
             try:
                 self.lab.maybe_run()        # its own thread, about every 18 hours
                 self.planner.maybe_run()    # 12.0: off unless the owner turned it on; can only shrink or skip
+                from app.engine import scalper as _S
+
+                self.timemachine.maybe_prefetch(list(_S.UNIVERSE))   # once a day, Sirius's homework before the open
             except Exception:
                 log.exception("the lab could not start")
                 self.mentor.error("Scan", str(exc))

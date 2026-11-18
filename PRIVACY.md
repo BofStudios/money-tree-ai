@@ -77,7 +77,7 @@ This is the whole list. When a service appears twice, it has more than one addre
 | This PC | `127.0.0.1` | The app's own window and an AI you run yourself (Ollama). Never leaves the PC. | This PC only |  |
 | Anthropic (Claude) | `api.anthropic.com` | The same as Groq, only if you entered a Claude key. | Used by a bundled part when you use that service | [privacy page](https://www.anthropic.com/legal/privacy) |
 | Telegram | `api.telegram.org` | Alerts you asked for, to your own chat, only if you entered a bot token. | Used by a bundled part when you use that service | [privacy page](https://telegram.org/privacy) |
-| Yahoo Finance | `query1.finance.yahoo.com` | Prices and candles when no Alpaca key is set or Alpaca is resting, and the one-minute bars of the Lab's replay (symbols only). | Used by a bundled part when you use that service | [privacy page](https://legal.yahoo.com/us/en/yahoo/privacy/index.html) |
+| Yahoo Finance | `query1.finance.yahoo.com` | Prices and candles when no Alpaca key is set or Alpaca is resting, the one-minute bars of the Lab's replay and the 5-minute bars of the Time Machine (symbols only). | Used by a bundled part when you use that service | [privacy page](https://legal.yahoo.com/us/en/yahoo/privacy/index.html) |
 
 ## What goes to an AI
 

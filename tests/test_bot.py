@@ -6,6 +6,7 @@ import json
 import pytest
 
 from app.bot import log as botlog
+from app.bot.crew import IDS
 from app.bot.funnel import GATES, STEPS, Funnel
 from app.bot.snapshot import crew_state, proof_of
 from app.common.events import EventBus
@@ -56,7 +57,7 @@ def test_blocks_are_counted_by_gate_with_labels_in_both_languages(tmp_path):
     assert rows[0] == {"gate": "confluence", "label": GATES["confluence"][2], "n": 2, "by": "orion", "symbol": "TSLA"}
     assert {r["gate"] for r in rows} == {"confluence", "not_armed", "rules"}
     for gate, (agent, en, tr) in GATES.items():
-        assert agent in ("orion", "atlas", "vega", "titan", "luna", "nova", "rigel") and en and tr
+        assert agent in IDS and en and tr
 
 
 def test_the_funnel_survives_a_restart_and_a_new_day_starts_at_zero(tmp_path):

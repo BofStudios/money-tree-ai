@@ -66,7 +66,7 @@ HOSTS: tuple[Host, ...] = (
     Host("api.telegram.org", "Telegram", "Alerts you asked for, to your own chat, only if you entered a bot token.",
          "İstediğin uyarılar, kendi sohbetine, sadece bot anahtarı girdiysen.", "library", "https://telegram.org/privacy", "desktop"),
     # ---- prices without a key
-    Host("query1.finance.yahoo.com", "Yahoo Finance", "Prices and candles when no Alpaca key is set or Alpaca is resting, and the one-minute bars of the Lab's replay (symbols only).",
+    Host("query1.finance.yahoo.com", "Yahoo Finance", "Prices and candles when no Alpaca key is set or Alpaca is resting, the one-minute bars of the Lab's replay and the 5-minute bars of the Time Machine (symbols only).",
          "Alpaca anahtarı yokken ya da Alpaca dinlenirken fiyat ve mumlar, ve Lab tekrarının 1 dakikalık mumları (sadece hisse adları).", "library",
          "https://legal.yahoo.com/us/en/yahoo/privacy/index.html", "desktop"),
     Host("api.frankfurter.dev", "Frankfurter", "Public exchange rates.", "Herkese açık döviz kurları.", "always", "", "both"),
