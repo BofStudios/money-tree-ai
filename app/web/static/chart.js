@@ -721,7 +721,8 @@ function renderControls(s) {
     return;
   }
   arm.disabled = false;
-  arm.textContent = s.risk.armed ? "Disarm" : "Arm live";
+  if (!armSure) arm.textContent = s.risk.armed ? tr("arm.armed", null, "ARMED · disarm") : tr("arm.btn", null, "Arm real money");
+  arm.classList.toggle("is-armed", !!s.risk.armed);
   hint.className = s.risk.armed ? "note warn" : "note";
   hint.textContent = s.risk.armed
     ? "Armed — placing real orders with real money."
@@ -1053,12 +1054,38 @@ $("haltBtn").onclick = () => {
 };
 $("btnScan").onclick = () => act(() => post("/api/engine/scan"));
 
-$("btnArm").onclick = () => {
-  if (state.risk && state.risk.armed) return act(() => post("/api/disarm"));
-  if (confirm("Arm live trading?\n\nThe bot will place real orders with real money.\nIt disarms on the daily loss limit and on every restart."))
-    act(() => post("/api/arm", { confirm: true }).then((r) => {
-      if (r && r.warning) showAlert({ tone: "warn", title: tr("bot.proof.armTitle", null, "Lab warning"), body: r.warning });
-    }));
+/* Arm real money (12.0): two clicks on the button itself (no browser dialog, which
+   the desktop window can swallow), and every answer is shown, never only logged. */
+let armSure = null;
+$("btnArm").onclick = async () => {
+  const btn = $("btnArm");
+  try {
+    if (state.risk && state.risk.armed) {
+      const r = await post("/api/disarm");
+      if (r && r.mode) renderStatus(r);
+      showAlert({ tone: "info", title: tr("arm.off", null, "Disarmed.") });
+      return;
+    }
+    if (!armSure) {
+      btn.textContent = tr("arm.sure", null, "Sure? Click again");
+      armSure = setTimeout(() => { armSure = null; renderStatus(window.mtState || state); }, 5000);
+      return;
+    }
+    clearTimeout(armSure); armSure = null;
+    const r = await post("/api/arm", { confirm: true });
+    if (r && r.mode) renderStatus(r);
+    showAlert({ tone: "warn", title: tr("arm.done", null, "Armed."), body: r && r.warning ? r.warning : "" });
+  } catch (err) {
+    clearTimeout(armSure); armSure = null;
+    const msg = String(err && err.message || err);
+    if (msg.includes("budget_needed")) {
+      showAlert({ tone: "warn", title: tr("arm.needAmount", null, "First type the amount.") });
+      document.getElementById("mbAmountIn")?.focus();
+    } else {
+      showAlert({ tone: "bad", title: msg });
+    }
+    renderStatus(window.mtState || state);
+  }
 };
 
 $("addForm").onsubmit = (e) => {

@@ -167,3 +167,8 @@ body[data-group="bot"] .view.active > * { animation: none; }
   .mb-top .halt-btn, .mb-top .halt-btn[data-state="on"], .mb-top .halt-btn[data-state="off"] { padding: 0 10px; letter-spacing: 0.06em; }
   .mb-top .mb-limits { padding: 0 10px; }
 }
+
+/* Arm real money: plain when off, loud when on. */
+.mb-top .mb-arm { color: var(--text); background: transparent; border: 1px solid var(--line-2); }
+.mb-top .mb-arm:hover { border-color: var(--text); }
+.mb-top .mb-arm.is-armed { color: #000; background: var(--bad); border-color: var(--bad); font-weight: 700; letter-spacing: 0.04em; }
