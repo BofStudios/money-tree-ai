@@ -375,3 +375,21 @@ button.mb-tile:hover:not(:disabled) { border-color: var(--line-2); background: v
 .mb-intro-lab { margin: var(--s4) 0 0; padding: var(--s2) var(--s3); border-left: 2px solid var(--warn); color: var(--text-2); font-size: var(--f-label); }
 .mb-intro-lab[data-state="passed"] { border-left-color: var(--good); }
 @media (max-width: 640px) { .mb-intro h2 { font-size: 18px; } }
+
+/* ------------------------------------------- a calmer Bot screen (2026-11-20) */
+
+/* The old readiness card becomes one slim line: why it is not trading, and the fix. */
+.mb-strips .ready-card { padding: var(--s2) var(--s3); border-radius: var(--radius); background: var(--panel); }
+.mb-strips .ready-card .rd-head { gap: var(--s3); align-items: center; }
+.mb-strips .ready-card .rd-word { display: none; }
+.mb-strips .ready-card .rd-text b { font: 500 var(--f-body)/1.4 var(--sans); color: var(--text); }
+.mb-strips .ready-card .rd-head button { height: 28px; padding: 0 var(--s3); font-size: var(--f-label); }
+.mb-strips .ready-card .lvl-strip, .mb-strips .ready-card .rd-missed { display: none; }
+.mb-strips .ready-card.rd-trading { display: none; }       /* trading: nothing to explain */
+
+/* One state chip in the top bar: the readiness pill repeats the line above. */
+.mb-top .ready-pill { display: none !important; }
+
+.mb-amount-all { height: 32px; padding: 0 var(--s3); background: transparent; color: var(--text-2);
+  border: 1px solid var(--line-2); border-radius: var(--radius-sm); font-size: var(--f-label); }
+.mb-amount-all:hover:not(:disabled) { color: var(--text); border-color: var(--text); }

@@ -420,10 +420,6 @@ def build_router(
     def arm(confirm: bool = Body(default=False, embed=True)) -> dict:
         if engine.risk.is_live and not confirm:
             raise HTTPException(status_code=400, detail="live arming requires confirm=true")
-        bot = getattr(engine, "bot_settings", None)
-        if engine.risk.is_live and bot is not None and bot.get("budget") is None:
-            # 12.0: the owner says how much the bot may use before real money is armed.
-            raise HTTPException(status_code=400, detail="budget_needed: enter how much the bot may use first")
         engine.arm()
         out = engine.status()
         if engine.risk.is_live:

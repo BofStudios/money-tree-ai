@@ -270,6 +270,8 @@ class Scalper:
                 done.append(self._note(symbol, "sell" if result == "sold" else "wait", why if result == "sold"
                                        else f"{why} · {result}"))
 
+        done += self._free_cash(now)
+
         tipped = {s for s, (until, _) in self.tips.items() if until > time.time()}
         lab = getattr(eng, "lab", None)
         funnel = getattr(eng, "funnel", None)      # 12.0: counts only; never changes a decision
@@ -378,6 +380,30 @@ class Scalper:
             if c.get("rsi") is not None and c["rsi"] >= TAKE_RSI:
                 return f"RSI {c['rsi']:.0f}: profit taken ({gain:+.2f}%)"
         return None
+
+    def _free_cash(self, now: datetime) -> list[dict]:
+        """12.0: Ultra is the only way of working. When the account has no cash left
+        and money still sits in positions of the older books (long, swing, news),
+        Ultra sells them at market during its own hours, so the whole account can
+        trade. Only on an armed account (or practice money); Stop still wins."""
+        eng = self.engine
+        risk = getattr(eng, "risk", None)
+        if risk is not None and risk.is_live and not risk.armed:
+            return []
+        if not (START <= now.time() < LAST_ENTRY):
+            return []
+        cash = self._cash()
+        if cash is None or cash >= MIN_CASH:
+            return []
+        with eng._lock:
+            old = [s for s in eng._positions if eng.book_of(s) != BOOK]
+        done = []
+        for symbol in old:
+            why = self._t("frees the cash: a position from an older book, Ultra uses the whole account now",
+                          "nakdi açar: eski bir defterden kalan pozisyon, Ultra artık tüm hesabı kullanır")
+            result = eng.book_sell(symbol, "Ultra: " + why)
+            done.append(self._note(symbol, "sell" if result == "sold" else "wait", why if result == "sold" else f"{why} · {result}"))
+        return done
 
     def exits_only(self, now: datetime | None = None) -> list[dict]:
         """Balanced mode: Ultra's trades still open finish by Ultra's own

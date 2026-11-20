@@ -125,14 +125,10 @@ def test_the_name_changed_and_the_data_home_did_not(monkeypatch):
     assert path is None or str(path).endswith("Money Tree AI")
 
 
-def test_real_money_needs_the_owners_amount_before_arm(client):
+def test_real_money_arms_without_an_amount_then_the_whole_account_is_used(client):
     engine = client.engine
-    assert client.get("/api/bot", headers=AUTH).json()["setup"]["next"] in ("keys", "live")
     engine.risk.mode = "live"
     try:
-        r = client.post("/api/arm", json={"confirm": True}, headers=AUTH)
-        assert r.status_code == 400 and r.json()["detail"].startswith("budget_needed")
-        engine.bot_settings.update({"budget": 500}, equity=10_000, live=True)
         assert client.post("/api/arm", json={"confirm": True}, headers=AUTH).status_code == 200
     finally:
         engine.disarm("test")
@@ -146,7 +142,7 @@ def test_setup_walks_keys_then_live_then_amount_then_arm():
     e = type("E", (), {"bot_settings": BotSettings(None)})()
     assert setup_of(e, {"mode": "paper"})["next"] == "keys"
     assert setup_of(e, {"mode": "paper"}, live_keys=True)["next"] == "live"
-    assert setup_of(e, {"mode": "live"})["next"] == "amount"
+    assert setup_of(e, {"mode": "live"})["next"] == "arm"            # no amount = the whole account
     e.bot_settings.update({"budget": 300}, equity=1_000, live=True)
     assert setup_of(e, {"mode": "live"})["next"] == "arm"
     assert setup_of(e, {"mode": "live", "risk": {"armed": True}})["next"] is None
@@ -165,3 +161,20 @@ def test_ten_agents_and_each_new_one_owns_real_work():
     main = Path("app/main.py").read_text(encoding="utf-8")
     assert "power_warning(" not in main                      # no "Full power / Light - 2 bots" question
     assert '"ultra": True, "power": "full"' in main          # one way of working, every start
+
+
+def test_with_no_cash_ultra_sells_the_older_books_positions_only_when_armed(tmp_path):
+    from app.engine import scalper as S
+    from tests.test_scalper import NOW, scalp_engine
+
+    engine = scalp_engine(tmp_path)
+    assert engine.book_buy("AAPL", "long", "an old long", engine.executor.get_balance().total * 0.99, 2.0, 2.0) == "bought"
+    assert engine.book_of("AAPL") != S.BOOK
+    engine.scalper._cash = lambda: 0.02             # the owner's account: every dollar in old positions
+    engine.risk.mode = "live"                      # live and not armed: nothing is sold
+    assert engine.scalper._free_cash(NOW) == [] and engine.position_for("AAPL") is not None
+    engine.risk.mode = "paper"
+    rows = engine.scalper._free_cash(NOW)
+    assert rows and rows[0]["action"] == "sell" and engine.position_for("AAPL") is None
+    engine._halted = True                          # Stop still wins
+    assert engine.book_buy("NVDA", "long", "x", 9_000, 2.0, 2.0) != "bought"

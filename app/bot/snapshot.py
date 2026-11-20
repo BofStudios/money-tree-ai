@@ -222,7 +222,7 @@ def setup_of(engine, status: dict, live_keys: bool | None = None) -> dict:
     keys = live or bool(live_keys)
     amount = _owner(engine).get("budget") is not None
     armed = bool(risk.get("armed", False))
-    nxt = ("keys" if not keys else "live" if not live else "amount" if not amount else None if armed else "arm")
+    nxt = ("keys" if not keys else "live" if not live else None if armed else "arm")   # no amount = the whole account
     return {"keys": keys, "live": live, "amount": amount, "armed": armed, "next": nxt}
 
 

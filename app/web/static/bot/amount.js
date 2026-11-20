@@ -68,6 +68,7 @@ function draw() {
         <input id="mbAmountIn" class="mb-amount-in num" type="number" inputmode="decimal" min="1" step="1"
           value="${esc(value)}" placeholder="0" ${st.live ? "" : "disabled"} aria-describedby="mbAmountSay">
         <button class="mb-btn mb-ok mb-amount-save" type="submit" ${busy || !changed || !(Number(typed) > 0) ? "disabled" : ""}>${esc(T("amount.save"))}</button>
+        ${budget != null && st.live ? `<button class="mb-btn mb-amount-all" type="button" data-amount-all ${busy ? "disabled" : ""}>${esc(T("amount.all"))}</button>` : ""}
         ${pending ? `<button class="mb-btn mb-warnbtn" type="button" data-amount-confirm>${esc(T("amount.confirm"))}</button>` : ""}
       </div>
       <p class="mb-amount-say" id="mbAmountSay">${esc(!st.live ? T("amount.noKeys")
@@ -123,6 +124,7 @@ host?.addEventListener("submit", (e) => {
 });
 host?.addEventListener("click", (e) => {
   if (e.target.closest("[data-amount-confirm]") && pending) { save(pending); return; }
+  if (e.target.closest("[data-amount-all]")) { save({ budget: null }); return; }   // no limit: the whole account
   const go = e.target.closest("[data-setup]");
   if (!go) return;
   if (go.dataset.setup === "amount") { $("mbAmountIn")?.focus(); return; }
